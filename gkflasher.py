@@ -64,7 +64,7 @@ def flash_eeprom (bus, filename):
 	calibration = ''.join([chr(x) for x in calibration])
 	print('[*] {} calibration version: {}'.format(filename, calibration))
 
-	if (input('[*] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
+	if (input('[?] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
 
@@ -78,6 +78,7 @@ def load_arguments ():
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address_start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address_stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
+	parser.add_argument('--eeprom-size', help='EEPROM size in bytes. ONLY USE THIS IF YOU REALLY, REALLY KNOW WHAT YOU\'RE DOING!!', type=int)
 	args = parser.parse_args()
 	
 	if (args.protocol):
@@ -116,8 +117,15 @@ def main():
 	#WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B]).execute(bus)
 
 	print('[*] Trying to find eeprom size and calibration..')
-	eeprom_size, eeprom_size_human, calibration = find_eeprom_size_and_calibration(bus)
-	print('[*] Found! EEPROM is {}mbit, calibration: {}'.format(eeprom_size_human, calibration))
+	if (args.eeprom_size):
+		print('[!] EEPROM size was selected by the user as {} bytes!'.format(args.eeprom_size))
+		if (input('[?] Are you absolutely sure you know what you\'re doing? This could potentially result in bricking your ECU [y/n]: ') != 'y'):
+			print('[!] Aborting.')
+			return False
+		eeprom_size = args.eeprom_size
+	else:
+		eeprom_size, eeprom_size_human, calibration = find_eeprom_size_and_calibration(bus)
+		print('[*] Found! EEPROM is {}mbit, calibration: {}'.format(eeprom_size_human, calibration))
 
 	if (args.read):
 		read_eeprom(bus, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
