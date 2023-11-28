@@ -1,0 +1,8 @@
+protocol: 'canbus'
+canbus:
+  interface: 'can0'
+  tx_id: 0x7e0
+  rx_id: 0x7e8
+kline:
+  interface: '/dev/ttyUSB0'
+  baudrate: 10400

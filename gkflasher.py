@@ -1,4 +1,4 @@
-import argparse, time
+import argparse, time, yaml
 from alive_progress import alive_bar
 from kwp.KWPCommand import KWPCommand
 from kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
@@ -12,18 +12,7 @@ from memory import find_eeprom_size_and_calibration, read_memory
 from interface.CanInterface import CanInterface
 from interface.KLineInterface import KLineInterface
 
-GKFlasher_config = {
-	'protocol': 'canbus',
-	'canbus': {
-		'interface': 'can0',
-		'tx_id': 0x7e0,
-		'rx_id': 0x7e8
-	},
-	'kline': {
-		'interface': '/dev/ttyUSB0',
-		'baudrate': 10400
-	}
-}
+GKFlasher_config = yaml.safe_load(open('gkflasher.yml'))
 
 def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90))[2:]
