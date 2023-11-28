@@ -8,6 +8,16 @@ parameters might be necessary for other vehicles.
 
 ![Reading over CANbus](assets/gkflasher_canbus_read.png)
 
+## Installation 
+
+Clone the repository
+
+`git clone https://github.com/Dante383/GKFlasher`
+
+Install required packages
+
+`python3 -m pip install -r requirements.txt`
+
 ## Usage 
 
 Connect your K-line or CANbus adapter to your computer and the vehicle (or ECU for bench setup).
