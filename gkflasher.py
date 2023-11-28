@@ -12,8 +12,6 @@ from memory import find_eeprom_size_and_calibration, read_memory
 from interface.CanInterface import CanInterface
 from interface.KLineInterface import KLineInterface
 
-GKFlasher_config = yaml.safe_load(open('gkflasher.yml'))
-
 def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90))[2:]
 	return ''.join([chr(x) for x in vin_hex])
@@ -53,20 +51,23 @@ def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, ou
 
 	print('[*] saved to {}'.format(output_filename))
 
-def flash_eeprom (bus, filename):
-	print('\n[*] Loading up {}'.format(filename))
+def flash_eeprom (bus, input_filename):
+	print('\n[*] Loading up {}'.format(input_filename))
 
-	with open(filename, 'rb') as file:
+	with open(input_filename, 'rb') as file:
 		eeprom = file.read()
 
 	print('[*] Loaded {} bytes'.format(len(eeprom)))
 	calibration = eeprom[0x090040:0x090048]
 	calibration = ''.join([chr(x) for x in calibration])
-	print('[*] {} calibration version: {}'.format(filename, calibration))
+	print('[*] {} calibration version: {}'.format(input_filename, calibration))
 
 	if (input('[?] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
+
+def load_config (config_filename):
+	return yaml.safe_load(open('gkflasher.yml'))
 
 def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher')
@@ -79,7 +80,10 @@ def load_arguments ():
 	parser.add_argument('-s', '--address_start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address_stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
 	parser.add_argument('--eeprom-size', help='EEPROM size in bytes. ONLY USE THIS IF YOU REALLY, REALLY KNOW WHAT YOU\'RE DOING!!', type=int)
+	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
 	args = parser.parse_args()
+
+	GKFlasher_config = load_config(args.config)
 	
 	if (args.protocol):
 		GKFlasher_config['protocol'] = args.protocol
@@ -88,20 +92,20 @@ def load_arguments ():
 	if (args.baudrate):
 		GKFlasher_config[GKFlasher_config['protocol']]['baudrate'] = args.baudrate
 
-	return args
+	return GKFlasher_config, args
 
-def initialize_bus (protocol):
+def initialize_bus (protocol, protocol_config):
 	if (protocol == 'canbus'):
-		return CanInterface(iface=GKFlasher_config['canbus']['interface'], rx_id=GKFlasher_config['canbus']['rx_id'], tx_id=GKFlasher_config['canbus']['tx_id'])
+		return CanInterface(iface=protocol_config['interface'], rx_id=protocol_config['rx_id'], tx_id=protocol_config['tx_id'])
 	elif (protocol == 'kline'):
-		return KLineInterface(iface=GKFlasher_config['kline']['interface'], baudrate=GKFlasher_config['kline']['baudrate'])
+		return KLineInterface(iface=protocol_config['interface'], baudrate=protocol_config['baudrate'])
 	raise Exception('Protocol %s unsupported' % protocol)
 
 def main():
-	args = load_arguments()
+	GKFlasher_config, args = load_arguments()
 
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
-	bus = initialize_bus(GKFlasher_config['protocol'])	
+	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
 	bus.execute(StopDiagnosticSession())
 	bus.execute(StopCommunication())
@@ -131,7 +135,7 @@ def main():
 		read_eeprom(bus, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 
 	if (args.flash):
-		flash_eeprom(bus, args.flash)
+		flash_eeprom(bus, input_filename=args.flash)
 
 if __name__ == '__main__':
 	main()

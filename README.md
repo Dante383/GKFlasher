@@ -46,6 +46,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 ### Parameters 
 
+`-c --config {filename}` - Load the config file (default: gkflasher.yml). You could use this for example to prepare different configurations for different vehicles you're working on.
+
 `-p --protocol {protocol}` - Currently supported: `canbus` and `kline`
 
 `-b --baudrate {baudrate}`
