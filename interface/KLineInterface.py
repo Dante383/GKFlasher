@@ -4,8 +4,10 @@ class KLineInterface:
 	socket = False
 	interbyte_delay = 30 # ms
 
-	def __init__ (self, iface, baudrate):
+	def __init__ (self, iface, baudrate, rx_id, tx_id):
 		print('    [K] K-line init. Iface: {} baudrate: {}'.format(iface, baudrate))
+		self.rx_id = rx_id
+		self.tx_id = tx_id
 		self.socket = serial.serial_for_url(iface, baudrate, rtscts=False, dsrdtr=False, do_not_open=True)
 		self.socket.dtr = 0
 		self.socket.rts = 0
@@ -17,8 +19,7 @@ class KLineInterface:
 
 	def execute (self, kwp_command):
 		# first byte 8 + length 
-		# second byte always 0x11
-		# third byte always 0xF1
+		# byte 2,3 = tx id
 		# 4th byte command 
 		# 4+x bytes data 
 		# last byte unknown
@@ -26,7 +27,10 @@ class KLineInterface:
 		data = [kwp_command.command] + kwp_command.data
 		length = len(data)-1 #FIXME!!
 
-		payload = bytes([0x80+length, 0x11, 0xF1] + data) # figure out the last byte!
+		tx_id_b1 = (self.tx_id >> 8) & 0xFF
+		tx_id_b2 = (self.tx_id & 0xFF)
+
+		payload = bytes([0x80+length, tx_id_b1, tx_id_b2] + data) # figure out the last byte!
 
 		self._write(payload)
 

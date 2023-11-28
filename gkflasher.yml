@@ -6,3 +6,5 @@ canbus:
 kline:
   interface: '/dev/ttyUSB0'
   baudrate: 10400
+  tx_id: 0x11F1
+  rx_id: 0xF111

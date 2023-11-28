@@ -98,7 +98,7 @@ def initialize_bus (protocol, protocol_config):
 	if (protocol == 'canbus'):
 		return CanInterface(iface=protocol_config['interface'], rx_id=protocol_config['rx_id'], tx_id=protocol_config['tx_id'])
 	elif (protocol == 'kline'):
-		return KLineInterface(iface=protocol_config['interface'], baudrate=protocol_config['baudrate'])
+		return KLineInterface(iface=protocol_config['interface'], baudrate=protocol_config['baudrate'], rx_id=protocol_config['rx_id'], tx_id=protocol_config['tx_id'])
 	raise Exception('Protocol %s unsupported' % protocol)
 
 def main():
