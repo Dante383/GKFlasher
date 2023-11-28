@@ -6,6 +6,8 @@ While it has been developed and tested on a Hyundai Tiburon, the basic functiona
 should work on any vehicle supporting KWP2000 over K-line or CANbus. Adjusting some 
 parameters might be necessary for other vehicles. 
 
+![Reading over CANbus](assets/gkflasher_canbus_read.png)
+
 ## Usage 
 
 Connect your K-line or CANbus adapter to your computer and the vehicle (or ECU for bench setup).
