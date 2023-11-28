@@ -69,7 +69,7 @@ def flash_eeprom (bus, filename):
 		print('[!] Aborting!')
 		return
 
-def main():
+def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher')
 	parser.add_argument('-f', '--flash', help='Filename to flash')
 	parser.add_argument('-r', '--read', action='store_true')
@@ -77,6 +77,7 @@ def main():
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate')
 	args = parser.parse_args()
+
 	if (args.protocol):
 		GKFlasher_config['protocol'] = args.protocol
 	if (args.interface):
@@ -84,11 +85,20 @@ def main():
 	if (args.baudrate):
 		GKFlasher_config[GKFlasher_config['protocol']]['baudrate'] = args.baudrate
 
+	return args
+
+def initialize_bus (protocol):
+	if (protocol == 'canbus'):
+		return CanInterface(iface=GKFlasher_config['canbus']['interface'], rx_id=GKFlasher_config['canbus']['rx_id'], tx_id=GKFlasher_config['canbus']['tx_id'])
+	elif (protocol == 'kline'):
+		return KLineInterface(iface=GKFlasher_config['kline']['interface'], baudrate=GKFlasher_config['kline']['baudrate'])
+	raise Exception('Protocol %s unsupported' % protocol)
+
+def main():
+	args = load_arguments()
+
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
-	if (GKFlasher_config['protocol'] == 'canbus'):
-		bus = CanInterface(iface=GKFlasher_config['canbus']['interface'], rx_id=GKFlasher_config['canbus']['rx_id'], tx_id=GKFlasher_config['canbus']['tx_id'])
-	elif (GKFlasher_config['protocol'] == 'kline'):
-		bus = KLineInterface(iface=GKFlasher_config['kline']['interface'], baudrate=GKFlasher_config['kline']['baudrate'])
+	bus = initialize_bus(GKFlasher_config['protocol'])	
 
 	bus.execute(StopDiagnosticSession())
 	bus.execute(StopCommunication())
