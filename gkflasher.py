@@ -27,7 +27,7 @@ def read_voltage(bus):
 	voltage = int(voltage, 16)/1000
 	print('{}V'.format(voltage))
 
-def read_eeprom (bus, eeprom_size):
+def read_eeprom (bus, eeprom_size, output_filename=None):
 	address_start = 0x000000
 	address_stop = 0x0fffff
 
@@ -45,12 +45,13 @@ def read_eeprom (bus, eeprom_size):
 
 	print('[*] received {} bytes of data'.format(len(fetched)))
 
-	filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
+	if (output_filename == None):
+		output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
 	
-	with open(filename, "wb") as file:
+	with open(output_filename, "wb") as file:
 		file.write(bytes(eeprom))
 
-	print('[*] saved to {}'.format(filename))
+	print('[*] saved to {}'.format(output_filename))
 
 def flash_eeprom (bus, filename):
 	print('\n[*] Loading up {}'.format(filename))
@@ -63,9 +64,7 @@ def flash_eeprom (bus, filename):
 	calibration = ''.join([chr(x) for x in calibration])
 	print('[*] {} calibration version: {}'.format(filename, calibration))
 
-	print('[*] Ready to flash! Do you wish to continue? [y/n]:', end='')
-
-	if (input() != 'y'):
+	if (input('[*] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
 
@@ -73,11 +72,12 @@ def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher')
 	parser.add_argument('-f', '--flash', help='Filename to flash')
 	parser.add_argument('-r', '--read', action='store_true')
+	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate')
 	args = parser.parse_args()
-
+	
 	if (args.protocol):
 		GKFlasher_config['protocol'] = args.protocol
 	if (args.interface):
@@ -118,7 +118,7 @@ def main():
 	print('[*] Found! EEPROM is {}mbit, calibration: {}'.format(eeprom_size_human, calibration))
 
 	if (args.read):
-		read_eeprom(bus, eeprom_size)
+		read_eeprom(bus, eeprom_size, output_filename=args.output)
 
 	if (args.flash):
 		flash_eeprom(bus, args.flash)

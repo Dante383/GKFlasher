@@ -17,8 +17,8 @@ Launch `python3 gkflasher.py --protocol {canbus/kline} --interface {can0//dev/tt
 
 ### Reading 
 
-Add `--read [filename]` to the parameters. Filename is optional, by default the output
-will be saved to `output_{address start}_to_{address stop}.bin`
+Add `--read` to the parameters. By default the output
+will be saved to `output_{address start}_to_{address stop}.bin`. You can use `--output {filename}` to override that
 
 ### Flashing 
 
@@ -33,6 +33,8 @@ and the calibration version of the file you're trying to flash before asking you
 
 `-i --interface {interface}`
 
-`-r --read [output filename}`
+`-r --read`
+
+`-o --output {filename}` - Filename to save the EEPROM dump
 
 `-f --flash {input filename}`
