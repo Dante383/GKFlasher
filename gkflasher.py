@@ -27,9 +27,9 @@ def read_voltage(bus):
 	voltage = int(voltage, 16)/1000
 	print('{}V'.format(voltage))
 
-def read_eeprom (bus, eeprom_size, output_filename=None):
-	address_start = 0x000000
-	address_stop = 0x0fffff
+def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+	if (address_stop == None):
+		address_stop = eeprom_size
 
 	print('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
@@ -70,12 +70,14 @@ def flash_eeprom (bus, filename):
 
 def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher')
-	parser.add_argument('-f', '--flash', help='Filename to flash')
-	parser.add_argument('-r', '--read', action='store_true')
-	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate')
+	parser.add_argument('-f', '--flash', help='Filename to flash')
+	parser.add_argument('-r', '--read', action='store_true')
+	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
+	parser.add_argument('-s', '--address_start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
+	parser.add_argument('-e', '--address_stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
 	args = parser.parse_args()
 	
 	if (args.protocol):
@@ -118,7 +120,7 @@ def main():
 	print('[*] Found! EEPROM is {}mbit, calibration: {}'.format(eeprom_size_human, calibration))
 
 	if (args.read):
-		read_eeprom(bus, eeprom_size, output_filename=args.output)
+		read_eeprom(bus, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 
 	if (args.flash):
 		flash_eeprom(bus, args.flash)
