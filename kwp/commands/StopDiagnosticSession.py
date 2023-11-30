@@ -4,4 +4,4 @@ class StopDiagnosticSession(KWPCommand):
 	command = 0x20
 
 	def __init__ (self):
-		self.data = [0xA3]
+		self.data = []

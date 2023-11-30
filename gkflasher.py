@@ -8,6 +8,7 @@ from kwp.commands.StartCommunication import StartCommunication
 from kwp.commands.StartDiagnosticSession import StartDiagnosticSession
 from kwp.commands.StopDiagnosticSession import StopDiagnosticSession 
 from kwp.commands.StopCommunication import StopCommunication
+from kwp.commands.SecurityAccess import SecurityAccess
 from memory import find_eeprom_size_and_calibration, read_memory
 from interface.CanInterface import CanInterface
 from interface.KLineInterface import KLineInterface
@@ -107,15 +108,16 @@ def main():
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
-	bus.execute(StopDiagnosticSession())
-	bus.execute(StopCommunication())
-	bus.execute(StartCommunication())
-	bus.execute(StartDiagnosticSession())
+	print('[*] Trying to start diagnostic session')
+	print(bus.execute(StartDiagnosticSession()))
 
 	#read_voltage(bus)
-
+	print('bb')
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
+
+	print('[*] security access')
+	print(bus.execute(SecurityAccess()))
 	
 	#print('[*] trying to write "GK" in first 2 bytes of calibration section')
 	#WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B]).execute(bus)
