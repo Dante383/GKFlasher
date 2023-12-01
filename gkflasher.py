@@ -20,7 +20,8 @@ def read_vin(bus):
 def read_voltage(bus):
 	print('[*] Trying to read voltage (0x42/SAE_VPWR).. ', end='')
 
-	voltage_hex = bus.execute(ReadStatusOfDTC(0x42))
+	voltage_hex = bus.execute(ReadStatusOfDTC(0x42)).get_data()
+	print(voltage_hex)
 	
 	voltage = hex(voltage_hex[0]) + hex(voltage_hex[1])[2:]
 	voltage = int(voltage, 16)/1000
@@ -115,7 +116,7 @@ def main():
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
 
-	#read_voltage(bus)
+	read_voltage(bus)
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
 

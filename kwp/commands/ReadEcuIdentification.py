@@ -7,6 +7,3 @@ class ReadEcuIdentification(KWPCommand):
 	def __init__ (self, identifier):
 		self.identifier = identifier
 		self.data = [self.identifier]
-
-	def prepare_output (self, output):
-		return output[2:]

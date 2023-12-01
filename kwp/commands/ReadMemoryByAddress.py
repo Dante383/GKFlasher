@@ -13,6 +13,3 @@ class ReadMemoryByAddress(KWPCommand):
 		byte3 = self.offset & 0xFF
 
 		self.data = [byte1, byte2, byte3, self.size]
-
-	def prepare_output (self, output):
-		return output[1:]
