@@ -28,7 +28,7 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 
 def find_eeprom_size_and_calibration (bus):
 	size_bytes, size_human, calibration = 0, 0, ''
-	print(bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)).get_data())
+
 	if (bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)).get_data() == [99, 97, 54, 54]): # 8 MiB (mebibyte)
 		size_bytes = 1048575
 		size_human = 8

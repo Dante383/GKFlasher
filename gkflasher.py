@@ -113,14 +113,14 @@ def main():
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
 	print('[*] Trying to start diagnostic session')
-	print(bus.execute(StartDiagnosticSession()).get_status())
+	bus.execute(StartDiagnosticSession())
 
 	#read_voltage(bus)
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
 
 	print('[*] security access')
-	print(bus.execute(SecurityAccess()).get_status())
+	bus.execute(SecurityAccess())
 	
 	#print('[*] trying to write "GK" in first 2 bytes of calibration section')
 	#WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B]).execute(bus)
