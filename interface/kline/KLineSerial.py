@@ -1,4 +1,4 @@
-import time, sys
+import time, sys, logging
 from pyftdi.ftdi import Ftdi
 import pyftdi.serialext
 import serial
@@ -26,17 +26,16 @@ class KLineSerial:
 			Ftdi().show_devices()
 			sys.exit(1)
 
-		print('fast init..')
-		
+		logging.info('fast init..')
 		self.fast_init(iface, baudrate)
-		print('fast init done. closing serial opening serialext instance')
+		logging.info('fast init done. closing serial opening serialext instance')
 
 		self.socket = pyftdi.serialext.serial_for_url(iface, baudrate=baudrate, timeout=0.2)
 
-		print('wait for startCommunication response')
+		logging.info('wait for startCommunication response')
 		time.sleep(0.04)
 
-		print('received {} bytes.'.format(len(self.read(7))))
+		logging.info('received {} bytes.'.format(len(self.read(7))))
 		self.socket.timeout = 5
 		
 	def fast_init (self, iface, baudrate):

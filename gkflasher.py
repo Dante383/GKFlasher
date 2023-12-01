@@ -1,4 +1,4 @@
-import argparse, time, yaml
+import argparse, time, yaml, logging
 from alive_progress import alive_bar
 from kwp.KWPCommand import KWPCommand
 from kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
@@ -82,7 +82,11 @@ def load_arguments ():
 	parser.add_argument('-e', '--address_stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
 	parser.add_argument('--eeprom-size', help='EEPROM size in bytes. ONLY USE THIS IF YOU REALLY, REALLY KNOW WHAT YOU\'RE DOING!!', type=int)
 	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
+	parser.add_argument('-v', '--verbose', action='count', default=0)
 	args = parser.parse_args()
+
+	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
+	logging.basicConfig(level=logging_levels[min(args.verbose, len(logging_levels) -1)])
 
 	GKFlasher_config = load_config(args.config)
 	
@@ -112,7 +116,6 @@ def main():
 	print(bus.execute(StartDiagnosticSession()))
 
 	#read_voltage(bus)
-	print('bb')
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
 
