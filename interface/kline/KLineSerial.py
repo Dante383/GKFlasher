@@ -1,4 +1,4 @@
-import time
+import time, sys
 from pyftdi.ftdi import Ftdi
 import pyftdi.serialext
 import serial
@@ -19,6 +19,13 @@ class KLineSerial:
 		self.init(iface, baudrate)
 
 	def init (self, iface, baudrate):
+		try:
+			Ftdi().get_device(iface)
+		except pyftdi.usbtools.UsbToolsError:
+			print('[!] Device {} not found!'.format(iface))
+			Ftdi().show_devices()
+			sys.exit(1)
+
 		print('fast init..')
 		
 		self.fast_init(iface, baudrate)
