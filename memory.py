@@ -12,7 +12,7 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 		if ( (address_stop-address) < at_a_time ):
 			at_a_time = (address_stop-address)
 
-		fetched = bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time))[:at_a_time] # last 3 bytes are zeros
+		fetched = bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time)).get_data()[:at_a_time] # last 3 bytes are zeros
 		payload_start = address-address_start
 		payload_stop = payload_start+len(fetched)
 		payload[payload_start:payload_stop] = fetched
@@ -28,19 +28,19 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 
 def find_eeprom_size_and_calibration (bus):
 	size_bytes, size_human, calibration = 0, 0, ''
-
-	if (bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)) == [99, 97, 54, 54]): # 8 MiB (mebibyte)
+	print(bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)).get_data())
+	if (bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)).get_data() == [99, 97, 54, 54]): # 8 MiB (mebibyte)
 		size_bytes = 1048575
 		size_human = 8
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x090040, size=8))
-	elif (bus.execute(ReadMemoryByAddress(offset=0x010008, size=4)) == [99, 97, 54, 54]): # 4 MiB (mebibyte)
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x090040, size=8)).get_data()
+	elif (bus.execute(ReadMemoryByAddress(offset=0x010008, size=4)).get_data() == [99, 97, 54, 54]): # 4 MiB (mebibyte)
 		size_bytes = 524287 # is that correct? verify
 		size_human = 4
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x010008, size=8))
-	elif (bus.execute(ReadMemoryByAddress(offset=0x008008, size=4)) == [99, 97, 54, 54]): # 2 MiB (mebibyte)
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x010008, size=8)).get_data()
+	elif (bus.execute(ReadMemoryByAddress(offset=0x008008, size=4)).get_data() == [99, 97, 54, 54]): # 2 MiB (mebibyte)
 		size_bytes = 262143 # is that correct? verify
 		size_human = 2
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x008008, size=8))
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x008008, size=8)).get_data()
 	calibration = ''.join([chr(x) for x in calibration])
 	return (size_bytes, size_human, calibration)
 

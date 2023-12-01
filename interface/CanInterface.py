@@ -3,6 +3,7 @@ conf.contribs['CANSocket'] = {'use-python-can': False}
 conf.contribs['ISOTP'] = {'use-can-isotp-kernel-module': True}
 from scapy.contrib.cansocket import *
 from scapy.contrib.isotp import *
+from kwp.KWPResponse import KWPResponse
 
 class CanInterface:
 	socket = False
@@ -16,7 +17,7 @@ class CanInterface:
 		self.socket.send(bytes(data))
 		
 		response = self.socket.recv()
-		return kwp_command.prepare_output(list(response.data))
+		return KWPResponse().set_data(list(response.data))
 		
 	def shutdown (self):
 		self.bus.shutdown()

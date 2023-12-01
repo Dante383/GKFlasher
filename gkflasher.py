@@ -14,7 +14,7 @@ from interface.CanInterface import CanInterface
 from interface.KLineInterface import KLineInterface
 
 def read_vin(bus):
-	vin_hex = bus.execute(ReadEcuIdentification(0x90))[2:]
+	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
 	return ''.join([chr(x) for x in vin_hex])
 
 def read_voltage(bus):
@@ -113,14 +113,14 @@ def main():
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
 	print('[*] Trying to start diagnostic session')
-	print(bus.execute(StartDiagnosticSession()))
+	print(bus.execute(StartDiagnosticSession()).get_status())
 
 	#read_voltage(bus)
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
 
 	print('[*] security access')
-	print(bus.execute(SecurityAccess()))
+	print(bus.execute(SecurityAccess()).get_status())
 	
 	#print('[*] trying to write "GK" in first 2 bytes of calibration section')
 	#WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B]).execute(bus)

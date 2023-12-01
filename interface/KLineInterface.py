@@ -1,5 +1,6 @@
 import os, time, logging
 from interface.kline.KLineSerial import KLineSerial
+from kwp.KWPResponse import KWPResponse
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +54,15 @@ class KLineInterface:
 		else:
 			counter = int.from_bytes(counter, "big")-0x80
 
-		data = self._read(counter)
+		status = self._read(1)
+
+		data = self._read(counter-1)
 
 		checksum = self._read(1)
 
 		#if (self.calculate_checksum()) todo
 
-		return data
+		return KWPResponse().set_status(status).set_data(list(data))
 
 
 	def execute (self, kwp_command):
@@ -74,10 +77,10 @@ class KLineInterface:
 
 		if (response == False):
 			logger.warning('Timeout! returning []')
-			return []
+			return KWPResponse().set_data([])
 
 
-		return kwp_command.prepare_output(list(response))
+		return response
 
 	def _write (self, message):
 		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in message])))
