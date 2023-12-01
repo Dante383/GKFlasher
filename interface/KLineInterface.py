@@ -1,6 +1,8 @@
 import os, time, logging
 from interface.kline.KLineSerial import KLineSerial
 
+logger = logging.getLogger(__name__)
+
 class KLineInterface:
 	socket = False
 
@@ -71,21 +73,21 @@ class KLineInterface:
 		response = self.fetch_response()
 
 		if (response == False):
-			logging.warning('Timeout! returning []')
+			logger.warning('Timeout! returning []')
 			return []
 
 
 		return kwp_command.prepare_output(list(response))
 
 	def _write (self, message):
-		logging.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in message])))
+		logger.debug('K-Line sending: {}'.format(' '.join([hex(x) for x in message])))
 		self.socket.write(message)
 		self.log(message)
 
 	def _read (self, length):
-		logging.debug('K-Line trying to read {} bytes'.format(length))
+		logger.debug('K-Line trying to read {} bytes'.format(length))
 		message = self.socket.read(length)
-		logging.debug('Success! Received: {}'.format(message))
+		logger.debug('Success! Received: {}'.format(message))
 		self.log(message)
 		return message
 
