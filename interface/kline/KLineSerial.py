@@ -7,6 +7,8 @@ logger = logging.getLogger(__name__)
 
 class KLineSerial:
 	socket = False
+	iface = False
+	baudrate = False
 
 	HIGH = bytes([0x01])
 	LOW = bytes([0x0])
@@ -18,21 +20,24 @@ class KLineSerial:
 	TIMEOUT_AFTER_REQUEST = (30 + 20)/1000
 
 	def __init__ (self, iface, baudrate):
-		self.init(iface, baudrate)
-
-	def init (self, iface, baudrate):
+	#	self.init(iface, baudrate)
+		self.iface = iface 
+		self.baudrate = baudrate
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
+		
+	def init (self):
 		try:
-			Ftdi().get_device(iface)
+			Ftdi().get_device(self.iface)
 		except pyftdi.usbtools.UsbToolsError:
-			print('[!] Device {} not found!'.format(iface))
+			print('[!] Device {} not found!'.format(self.iface))
 			Ftdi().show_devices()
 			sys.exit(1)
 
 		logger.info('fast init..')
-		self.fast_init(iface, baudrate)
+		self.fast_init(self.iface, self.baudrate)
 		logger.info('fast init done. closing serial opening serialext instance')
 
-		self.socket = pyftdi.serialext.serial_for_url(iface, baudrate=baudrate, timeout=0.2)
+		self.socket = pyftdi.serialext.serial_for_url(self.iface, baudrate=self.baudrate, timeout=0.2)
 
 		logger.info('wait for startCommunication response')
 		time.sleep(0.04)

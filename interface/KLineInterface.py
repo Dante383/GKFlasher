@@ -90,7 +90,7 @@ class KLineInterface:
 	def _read (self, length):
 		logger.debug('K-Line trying to read {} bytes'.format(length))
 		message = self.socket.read(length)
-		logger.debug('Success! Received: {}'.format(message))
+		logger.debug('Success! Received: {}'.format(' '.join([hex(x) for x in message])))
 		self.log(message)
 		return message
 

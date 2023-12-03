@@ -21,7 +21,6 @@ def read_voltage(bus):
 	print('[*] Trying to read voltage (0x42/SAE_VPWR).. ', end='')
 
 	voltage_hex = bus.execute(ReadStatusOfDTC(0x42)).get_data()
-	print(voltage_hex)
 	
 	voltage = hex(voltage_hex[0]) + hex(voltage_hex[1])[2:]
 	voltage = int(voltage, 16)/1000
@@ -39,7 +38,7 @@ def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, ou
 
 	with alive_bar(requested_size+1, unit='B') as bar:
 		fetched = read_memory(bus, address_start=address_start, address_stop=address_stop, progress_callback=bar)
-
+	
 	eeprom_end = address_start + len(fetched)
 	eeprom[address_start:eeprom_end] = fetched
 
@@ -113,18 +112,27 @@ def main():
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
+	bus.execute(StopDiagnosticSession())
+	bus.execute(StopCommunication())
+	bus.socket.init()
+	#bus.execute(StartCommunication())
+
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
 
-	read_voltage(bus)
+	print('[*] security access')
+	bus.execute(SecurityAccess([0x01]))
+
+	print('[*] security access 2')
+	bus.execute(SecurityAccess([0x02, 0xFC, 0xD0]))
+
+	#read_voltage(bus)
 	print('[*] Trying to read VIN... ', end='')
 	print(read_vin(bus))
 
-	print('[*] security access')
-	bus.execute(SecurityAccess())
 	
-	#print('[*] trying to write "GK" in first 2 bytes of calibration section')
-	#WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B]).execute(bus)
+	print('[*] trying to write "GK" in first 2 bytes of calibration section')
+	print(bus.execute(WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B])))
 
 	print('[*] Trying to find eeprom size and calibration..')
 	if (args.eeprom_size):

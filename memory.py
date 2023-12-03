@@ -1,9 +1,11 @@
 from kwp.commands.ReadMemoryByAddress import ReadMemoryByAddress
 from kwp.commands.WriteMemoryByAddress import WriteMemoryByAddress
 
+page_size_b = 16384
+
 def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 	address_start = offset
-	address_stop = offset+16384
+	address_stop = offset+page_size_b
 	address = address_start
 
 	payload = [0xF]*(address_stop-address_start)
@@ -51,7 +53,7 @@ def find_eeprom_size_and_calibration (bus):
 # get 16364 bytes back. 
 def read_memory(bus, address_start, address_stop, progress_callback=False):#, progress_callback):
 	requested_size = address_stop-address_start
-	pages = int(requested_size/16384) # 16kib per page 
+	pages = int(requested_size/page_size_b) # 16kib per page 
 	buffer = [0xF]*requested_size
 	address = address_start
 
@@ -67,7 +69,7 @@ def read_memory(bus, address_start, address_stop, progress_callback=False):#, pr
 			buffer_end = buffer_start + len(fetched)
 			buffer[buffer_start:buffer_end] = fetched
 			
-			address += 16384 # 16kib per page 
+			address += page_size_b # 16kib per page 
 			
 			if (address >= address_stop):
 				break
