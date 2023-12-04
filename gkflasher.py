@@ -1,17 +1,22 @@
 import argparse, time, yaml, logging
 from alive_progress import alive_bar
-from kwp.KWPCommand import KWPCommand
-from kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
-from kwp.commands.ReadEcuIdentification import ReadEcuIdentification
-from kwp.commands.WriteMemoryByAddress import WriteMemoryByAddress
-from kwp.commands.StartCommunication import StartCommunication
-from kwp.commands.StartDiagnosticSession import StartDiagnosticSession
-from kwp.commands.StopDiagnosticSession import StopDiagnosticSession 
-from kwp.commands.StopCommunication import StopCommunication
-from kwp.commands.SecurityAccess import SecurityAccess
+from gkbus.kwp.KWPCommand import KWPCommand
+from gkbus.kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
+from gkbus.kwp.commands.ReadEcuIdentification import ReadEcuIdentification
+from gkbus.kwp.commands.WriteMemoryByAddress import WriteMemoryByAddress
+from gkbus.kwp.commands.StartCommunication import StartCommunication
+from gkbus.kwp.commands.StartDiagnosticSession import StartDiagnosticSession
+from gkbus.kwp.commands.StopDiagnosticSession import StopDiagnosticSession 
+from gkbus.kwp.commands.StopCommunication import StopCommunication
+from gkbus.kwp.commands.SecurityAccess import SecurityAccess
+from gkbus.kwp.commands.RequestDownload import RequestDownload
+from gkbus.kwp.commands.TransferData import TransferData
+from gkbus.kwp.commands.RequestTransferExit import RequestTransferExit
+from gkbus.kwp.commands.StartRoutineByLocalId import StartRoutineByLocalId
+from gkbus.kwp.commands.ECUReset import ECUReset
 from memory import find_eeprom_size_and_calibration, read_memory
-from interface.CanInterface import CanInterface
-from interface.KLineInterface import KLineInterface
+
+from gkbus.interface import CanInterface, KLineInterface
 
 def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
@@ -126,13 +131,33 @@ def main():
 	print('[*] security access 2')
 	bus.execute(SecurityAccess([0x02, 0xFC, 0xD0]))
 
-	#read_voltage(bus)
-	print('[*] Trying to read VIN... ', end='')
-	print(read_vin(bus))
+	calw = False
+	if calw:
+		print('[*] start routine 0x01')
+		bus.execute(StartRoutineByLocalId([0x01]))
 
-	
-	print('[*] trying to write "GK" in first 2 bytes of calibration section')
-	print(bus.execute(WriteMemoryByAddress(offset=0x90040, data_to_write=[0x67, 0x6B])))
+		print('[*] start routine 0x00')
+		bus.execute(StartRoutineByLocalId([0x00]))
+
+		#read_voltage(bus)
+		#print('[*] Trying to read VIN... ', end='')
+		#print(read_vin(bus))
+
+		
+		print('[*] trying to write "GK663056" in the calibration version section')
+
+		print('    [*] request download')
+		print(bus.execute(RequestDownload(offset=0x90040, size=8)).get_data())
+		print('    [*] transfer data')
+		print(bus.execute(TransferData([0x67, 0x6B, 0x36, 0x36, 0x33, 0x30, 0x35, 0x36])).get_data())
+		print('    [*] transfer exit')
+		print(bus.execute(RequestTransferExit()).get_data())
+
+		print('    [*] start routine 0x02')
+		print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
+
+		print('    [*] ecu reset')
+		print(bus.execute(ECUReset([0x01])).get_data())
 
 	print('[*] Trying to find eeprom size and calibration..')
 	if (args.eeprom_size):
