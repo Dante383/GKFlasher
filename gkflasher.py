@@ -1,5 +1,6 @@
 import argparse, time, yaml, logging
 from alive_progress import alive_bar
+import gkbus
 from gkbus.kwp.KWPCommand import KWPCommand
 from gkbus.kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
 from gkbus.kwp.commands.ReadEcuIdentification import ReadEcuIdentification
@@ -16,7 +17,6 @@ from gkbus.kwp.commands.ECUReset import ECUReset
 from gkbus.kwp.commands.AccessTimingParameters import AccessTimingParameters
 from memory import find_eeprom_size_and_calibration, read_memory
 from ecu import print_ecu_identification, enable_security_access
-from gkbus.interface import CanInterface, KLineInterface
 
 def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
@@ -105,11 +105,10 @@ def load_arguments ():
 	return GKFlasher_config, args
 
 def initialize_bus (protocol, protocol_config):
-	if (protocol == 'canbus'):
-		return CanInterface(iface=protocol_config['interface'], rx_id=protocol_config['rx_id'], tx_id=protocol_config['tx_id'])
-	elif (protocol == 'kline'):
-		return KLineInterface(iface=protocol_config['interface'], baudrate=protocol_config['baudrate'], rx_id=protocol_config['rx_id'], tx_id=protocol_config['tx_id'])
-	raise Exception('Protocol %s unsupported' % protocol)
+	interface = protocol_config['interface']
+	del protocol_config['interface']
+
+	return gkbus.Bus(protocol, interface=interface, **protocol_config)
 
 def main():
 	GKFlasher_config, args = load_arguments()
