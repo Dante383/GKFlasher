@@ -1,4 +1,5 @@
 from gkbus.kwp.commands.ReadEcuIdentification import ReadEcuIdentification
+from gkbus.kwp.commands.SecurityAccess import SecurityAccess
 
 ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
@@ -34,3 +35,16 @@ def print_ecu_identification (bus):
 		print('    [*] [{}] {}: (status: {})'.format(hex(parameter['value']), parameter['name'], hex(status)))
 		print('        [HEX]: {}'.format(value_hex))
 		print('        [ASCII]: {}'.format(value_ascii))
+
+def get_security_key (seed):
+	# we don't know the key algo yet so i'll just hardcode known key for now
+	return [0xFC, 0xD0]
+
+def enable_security_access (bus):
+	print('[*] Security Access 1')
+	seed = bus.execute(SecurityAccess([0x01])).get_data()[1:]
+
+	key = get_security_key(seed)
+
+	print('[*] Security Access 2')
+	bus.execute(SecurityAccess([0x02] + key))
