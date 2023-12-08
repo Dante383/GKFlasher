@@ -118,7 +118,7 @@ def main():
 
 	bus.execute(StopDiagnosticSession())
 	bus.execute(StopCommunication())
-	bus.socket.init()
+	bus.init()
 	#bus.execute(StartCommunication())
 
 	print('[*] Trying to start diagnostic session')
