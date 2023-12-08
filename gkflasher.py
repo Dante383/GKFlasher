@@ -15,7 +15,7 @@ from gkbus.kwp.commands.RequestTransferExit import RequestTransferExit
 from gkbus.kwp.commands.StartRoutineByLocalId import StartRoutineByLocalId
 from gkbus.kwp.commands.ECUReset import ECUReset
 from memory import find_eeprom_size_and_calibration, read_memory
-
+from ecu import print_ecu_identification
 from gkbus.interface import CanInterface, KLineInterface
 
 def read_vin(bus):
@@ -43,7 +43,7 @@ def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, ou
 
 	with alive_bar(requested_size+1, unit='B') as bar:
 		fetched = read_memory(bus, address_start=address_start, address_stop=address_stop, progress_callback=bar)
-	
+	address_start = address_start - 0x080000 # !!!!!! FIXME TODO ALERT ACHTUNG
 	eeprom_end = address_start + len(fetched)
 	eeprom[address_start:eeprom_end] = fetched
 
@@ -131,7 +131,9 @@ def main():
 	print('[*] security access 2')
 	bus.execute(SecurityAccess([0x02, 0xFC, 0xD0]))
 
-	calw = False
+	print_ecu_identification(bus)
+
+	calw = False#True
 	if calw:
 		print('[*] start routine 0x01')
 		bus.execute(StartRoutineByLocalId([0x01]))
