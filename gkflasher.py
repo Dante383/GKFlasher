@@ -14,6 +14,7 @@ from gkbus.kwp.commands.TransferData import TransferData
 from gkbus.kwp.commands.RequestTransferExit import RequestTransferExit
 from gkbus.kwp.commands.StartRoutineByLocalId import StartRoutineByLocalId
 from gkbus.kwp.commands.ECUReset import ECUReset
+from gkbus.kwp.commands.AccessTimingParameters import AccessTimingParameters
 from memory import find_eeprom_size_and_calibration, read_memory
 from ecu import print_ecu_identification
 from gkbus.interface import CanInterface, KLineInterface
@@ -125,10 +126,16 @@ def main():
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
 
-	print('[*] security access')
+	print('[*] Access Timing Parameters')
+	bus.execute(AccessTimingParameters([0x00]))
+
+	print('[*] Access Timing Parameters 2')
+	bus.execute(AccessTimingParameters([0x03, 0x0, 0x02, 0x0, 0xFE, 0x0]))
+
+	print('[*] Security Access')
 	bus.execute(SecurityAccess([0x01]))
 
-	print('[*] security access 2')
+	print('[*] Security Access 2')
 	bus.execute(SecurityAccess([0x02, 0xFC, 0xD0]))
 
 	print_ecu_identification(bus)
