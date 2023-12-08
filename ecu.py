@@ -30,6 +30,7 @@ def print_ecu_identification (bus):
 		value_hex = ' '.join([hex(x) for x in value[1:]])
 		value_ascii = ''.join([chr(x) for x in value[1:]])
 
+		print('')
 		print('    [*] [{}] {}: (status: {})'.format(hex(parameter['value']), parameter['name'], hex(status)))
 		print('        [HEX]: {}'.format(value_hex))
 		print('        [ASCII]: {}'.format(value_ascii))
