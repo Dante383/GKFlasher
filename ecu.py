@@ -1,4 +1,5 @@
 from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess
+from gkbus.kwp import KWPNegativeResponseException
 
 ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
@@ -16,24 +17,27 @@ ecu_identification_parameters = [
 	{'value': 0x9F, 'name': 'ECU Boot Fingerprint'},
 	{'value': 0x8A, 'name': 'System supplier specific'},
 	{'value': 0x8B, 'name': 'System supplier specific'},
-	{'value': 0x8C, 'name': 'System supplier specific'},
-	{'value': 0x8D, 'name': 'System supplier specific'},
-	{'value': 0x8E, 'name': 'System supplier specific'},
+	{'value': 0x8C, 'name': 'Hardware revision'},
+	{'value': 0x8D, 'name': 'Hardware subsystem'},
+	{'value': 0x8E, 'name': 'Calibration version'},
 	{'value': 0x8F, 'name': 'System supplier specific'},
 ]
 
 def print_ecu_identification (bus):
 	print('[*] Reading ECU Identification..')
 	for parameter in ecu_identification_parameters:
-		value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
-		status = value[0]
+		try:
+			value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
+		except KWPNegativeResponseException:
+			continue
+
 		value_hex = ' '.join([hex(x) for x in value[1:]])
 		value_ascii = ''.join([chr(x) for x in value[1:]])
 
 		print('')
-		print('    [*] [{}] {}: (status: {})'.format(hex(parameter['value']), parameter['name'], hex(status)))
-		print('        [HEX]: {}'.format(value_hex))
-		print('        [ASCII]: {}'.format(value_ascii))
+		print('    [*] [{}] {}:'.format(hex(parameter['value']), parameter['name']))
+		print('            [HEX]: {}'.format(value_hex))
+		print('            [ASCII]: {}'.format(value_ascii))
 
 def get_security_key (seed):
 	# we don't know the key algo yet so i'll just hardcode known key for now
