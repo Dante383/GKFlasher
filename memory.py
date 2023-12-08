@@ -1,5 +1,4 @@
-from gkbus.kwp.commands.ReadMemoryByAddress import ReadMemoryByAddress
-from gkbus.kwp.commands.WriteMemoryByAddress import WriteMemoryByAddress
+from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress
 
 page_size_b = 16384
 

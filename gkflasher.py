@@ -1,20 +1,7 @@
 import argparse, time, yaml, logging
 from alive_progress import alive_bar
+from gkbus.kwp.commands import *
 import gkbus
-from gkbus.kwp.KWPCommand import KWPCommand
-from gkbus.kwp.commands.ReadStatusOfDTC import ReadStatusOfDTC
-from gkbus.kwp.commands.ReadEcuIdentification import ReadEcuIdentification
-from gkbus.kwp.commands.WriteMemoryByAddress import WriteMemoryByAddress
-from gkbus.kwp.commands.StartCommunication import StartCommunication
-from gkbus.kwp.commands.StartDiagnosticSession import StartDiagnosticSession
-from gkbus.kwp.commands.StopDiagnosticSession import StopDiagnosticSession 
-from gkbus.kwp.commands.StopCommunication import StopCommunication
-from gkbus.kwp.commands.RequestDownload import RequestDownload
-from gkbus.kwp.commands.TransferData import TransferData
-from gkbus.kwp.commands.RequestTransferExit import RequestTransferExit
-from gkbus.kwp.commands.StartRoutineByLocalId import StartRoutineByLocalId
-from gkbus.kwp.commands.ECUReset import ECUReset
-from gkbus.kwp.commands.AccessTimingParameters import AccessTimingParameters
 from memory import find_eeprom_size_and_calibration, read_memory
 from ecu import print_ecu_identification, enable_security_access
 

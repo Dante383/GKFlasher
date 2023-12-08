@@ -1,5 +1,4 @@
-from gkbus.kwp.commands.ReadEcuIdentification import ReadEcuIdentification
-from gkbus.kwp.commands.SecurityAccess import SecurityAccess
+from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess
 
 ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
