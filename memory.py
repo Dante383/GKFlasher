@@ -1,4 +1,7 @@
+import logging
 from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress
+from gkbus.kwp import KWPNegativeResponseException
+logger = logging.getLogger(__name__)
 
 page_size_b = 16384
 
@@ -13,7 +16,12 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 		if ( (address_stop-address) < at_a_time ):
 			at_a_time = (address_stop-address)
 
-		fetched = bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time)).get_data()[:at_a_time] # last 3 bytes are zeros
+		try:
+			fetched = bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time)).get_data()[:at_a_time] # last 3 bytes are zeros
+		except KWPNegativeResponseException as e:
+			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
+			fetched = []
+
 		payload_start = address-address_start
 		payload_stop = payload_start+len(fetched)
 		payload[payload_start:payload_stop] = fetched
