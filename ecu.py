@@ -39,9 +39,24 @@ def print_ecu_identification (bus):
 		print('            [HEX]: {}'.format(value_hex))
 		print('            [ASCII]: {}'.format(value_ascii))
 
+def calculate_key(concat11_seed):
+    key = 0
+    index = 0
+    
+    while index < 0x10:
+        if (concat11_seed & (1 << (index & 0x1f))) != 0:
+            key = key ^ 0xffff << (index & 0x1f)
+        index += 1
+    
+    return key
+
 def get_security_key (seed):
-	# we don't know the key algo yet so i'll just hardcode known key for now
-	return [0xFC, 0xD0]
+	seed_concat = (seed[0]<<8) | seed[1]
+	key = calculate_key(seed_concat)
+
+	key_byte1 = (key >> 8) & 0xFF
+	key_byte2 = key & 0xFF
+	return [key_byte1, key_byte2]
 
 def enable_security_access (bus):
 	print('[*] Security Access 1')
