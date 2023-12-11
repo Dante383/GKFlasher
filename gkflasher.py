@@ -103,8 +103,12 @@ def main():
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
-	bus.execute(StopDiagnosticSession())
-	bus.execute(StopCommunication())
+	try:
+		bus.execute(StopDiagnosticSession())
+		bus.execute(StopCommunication())
+	except KWPNegativeResponseException:
+		pass
+
 	bus.init()
 	#bus.execute(StartCommunication())
 
