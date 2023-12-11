@@ -110,7 +110,6 @@ def main():
 		pass
 
 	bus.init()
-	#bus.execute(StartCommunication())
 
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
@@ -124,34 +123,6 @@ def main():
 	enable_security_access(bus)
 
 	print_ecu_identification(bus)
-
-	calw = False#True
-	if calw:
-		print('[*] start routine 0x01')
-		bus.execute(StartRoutineByLocalId([0x01]))
-
-		print('[*] start routine 0x00')
-		bus.execute(StartRoutineByLocalId([0x00]))
-
-		#read_voltage(bus)
-		#print('[*] Trying to read VIN... ', end='')
-		#print(read_vin(bus))
-
-		
-		print('[*] trying to write "GK663056" in the calibration version section')
-
-		print('    [*] request download')
-		print(bus.execute(RequestDownload(offset=0x90040, size=8)).get_data())
-		print('    [*] transfer data')
-		print(bus.execute(TransferData([0x67, 0x6B, 0x36, 0x36, 0x33, 0x30, 0x35, 0x36])).get_data())
-		print('    [*] transfer exit')
-		print(bus.execute(RequestTransferExit()).get_data())
-
-		print('    [*] start routine 0x02')
-		print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
-
-		print('    [*] ecu reset')
-		print(bus.execute(ECUReset([0x01])).get_data())
 
 	print('[*] Trying to find eeprom size and calibration..')
 	if (args.eeprom_size):
