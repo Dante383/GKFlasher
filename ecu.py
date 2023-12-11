@@ -47,6 +47,10 @@ def enable_security_access (bus):
 	print('[*] Security Access 1')
 	seed = bus.execute(SecurityAccess([0x01])).get_data()[1:]
 
+	if (seed == [0x0, 0x0]):
+		print('[*] ECU is not locked.')
+		return
+
 	key = get_security_key(seed)
 
 	print('[*] Security Access 2')
