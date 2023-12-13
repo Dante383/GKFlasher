@@ -1,6 +1,7 @@
 import argparse, time, yaml, logging
 from alive_progress import alive_bar
 from gkbus.kwp.commands import *
+from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from memory import find_eeprom_size_and_calibration, read_memory
 from ecu import print_ecu_identification, enable_security_access
@@ -44,6 +45,31 @@ def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, ou
 
 	print('[*] saved to {}'.format(output_filename))
 
+def write (bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom):
+	payload = eeprom[payload_start:payload_stop]
+	print('[*] Preparing to write {} bytes @ {}.'.format(flash_size, hex(flash_start)))
+	print('[*] Payload starts at {} in {}'.format(hex(payload_start), input_filename))
+
+	print('    [*] request download')
+	print(bus.execute(RequestDownload(offset=flash_start, size=flash_size)))
+
+	packets_to_write = int(flash_size/254)
+	packets_written = 0
+	while packets_to_write >= packets_written:
+		print('    [*] transfer data {}/{}'.format(packets_written, packets_to_write))
+		payload_packet_start = packets_written*254
+		payload_packet_end = payload_packet_start+254
+		payload_packet = payload[payload_packet_start:payload_packet_end]
+
+		#print('trying to write the following')
+		#print([hex(x) for x in payload_packet])
+		bus.execute(TransferData(list(payload_packet)))
+
+		packets_written += 1
+
+	print('    [*] transfer exit')
+	print(bus.execute(RequestTransferExit()).get_data())
+
 def flash_eeprom (bus, input_filename):
 	print('\n[*] Loading up {}'.format(input_filename))
 
@@ -58,6 +84,38 @@ def flash_eeprom (bus, input_filename):
 	if (input('[?] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
+
+	print('[*] start routine 0x01')
+	bus.execute(StartRoutineByLocalId([0x01]))
+
+	print('[*] start routine 0x00')
+	bus.execute(StartRoutineByLocalId([0x00]))
+
+	# unknown section
+	flash_start = 0x8A0010
+	flash_size = 0x05FFF0
+	payload_start = 0x020010
+	payload_stop = payload_start+flash_size
+	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
+
+	# cal section
+
+	flash_start = 0x890000
+	flash_size = 0x00FFF0
+
+	payload_start = 0x010000
+	payload_stop = payload_start + flash_size
+	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
+
+
+	print('    [*] start routine 0x02')
+	print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
+
+	bus.execute(WriteDataByLocalIdentifier([0x99, 0x20, 0x04, 0x10, 0x20]))
+	bus.execute(WriteDataByLocalIdentifier([0x98, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
+	print('    [*] ecu reset')
+	print(bus.execute(ECUReset([0x01])).get_data())
+
 
 def load_config (config_filename):
 	return yaml.safe_load(open('gkflasher.yml'))
@@ -122,7 +180,7 @@ def main():
 
 	enable_security_access(bus)
 
-	print_ecu_identification(bus)
+	#print_ecu_identification(bus)
 
 	print('[*] Trying to find eeprom size and calibration..')
 	if (args.eeprom_size):
