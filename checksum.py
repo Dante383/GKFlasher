@@ -65,7 +65,7 @@ def fix_checksum (filename):
 
 	print('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
 
-	if (input('[?] Save to {}?'.format(filename)) == 'y'):
+	if (input('[?] Save to {}? [y/n]: '.format(filename)) == 'y'):
 		with open(filename, 'rb+') as file:
 			file.seek(cks_address)
 			file.write(checksum_reversed.to_bytes(2, "big"))
