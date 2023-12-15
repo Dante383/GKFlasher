@@ -5,6 +5,7 @@ from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from memory import find_eeprom_size_and_calibration, read_memory
 from ecu import print_ecu_identification, enable_security_access
+from checksum import fix_checksum
 
 def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
@@ -127,6 +128,7 @@ def load_arguments ():
 	parser.add_argument('-b', '--baudrate')
 	parser.add_argument('-f', '--flash', help='Filename to flash')
 	parser.add_argument('-r', '--read', action='store_true')
+	parser.add_argument('-crc', '--fix-checksum')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
@@ -157,6 +159,10 @@ def initialize_bus (protocol, protocol_config):
 
 def main():
 	GKFlasher_config, args = load_arguments()
+
+	if (args.fix_checksum):
+		fix_checksum(filename=args.fix_checksum)
+		return 
 
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
