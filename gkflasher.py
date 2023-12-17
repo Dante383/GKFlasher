@@ -108,7 +108,7 @@ def flash_eeprom (bus, input_filename):
 	payload_stop = payload_start + flash_size
 	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
 
-
+	bus.socket.socket.timeout = 300
 	print('    [*] start routine 0x02')
 	print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
 
@@ -196,8 +196,8 @@ def main():
 			return False
 		eeprom_size = args.eeprom_size
 	else:
-		eeprom_size, eeprom_size_human, calibration = find_eeprom_size_and_calibration(bus)
-		print('[*] Found! EEPROM is {}mbit, calibration: {}'.format(eeprom_size_human, calibration))
+		eeprom_size, eeprom_size_human, description, calibration = find_eeprom_size_and_calibration(bus)
+		print('[*] Found! EEPROM is {}mbit, description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
 
 	if (args.read):
 		read_eeprom(bus, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)

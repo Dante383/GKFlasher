@@ -36,22 +36,39 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 	return payload
 
 def find_eeprom_size_and_calibration (bus):
-	size_bytes, size_human, calibration = 0, 0, ''
+	size_bytes, size_human, description, calibration = 0, 0, '', ''
 
-	if (bus.execute(ReadMemoryByAddress(offset=0x090040, size=4)).get_data() == [99, 97, 54, 54]): # 8 MiB (mebibyte)
+	# 54, 54, 51, 54  = 6636 in ASCII
+	if (bus.execute(ReadMemoryByAddress(offset=0xA00A0, size=4)).get_data() == [54, 54, 51, 54]): # 8 MiB (mebibyte) - real address: 0x90000 (SIMK43 Dev)
 		size_bytes = 1048575
 		size_human = 8
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x090040, size=8)).get_data()
-	elif (bus.execute(ReadMemoryByAddress(offset=0x010008, size=4)).get_data() == [99, 97, 54, 54]): # 4 MiB (mebibyte)
-		size_bytes = 524287 # is that correct? verify
+		description = bus.execute(ReadMemoryByAddress(offset=0x90040, size=8)).get_data()
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x90000, size=8)).get_data()
+	
+	# 99, 97, 54, 53  = ca65 in ASCII (Santa Fe V6)
+	elif (bus.execute(ReadMemoryByAddress(offset=0x88040, size=4)).get_data() == [99, 97, 54, 53]): # 4 MiB (mebibyte) - real address: 0x8000 (SIMK43 V6)
+		size_bytes = 524287
 		size_human = 4
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x010008, size=8)).get_data()
-	elif (bus.execute(ReadMemoryByAddress(offset=0x008008, size=4)).get_data() == [99, 97, 54, 54]): # 2 MiB (mebibyte)
-		size_bytes = 262143 # is that correct? verify
+		description = bus.execute(ReadMemoryByAddress(offset=0x88040, size=8)).get_data()
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x88000, size=8)).get_data()
+		
+	# 99, 97, 54, 54  = ca66 in ASCII
+	elif (bus.execute(ReadMemoryByAddress(offset=0x890040, size=4)).get_data() == [99, 97, 54, 54]): # 4 MiB (mebibyte) - real address: 0x10000 (SIMK43 2.0L)
+		size_bytes = 524287
+		size_human = 4
+		description = bus.execute(ReadMemoryByAddress(offset=0x890040, size=8)).get_data()
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x890000, size=8)).get_data()
+		
+	# 99, 97, 54, 54  = ca66 in ASCII (SIMK41)
+	elif (bus.execute(ReadMemoryByAddress(offset=0x48040, size=4)).get_data() == [99, 97, 54, 54]): # 2 MiB (mebibyte) - real address: 0x8000 (SIMK41)
+		size_bytes = 262143
 		size_human = 2
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x008008, size=8)).get_data()
+		description = bus.execute(ReadMemoryByAddress(offset=0x48000, size=8)).get_data()
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x48040, size=8)).get_data()
+			
+	description = ''.join([chr(x) for x in description])
 	calibration = ''.join([chr(x) for x in calibration])
-	return (size_bytes, size_human, calibration)
+	return (size_bytes, size_human, description, calibration)
 
 # read memory into a buffer
 # this function only cares about reading from address_start to address_stop. 
