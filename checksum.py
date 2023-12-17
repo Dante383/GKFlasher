@@ -38,7 +38,6 @@ def fix_checksum (filename):
 	print('[*] Trying to find initial value.. ', end='')
 	initial_value_bytes = read_and_reverse(payload, init_address, 2)
 	initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
-	#initial_value = 0x3536
 	print(hex(initial_value))
 
 	print('[*] checksum of zone1: ', end='')

@@ -169,12 +169,6 @@ def main():
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
 
-	print('[*] Access Timing Parameters')
-	bus.execute(AccessTimingParameters([0x00]))
-
-	print('[*] Access Timing Parameters 2')
-	bus.execute(AccessTimingParameters([0x03, 0x0, 0x02, 0x0, 0xFE, 0x0]))
-
 	enable_security_access(bus)
 
 	#print_ecu_identification(bus)
