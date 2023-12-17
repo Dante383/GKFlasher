@@ -36,19 +36,6 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 	return payload
 
 
-
-def find_eeprom_size_and_calibration (bus, ecu):
-	size_bytes, size_human, description, calibration = 0, 0, '', ''
-
-	size_bytes = ecu['size_bytes']
-	size_human = ecu['size_human']
-	description = bus.execute(ReadMemoryByAddress(offset=ecu['description_offset'], size=8)).get_data()
-	calibration = bus.execute(ReadMemoryByAddress(offset=ecu['calibration_offset'], size=8)).get_data()
-		
-	description = ''.join([chr(x) for x in description])
-	calibration = ''.join([chr(x) for x in calibration])
-	return (size_bytes, size_human, description, calibration)
-
 # read memory into a buffer
 # this function only cares about reading from address_start to address_stop. 
 # it doesn't pad the read with 0xFFs or anything. If you request to read, for example,

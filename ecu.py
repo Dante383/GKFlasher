@@ -71,65 +71,95 @@ def enable_security_access (bus):
 	print('[*] Security Access 2')
 	bus.execute(SecurityAccess([0x02] + key))
 
-ECU_DEFINITIONS = {
-	'simk43_8mbit': {
-		'name': 'SIMK43 8mbit',
-		'size_bytes': 1048575,
-		'size_human': 8,
-		'description_offset': 0x90040,
-		'calibration_offset': 0x90000
-	},
-	'simk43_v6_4mbit': {
-		'name': 'SIMK43 V6 4mbit',
-		'size_bytes': 524287,
-		'size_human': 4,
-		'description_offset': 0x88040,
-		'calibration_offset': 0x88000
-	},
-	'simk43_2.0_4mbit': {
-		'name': 'SIMK43 2.0 4mbit',
-		'size_bytes': 524287,
-		'size_human': 4,
-		'description_offset': 0x90040,
-		'calibration_offset': 0x90000
-	},
-	'simk41_2mbit': {
-		'name': 'SIMK41 2mbit',
-		'size_bytes': 262143,
-		'size_human': 2,
-		'description_offset': 0x48000,
-		'calibration_offset': 0x48040
-	}
-}
+class ECU:
+	def __init__ (self, name: str, eeprom_size_bytes: int, eeprom_size_human: int, memory_offset: int, bin_offset: int):
+		self.name = name
+		self.eeprom_size_bytes, self.eeprom_size_human = eeprom_size_bytes, eeprom_size_human
+		self.memory_offset, self.bin_offset = memory_offset, bin_offset
+
+	def get_name (self) -> str:
+		return self.name 
+
+	def get_eeprom_size_bytes (self) -> int:
+		return self.eeprom_size_bytes
+
+	def get_eeprom_size_human (self) -> int:
+		return self.eeprom_size_human
+
+	def set_bus (self, bus):
+		self.bus = bus
+		return self
+
+	def calculate_memory_offset (self, offset: int) -> int:
+		return offset + self.memory_offset
+
+	def calculate_bin_offset (self, offset: int) -> int:
+		return offset + self.bin_offset
+
+	def get_calibration (self):
+		calibration = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
+		return ''.join([chr(x) for x in calibration])
+
+	def get_calibration_description (self):
+		description = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
+		return ''.join([chr(x) for x in description])
 
 ECU_IDENTIFICATION_TABLE = [
 	{
 		'offset': 0xA00A0,
 		'expected': [54, 54, 51, 54],
-		'ecu': ECU_DEFINITIONS['simk43_8mbit']
+		'ecu': ECU(
+			name = 'SIMK43 8mbit',
+			eeprom_size_bytes = 1048575,
+			eeprom_size_human = 8,
+			memory_offset = 0,
+			bin_offset = 0
+		)
 	},
 	{
 		'offset': 0x88040,
 		'expected': [99, 97, 54, 53],
-		'ecu': ECU_DEFINITIONS['simk43_v6_4mbit']
+		'ecu': ECU(
+			name = 'SIMK43 V6 4mbit',
+			eeprom_size_bytes = 524287,
+			eeprom_size_human = 4,
+			memory_offset = -0x8000,
+			bin_offset = -0x080000
+		)
 	},
 	{
-		'offset': 0x90040,
+		'offset': 0x090040,
 		'expected': [99, 97, 54, 54],
-		'ecu': ECU_DEFINITIONS['simk43_2.0_4mbit']
+		'ecu': ECU(
+			name = 'SIMK43 2.0 4mbit',
+			eeprom_size_bytes = 524287,
+			eeprom_size_human = 4,
+			memory_offset = 0,
+			bin_offset = -0x080000
+		)
 	},
 	{
 		'offset': 0x48040,
 		'expected': [99, 97, 54, 54],
-		'ecu': ECU_DEFINITIONS['simk41_2mbit']
+		'ecu': ECU(
+			name = 'SIMK41 2mbit',
+			eeprom_size_bytes = 262143,
+			eeprom_size_human = 2,
+			memory_offset = -0x48000,
+			bin_offset = -0x080000 - 1
+		)
 	}
 ]
 
-def identify_ecu (bus):
+def identify_ecu (bus) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
 			result = bus.execute(ReadMemoryByAddress(offset=ecu_identifier['offset'], size=4)).get_data()
 		except KWPNegativeResponseException:
 			continue
+
 		if result == ecu_identifier['expected']:
-			return ecu_identifier['ecu']
+			ecu = ecu_identifier['ecu']
+			ecu.set_bus(bus)
+			return ecu
+	raise Exception('Failed to identify ECU!')

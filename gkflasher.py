@@ -3,7 +3,7 @@ from alive_progress import alive_bar
 from gkbus.kwp.commands import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
-from memory import find_eeprom_size_and_calibration, read_memory
+from memory import read_memory
 from ecu import identify_ecu, print_ecu_identification, enable_security_access
 from checksum import fix_checksum
 
@@ -11,7 +11,7 @@ def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
 	return ''.join([chr(x) for x in vin_hex])
 
-def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+def read_eeprom (bus, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
 		address_stop = eeprom_size
 
@@ -22,10 +22,11 @@ def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, ou
 	eeprom = [0xFF]*eeprom_size
 
 	with alive_bar(requested_size+1, unit='B') as bar:
-		fetched = read_memory(bus, address_start=address_start, address_stop=address_stop, progress_callback=bar)
-	address_start = address_start - 0x080000 # !!!!!! FIXME TODO ALERT ACHTUNG
-	eeprom_end = address_start + len(fetched)
-	eeprom[address_start:eeprom_end] = fetched
+		fetched = read_memory(bus, address_start=ecu.calculate_memory_offset(address_start), address_stop=ecu.calculate_memory_offset(address_stop), progress_callback=bar)
+
+	eeprom_start = ecu.calculate_bin_offset(address_start)
+	eeprom_end = eeprom_start + len(fetched)
+	eeprom[eeprom_start:eeprom_end] = fetched
 
 	print('[*] received {} bytes of data'.format(len(fetched)))
 
@@ -62,7 +63,7 @@ def write (bus, input_filename, flash_start, flash_size, payload_start, payload_
 	print('    [*] transfer exit')
 	print(bus.execute(RequestTransferExit()).get_data())
 
-def flash_eeprom (bus, input_filename):
+def flash_eeprom (bus, ecu, input_filename):
 	print('\n[*] Loading up {}'.format(input_filename))
 
 	with open(input_filename, 'rb') as file:
@@ -175,9 +176,9 @@ def main():
 
 	print('[*] Trying to identify ECU automatically..')
 	ecu = identify_ecu(bus)
-	print('[*] Found! ECU name: {}'.format(ecu['name']))
+	print('[*] Found! ECU name: {}'.format(ecu.get_name()))
 
-	print('[*] Trying to find eeprom size and calibration..')
+	print('[*] Trying to find calibration..')
 	if (args.eeprom_size):
 		print('[!] EEPROM size was selected by the user as {} bytes!'.format(args.eeprom_size))
 		if (input('[?] Are you absolutely sure you know what you\'re doing? This could potentially result in bricking your ECU [y/n]: ') != 'y'):
@@ -185,14 +186,15 @@ def main():
 			return False
 		eeprom_size = args.eeprom_size
 	else:
-		eeprom_size, eeprom_size_human, description, calibration = find_eeprom_size_and_calibration(bus, ecu)
+		eeprom_size, eeprom_size_human = ecu.get_eeprom_size_bytes(), ecu.get_eeprom_size_human()
+		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
 		print('[*] Found! EEPROM is {}mbit, description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
 
 	if (args.read):
-		read_eeprom(bus, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
+		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 
 	if (args.flash):
-		flash_eeprom(bus, input_filename=args.flash)
+		flash_eeprom(bus, ecu, input_filename=args.flash)
 
 if __name__ == '__main__':
 	main()
