@@ -72,10 +72,15 @@ def enable_security_access (bus):
 	bus.execute(SecurityAccess([0x02] + key))
 
 class ECU:
-	def __init__ (self, name: str, eeprom_size_bytes: int, eeprom_size_human: int, memory_offset: int, bin_offset: int):
+	def __init__ (self, 
+		name: str, 
+		eeprom_size_bytes: int, eeprom_size_human: int, 
+		memory_offset: int, bin_offset: int,
+		single_byte_restriction_start: int = 0, single_byte_restriction_stop: int = 0):
 		self.name = name
 		self.eeprom_size_bytes, self.eeprom_size_human = eeprom_size_bytes, eeprom_size_human
 		self.memory_offset, self.bin_offset = memory_offset, bin_offset
+		self.single_byte_restriction_start, self.single_byte_restriction_stop = single_byte_restriction_start, single_byte_restriction_stop
 
 	def get_name (self) -> str:
 		return self.name 
@@ -96,11 +101,18 @@ class ECU:
 	def calculate_bin_offset (self, offset: int) -> int:
 		return offset + self.bin_offset
 
-	def get_calibration (self):
+	def adjust_bytes_at_a_time (self, offset: int, at_a_time: int, og_at_a_time: int) -> int:
+		if (self.single_byte_restriction_start == 0 or self.single_byte_restriction_stop == 0):
+			return at_a_time
+		if (offset >= self.single_byte_restriction_start and offset < self.single_byte_restriction_stop):
+			return 1
+		return og_at_a_time
+
+	def get_calibration (self) -> str:
 		calibration = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
 		return ''.join([chr(x) for x in calibration])
 
-	def get_calibration_description (self):
+	def get_calibration_description (self) -> str:
 		description = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
 		return ''.join([chr(x) for x in description])
 
@@ -135,7 +147,9 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_bytes = 524287,
 			eeprom_size_human = 4,
 			memory_offset = 0,
-			bin_offset = -0x080000
+			bin_offset = -0x080000,
+			single_byte_restriction_start = 0x089FFF,
+			single_byte_restriction_stop = 0x09000F
 		)
 	},
 	{

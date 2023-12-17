@@ -5,19 +5,21 @@ logger = logging.getLogger(__name__)
 
 page_size_b = 16384
 
-def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
+def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 	address_start = offset
 	address_stop = offset+page_size_b
 	address = address_start
 
 	payload = [0xF]*(address_stop-address_start)
+	og_at_a_time = at_a_time
 
 	while True:
+		at_a_time = ecu.adjust_bytes_at_a_time(address, at_a_time, og_at_a_time)
 		if ( (address_stop-address) < at_a_time ):
 			at_a_time = (address_stop-address)
 
 		try:
-			fetched = bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time)).get_data()[:at_a_time] # last 3 bytes are zeros
+			fetched = ecu.bus.execute(ReadMemoryByAddress(offset=address, size=at_a_time)).get_data()[:at_a_time] # last 3 bytes are zeros
 		except KWPNegativeResponseException as e:
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
 			fetched = []
@@ -41,7 +43,7 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 # it doesn't pad the read with 0xFFs or anything. If you request to read, for example,
 # the calibration zone, from 0x090000 to 0x094000 (16364 bytes) - then you'll only
 # get 16364 bytes back. 
-def read_memory(bus, address_start, address_stop, progress_callback=False):#, progress_callback):
+def read_memory(ecu, address_start, address_stop, progress_callback=False):#, progress_callback):
 	requested_size = address_stop-address_start
 	pages = int(requested_size/page_size_b) # 16kib per page 
 	buffer = [0xF]*requested_size
@@ -53,7 +55,7 @@ def read_memory(bus, address_start, address_stop, progress_callback=False):#, pr
 			if (progress_callback):
 				progress_callback.title('Page {}/{}, offset {}'.format(page+1, pages+1, hex(address)))
 
-			fetched = read_page_16kib(bus, offset=address, progress_callback=progress_callback)
+			fetched = read_page_16kib(ecu, offset=address, progress_callback=progress_callback)
 			
 			buffer_start = (address-address_start)
 			buffer_end = buffer_start + len(fetched)
