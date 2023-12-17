@@ -1,7 +1,7 @@
-from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess
+from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess, ReadMemoryByAddress
 from gkbus.kwp import KWPNegativeResponseException
 
-ecu_identification_parameters = [
+kwp_ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
 	{'value': 0x87, 'name': 'DCX/MMC ECU Identification'},
 	{'value': 0x88, 'name': 'VIN (original)'},
@@ -25,7 +25,7 @@ ecu_identification_parameters = [
 
 def print_ecu_identification (bus):
 	print('[*] Reading ECU Identification..')
-	for parameter in ecu_identification_parameters:
+	for parameter in kwp_ecu_identification_parameters:
 		try:
 			value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
 		except KWPNegativeResponseException:
@@ -70,3 +70,66 @@ def enable_security_access (bus):
 
 	print('[*] Security Access 2')
 	bus.execute(SecurityAccess([0x02] + key))
+
+ECU_DEFINITIONS = {
+	'simk43_8mbit': {
+		'name': 'SIMK43 8mbit',
+		'size_bytes': 1048575,
+		'size_human': 8,
+		'description_offset': 0x90040,
+		'calibration_offset': 0x90000
+	},
+	'simk43_v6_4mbit': {
+		'name': 'SIMK43 V6 4mbit',
+		'size_bytes': 524287,
+		'size_human': 4,
+		'description_offset': 0x88040,
+		'calibration_offset': 0x88000
+	},
+	'simk43_2.0_4mbit': {
+		'name': 'SIMK43 2.0 4mbit',
+		'size_bytes': 524287,
+		'size_human': 4,
+		'description_offset': 0x90040,
+		'calibration_offset': 0x90000
+	},
+	'simk41_2mbit': {
+		'name': 'SIMK41 2mbit',
+		'size_bytes': 262143,
+		'size_human': 2,
+		'description_offset': 0x48000,
+		'calibration_offset': 0x48040
+	}
+}
+
+ECU_IDENTIFICATION_TABLE = [
+	{
+		'offset': 0xA00A0,
+		'expected': [54, 54, 51, 54],
+		'ecu': ECU_DEFINITIONS['simk43_8mbit']
+	},
+	{
+		'offset': 0x88040,
+		'expected': [99, 97, 54, 53],
+		'ecu': ECU_DEFINITIONS['simk43_v6_4mbit']
+	},
+	{
+		'offset': 0x90040,
+		'expected': [99, 97, 54, 54],
+		'ecu': ECU_DEFINITIONS['simk43_2.0_4mbit']
+	},
+	{
+		'offset': 0x48040,
+		'expected': [99, 97, 54, 54],
+		'ecu': ECU_DEFINITIONS['simk41_2mbit']
+	}
+]
+
+def identify_ecu (bus):
+	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
+		try:
+			result = bus.execute(ReadMemoryByAddress(offset=ecu_identifier['offset'], size=4)).get_data()
+		except KWPNegativeResponseException:
+			continue
+		if result == ecu_identifier['expected']:
+			return ecu_identifier['ecu']

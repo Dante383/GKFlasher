@@ -35,62 +35,16 @@ def read_page_16kib(bus, offset, at_a_time=254, progress_callback=False):
 			break
 	return payload
 
-ECU_IDENTIFICATION_TABLE = [
-	{
-		'name': 'SIMK43 8mbit',
-		'offset': 0xA00A0,
-		'expected': [54, 54, 51, 54],
-		'size_bytes': 1048575,
-		'size_human': 8,
-		'description_offset': 0x90040,
-		'calibration_offset': 0x90000
-	},
-	{
-		'name': 'SIMK43 V6 4mbit',
-		'offset': 0x88040,
-		'expected': [99, 97, 54, 53],
-		'size_bytes': 524287,
-		'size_human': 4,
-		'description_offset': 0x88040,
-		'calibration_offset': 0x88000
-	},
-	{
-		'name': 'SIMK43 2.0 4mbit',
-		'offset': 0x90040,
-		'expected': [99, 97, 54, 54],
-		'size_bytes': 524287,
-		'size_human': 4,
-		'description_offset': 0x90040,
-		'calibration_offset': 0x90000
-	},
-	{
-		'name': 'SIMK41 2mbit',
-		'offset': 0x48040,
-		'expected': [99, 97, 54, 54],
-		'size_bytes': 262143,
-		'size_human': 2,
-		'description_offset': 0x48000,
-		'calibration_offset': 0x48040
-	}
-]
 
-def find_eeprom_size_and_calibration (bus):
+
+def find_eeprom_size_and_calibration (bus, ecu):
 	size_bytes, size_human, description, calibration = 0, 0, '', ''
 
-	for ecu in ECU_IDENTIFICATION_TABLE:
-		try:
-			result = bus.execute(ReadMemoryByAddress(offset=ecu['offset'], size=4)).get_data()
-		except KWPNegativeResponseException:
-			continue
-		if result == ecu['expected']:
-			size_bytes = ecu['size_bytes']
-			size_human = ecu['size_human']
-			description = bus.execute(ReadMemoryByAddress(offset=ecu['description_offset'], size=8)).get_data()
-			calibration = bus.execute(ReadMemoryByAddress(offset=ecu['calibration_offset'], size=8)).get_data()
-
-	if size_bytes == 0:
-		raise Exception('Failed to identify ECU!')
-			
+	size_bytes = ecu['size_bytes']
+	size_human = ecu['size_human']
+	description = bus.execute(ReadMemoryByAddress(offset=ecu['description_offset'], size=8)).get_data()
+	calibration = bus.execute(ReadMemoryByAddress(offset=ecu['calibration_offset'], size=8)).get_data()
+		
 	description = ''.join([chr(x) for x in description])
 	calibration = ''.join([chr(x) for x in calibration])
 	return (size_bytes, size_human, description, calibration)

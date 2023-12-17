@@ -4,7 +4,7 @@ from gkbus.kwp.commands import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from memory import find_eeprom_size_and_calibration, read_memory
-from ecu import print_ecu_identification, enable_security_access
+from ecu import identify_ecu, print_ecu_identification, enable_security_access
 from checksum import fix_checksum
 
 def read_vin(bus):
@@ -173,6 +173,10 @@ def main():
 
 	#print_ecu_identification(bus)
 
+	print('[*] Trying to identify ECU automatically..')
+	ecu = identify_ecu(bus)
+	print('[*] Found! ECU name: {}'.format(ecu['name']))
+
 	print('[*] Trying to find eeprom size and calibration..')
 	if (args.eeprom_size):
 		print('[!] EEPROM size was selected by the user as {} bytes!'.format(args.eeprom_size))
@@ -181,7 +185,7 @@ def main():
 			return False
 		eeprom_size = args.eeprom_size
 	else:
-		eeprom_size, eeprom_size_human, description, calibration = find_eeprom_size_and_calibration(bus)
+		eeprom_size, eeprom_size_human, description, calibration = find_eeprom_size_and_calibration(bus, ecu)
 		print('[*] Found! EEPROM is {}mbit, description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
 
 	if (args.read):
