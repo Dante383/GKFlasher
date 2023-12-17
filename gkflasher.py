@@ -108,7 +108,7 @@ def flash_eeprom (bus, input_filename):
 	payload_stop = payload_start + flash_size
 	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
 
-	bus.socket.socket.timeout = 300
+	bus.set_timeout(300)
 	print('    [*] start routine 0x02')
 	print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
 
