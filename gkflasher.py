@@ -11,15 +11,6 @@ def read_vin(bus):
 	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
 	return ''.join([chr(x) for x in vin_hex])
 
-def read_voltage(bus):
-	print('[*] Trying to read voltage (0x42/SAE_VPWR).. ', end='')
-
-	voltage_hex = bus.execute(ReadStatusOfDTC(0x42)).get_data()
-	
-	voltage = hex(voltage_hex[0]) + hex(voltage_hex[1])[2:]
-	voltage = int(voltage, 16)/1000
-	print('{}V'.format(voltage))
-
 def read_eeprom (bus, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
 		address_stop = eeprom_size
@@ -92,7 +83,7 @@ def flash_eeprom (bus, input_filename):
 	print('[*] start routine 0x00')
 	bus.execute(StartRoutineByLocalId([0x00]))
 
-	# unknown section
+	# program code section
 	flash_start = 0x8A0010
 	flash_size = 0x05FFF0
 	payload_start = 0x020010

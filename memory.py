@@ -53,11 +53,11 @@ def find_eeprom_size_and_calibration (bus):
 		calibration = bus.execute(ReadMemoryByAddress(offset=0x88000, size=8)).get_data()
 		
 	# 99, 97, 54, 54  = ca66 in ASCII
-	elif (bus.execute(ReadMemoryByAddress(offset=0x890040, size=4)).get_data() == [99, 97, 54, 54]): # 4 MiB (mebibyte) - real address: 0x10000 (SIMK43 2.0L)
+	if (bus.execute(ReadMemoryByAddress(offset=0x90040, size=4)).get_data() == [99, 97, 54, 54]): # 4 MiB (mebibyte) - real address: 0x10000 (SIMK43 2.0L)
 		size_bytes = 524287
 		size_human = 4
-		description = bus.execute(ReadMemoryByAddress(offset=0x890040, size=8)).get_data()
-		calibration = bus.execute(ReadMemoryByAddress(offset=0x890000, size=8)).get_data()
+		description = bus.execute(ReadMemoryByAddress(offset=0x90040, size=8)).get_data()
+		calibration = bus.execute(ReadMemoryByAddress(offset=0x90000, size=8)).get_data()
 		
 	# 99, 97, 54, 54  = ca66 in ASCII (SIMK41)
 	elif (bus.execute(ReadMemoryByAddress(offset=0x48040, size=4)).get_data() == [99, 97, 54, 54]): # 2 MiB (mebibyte) - real address: 0x8000 (SIMK41)
