@@ -10,7 +10,7 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 	address_stop = offset+page_size_b
 	address = address_start
 
-	payload = [0xF]*(address_stop-address_start)
+	payload = [0xFF]*(address_stop-address_start)
 	og_at_a_time = at_a_time
 
 	while True:
@@ -46,7 +46,7 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 def read_memory(ecu, address_start, address_stop, progress_callback=False):#, progress_callback):
 	requested_size = address_stop-address_start
 	pages = int(requested_size/page_size_b) # 16kib per page 
-	buffer = [0xF]*requested_size
+	buffer = [0xFF]*requested_size
 	address = address_start
 
 	try:

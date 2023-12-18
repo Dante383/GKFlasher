@@ -136,7 +136,7 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_bytes = 524287,
 			eeprom_size_human = 4,
 			memory_offset = -0x8000,
-			bin_offset = -0x080000
+			bin_offset = -0x088000
 		)
 	},
 	{
@@ -160,7 +160,9 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_bytes = 262143,
 			eeprom_size_human = 2,
 			memory_offset = -0x48000,
-			bin_offset = -0x080000 - 1
+			bin_offset = -0x088000,
+			single_byte_restriction_start = 0x48000,
+			single_byte_restriction_stop = 0x4800F
 		)
 	}
 ]
