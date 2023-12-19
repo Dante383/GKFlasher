@@ -63,25 +63,19 @@ def write (bus, input_filename, flash_start, flash_size, payload_start, payload_
 	print('    [*] transfer exit')
 	print(bus.execute(RequestTransferExit()).get_data())
 
-def flash_eeprom (bus, ecu, input_filename):
+def flash_eeprom (bus, input_filename):
 	print('\n[*] Loading up {}'.format(input_filename))
 
 	with open(input_filename, 'rb') as file:
 		eeprom = file.read()
 
 	print('[*] Loaded {} bytes'.format(len(eeprom)))
-	calibration = eeprom[0x090040:0x090048]
-	calibration = ''.join([chr(x) for x in calibration])
-	print('[*] {} calibration version: {}'.format(input_filename, calibration))
 
 	if (input('[?] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
 
-	print('[*] start routine 0x01')
-	bus.execute(StartRoutineByLocalId([0x01]))
-
-	print('[*] start routine 0x00')
+	print('[*] start routine 0x00 (erase program code section)')
 	bus.execute(StartRoutineByLocalId([0x00]))
 
 	# program code section
@@ -90,6 +84,9 @@ def flash_eeprom (bus, ecu, input_filename):
 	payload_start = 0x020010
 	payload_stop = payload_start+flash_size
 	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
+
+	print('[*] start routine 0x01 (erase calibration section)')
+	bus.execute(StartRoutineByLocalId([0x01]))
 
 	# cal section
 
@@ -103,6 +100,7 @@ def flash_eeprom (bus, ecu, input_filename):
 	bus.set_timeout(300)
 	print('    [*] start routine 0x02')
 	print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
+	bus.set_timeout(12)
 
 	bus.execute(WriteDataByLocalIdentifier([0x99, 0x20, 0x04, 0x10, 0x20]))
 	bus.execute(WriteDataByLocalIdentifier([0x98, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
@@ -169,6 +167,14 @@ def main():
 
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession())
+	bus.set_timeout(12)
+
+	print('[*] Access Timing Parameters')
+    bus.execute(AccessTimingParameters([0x00]))
+    # we don't know what this does yet but removing it makes Routine 0x02 never
+    # finish - rendering flashing unusable
+    print('[*] Access Timing Parameters 2')
+    bus.execute(AccessTimingParameters([0x03, 0x0, 0x02, 0x0, 0xFE, 0x0]))
 
 	enable_security_access(bus)
 
@@ -194,7 +200,7 @@ def main():
 		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 
 	if (args.flash):
-		flash_eeprom(bus, ecu, input_filename=args.flash)
+		flash_eeprom(bus, input_filename=args.flash)
 
 if __name__ == '__main__':
 	main()
