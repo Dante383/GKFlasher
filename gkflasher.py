@@ -170,12 +170,10 @@ def main():
 	bus.set_timeout(12)
 
 	print('[*] Access Timing Parameters')
-    bus.execute(AccessTimingParameters([0x00]))
-    # we don't know what this does yet but removing it makes Routine 0x02 never
-    # finish - rendering flashing unusable
-    print('[*] Access Timing Parameters 2')
-    bus.execute(AccessTimingParameters([0x03, 0x0, 0x02, 0x0, 0xFE, 0x0]))
+    available_timing = bus.execute(AccessTimingParameters([0x00])).get_data()[1:]
 
+    bus.execute(AccessTimingParameters([0x03] + available_timing))
+	
 	enable_security_access(bus)
 
 	#print_ecu_identification(bus)
