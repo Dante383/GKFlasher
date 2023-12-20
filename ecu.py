@@ -53,7 +53,7 @@ def calculate_key(concat11_seed):
 
 def enable_security_access (bus):
 	print('[*] Security Access')
-	seed = bus.execute(SecurityAccess(AccessLevel.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
+	seed = bus.execute(SecurityAccess(AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
 
 	if (seed == [0x0, 0x0]):
 		print('[*] ECU is not locked.')
@@ -62,7 +62,7 @@ def enable_security_access (bus):
 	seed_concat = (seed[0]<<8) | seed[1]
 	key = calculate_key(seed_concat)
 
-	bus.execute(SecurityAccess(AccessLevel.PROGRAMMING_SEND_KEY, key))
+	bus.execute(SecurityAccess(AccessType.PROGRAMMING_SEND_KEY, key))
 
 class ECU:
 	def __init__ (self, 
