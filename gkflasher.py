@@ -225,9 +225,9 @@ def main():
 	if (args.flash):
 		flash_eeprom(ecu, input_filename=args.flash)
 	if (args.flash_calibration):
-		flash_eeprom(ecu, input_filename=args.flash_calibration_zone, flash_calibration=True, flash_program=False)
+		flash_eeprom(ecu, input_filename=args.flash_calibration, flash_calibration=True, flash_program=False)
 	if (args.flash_program):
-		flash_eeprom(ecu, input_filename=args.flash_program_zone, flash_program=True, flash_calibration=False)
+		flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
 
 if __name__ == '__main__':
 	main()
