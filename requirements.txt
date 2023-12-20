@@ -1,2 +1,2 @@
 alive-progress==3.1.5
-gkbus==0.1.0
+gkbus==0.1.1

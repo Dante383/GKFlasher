@@ -1,6 +1,7 @@
 import argparse, time, yaml, logging
 from alive_progress import alive_bar
 from gkbus.kwp.commands import *
+from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from memory import read_memory
@@ -166,7 +167,7 @@ def main():
 	bus.init()
 
 	print('[*] Trying to start diagnostic session')
-	bus.execute(StartDiagnosticSession())
+	bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 	bus.set_timeout(12)
 
 	print('[*] Access Timing Parameters')
@@ -175,7 +176,7 @@ def main():
     	bus.execute(AccessTimingParameters([0x03] + available_timing))
 	except KWPNegativeResponseException:
 		print('[!] Not supported on this ECU!')
-		
+
 	enable_security_access(bus)
 
 	#print_ecu_identification(bus)
