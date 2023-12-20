@@ -19,7 +19,7 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 			at_a_time = (address_stop-address)
 
 		try:
-			fetched = ecu.read_memory_by_address(offset=address, size=at_a_time)[:at_a_time] # last 3 bytes are zeros
+			fetched = ecu.read_memory_by_address(offset=address, size=at_a_time)
 		except KWPNegativeResponseException as e:
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
 			fetched = []
