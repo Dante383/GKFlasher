@@ -4,7 +4,7 @@ from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
-from memory import read_memory
+from memory import read_memory, write_memory
 from ecu import identify_ecu, print_ecu_identification, enable_security_access
 from checksum import fix_checksum
 
@@ -39,32 +39,7 @@ def read_eeprom (bus, ecu, eeprom_size, address_start=0x000000, address_stop=Non
 
 	print('[*] saved to {}'.format(output_filename))
 
-def write (bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom):
-	payload = eeprom[payload_start:payload_stop]
-	print('[*] Preparing to write {} bytes @ {}.'.format(flash_size, hex(flash_start)))
-	print('[*] Payload starts at {} in {}'.format(hex(payload_start), input_filename))
-
-	print('    [*] request download')
-	print(bus.execute(RequestDownload(offset=flash_start, size=flash_size)))
-
-	packets_to_write = int(flash_size/254)
-	packets_written = 0
-	while packets_to_write >= packets_written:
-		print('    [*] transfer data {}/{}'.format(packets_written, packets_to_write))
-		payload_packet_start = packets_written*254
-		payload_packet_end = payload_packet_start+254
-		payload_packet = payload[payload_packet_start:payload_packet_end]
-
-		#print('trying to write the following')
-		#print([hex(x) for x in payload_packet])
-		bus.execute(TransferData(list(payload_packet)))
-
-		packets_written += 1
-
-	print('    [*] transfer exit')
-	print(bus.execute(RequestTransferExit()).get_data())
-
-def flash_eeprom (bus, input_filename):
+def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
 	print('\n[*] Loading up {}'.format(input_filename))
 
 	with open(input_filename, 'rb') as file:
@@ -76,37 +51,41 @@ def flash_eeprom (bus, input_filename):
 		print('[!] Aborting!')
 		return
 
-	print('[*] start routine 0x00 (erase program code section)')
-	bus.execute(StartRoutineByLocalIdentifier(0x00))
+	if flash_program:
+		print('[*] start routine 0x00 (erase program code section)')
+		ecu.bus.execute(StartRoutineByLocalIdentifier(0x00))
 
-	# program code section
-	flash_start = 0x8A0010
-	flash_size = 0x05FFF0
-	payload_start = 0x020010
-	payload_stop = payload_start+flash_size
-	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
+		flash_start = 0x8A0010
+		flash_size = 0x05FFF0
+		payload_start = 0x020010
+		payload_stop = payload_start+flash_size
+		payload = eeprom[payload_start:payload_stop]
 
-	print('[*] start routine 0x01 (erase calibration section)')
-	bus.execute(StartRoutineByLocalIdentifier(0x01))
+		with alive_bar(flash_size+1, unit='B') as bar:
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
-	# cal section
+	if flash_calibration:
+		print('[*] start routine 0x01 (erase calibration section)')
+		ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
 
-	flash_start = 0x890000
-	flash_size = 0x00FFF0
+		flash_start = 0x890000
+		flash_size = 0x00FFF0
+		payload_start = 0x010000
+		payload_stop = payload_start + flash_size
+		payload = eeprom[payload_start:payload_stop]
 
-	payload_start = 0x010000
-	payload_stop = payload_start + flash_size
-	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
+		with alive_bar(flash_size+1, unit='B') as bar:
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
-	bus.set_timeout(300)
+	ecu.bus.set_timeout(300)
 	print('    [*] start routine 0x02')
-	print(bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data())
-	bus.set_timeout(12)
+	print(ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data())
+	ecu.bus.set_timeout(12)
 
-	bus.execute(WriteDataByLocalIdentifier(0x99, [0x20, 0x04, 0x10, 0x20]))
-	bus.execute(WriteDataByLocalIdentifier(0x98, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
+	ecu.bus.execute(WriteDataByLocalIdentifier(0x99, [0x20, 0x04, 0x10, 0x20]))
+	ecu.bus.execute(WriteDataByLocalIdentifier(0x98, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
 	print('    [*] ecu reset')
-	print(bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data())
+	print(ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data())
 
 
 def load_config (config_filename):
@@ -117,7 +96,9 @@ def load_arguments ():
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate')
-	parser.add_argument('-f', '--flash', help='Filename to flash')
+	parser.add_argument('-f', '--flash', help='Filename to full flash')
+	parser.add_argument('-fc', '--flash-calibration', help='Filename to flash calibration zone from')
+	parser.add_argument('-fp', '--flash-program', help='Filename to flash program zone from')
 	parser.add_argument('-r', '--read', action='store_true')
 	parser.add_argument('-crc', '--fix-checksum')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
@@ -191,9 +172,9 @@ def main():
 
 	#print_ecu_identification(bus)
 
-	print('[*] Trying to identify ECU automatically..')
+	print('[*] Trying to identify ECU automatically.. ', end='')
 	ecu = identify_ecu(bus)
-	print('[*] Found! ECU name: {}'.format(ecu.get_name()))
+	print('[*] Found! {}'.format(ecu.get_name()))
 
 	print('[*] Trying to find calibration..')
 	if (args.eeprom_size):
@@ -205,13 +186,17 @@ def main():
 	else:
 		eeprom_size, eeprom_size_human = ecu.get_eeprom_size_bytes(), ecu.get_eeprom_size_human()
 		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
-		print('[*] Found! EEPROM is {}mbit, description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
+		print('[*] Found! Description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
 
 	if (args.read):
 		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 
 	if (args.flash):
-		flash_eeprom(bus, input_filename=args.flash)
+		flash_eeprom(ecu, input_filename=args.flash)
+	if (args.flash_calibration:
+		flash_eeprom(ecu, input_filename=args.flash_calibration_zone, flash_calibration=True, flash_program=False)
+	if (args.flash_program):
+		flash_eeprom(ecu, input_filename=args.flash_program_zone, flash_program=True, flash_calibration=False)
 
 if __name__ == '__main__':
 	main()

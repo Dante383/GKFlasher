@@ -168,6 +168,9 @@ ECU_IDENTIFICATION_TABLE = [
 	}
 ]
 
+class ECUIdentificationException (Exception):
+	pass
+
 def identify_ecu (bus) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
@@ -179,4 +182,4 @@ def identify_ecu (bus) -> ECU:
 			ecu = ecu_identifier['ecu']
 			ecu.set_bus(bus)
 			return ecu
-	raise Exception('Failed to identify ECU!')
+	raise ECUIdentificationException('Failed to identify ECU!')

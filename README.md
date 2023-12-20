@@ -40,6 +40,8 @@ an 8mbit EEPROM will still result in a 1mb output file.
 Add `--flash {filename}` to the parameters. GKFlasher will attempt to detect current ECU calibration version 
 and the calibration version of the file you're trying to flash before asking you for confirmation.
 
+You don't need to flash the whole bin at once. You can also use `--flash-calibration {filename}` and `--flash-program {filename}`
+
 You can use `--address_start` and `--address_stop` to only overwrite a certain portion. Be aware that input file offsets must match with intended EEPROM offset. 
 For example, if you want to flash only the calibration zone (0x090000 - 0x094000 on 8mbit eeprom) the calibration zone must be located at 0x090000 - 0x094000 in the input file.
 This behaviour is followed by default by GKFlasher's --read command.
@@ -59,6 +61,10 @@ This behaviour is followed by default by GKFlasher's --read command.
 `-o --output {filename}` - Filename to save the EEPROM dump
 
 `-f --flash {input filename}`
+
+`-fc --flash-calibration {input filename}`
+
+`-fp --flash-program {input filename}`
 
 `-s --address_start {offset}` - Offset to start reading/flashing from 
 
