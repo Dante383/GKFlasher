@@ -1,11 +1,11 @@
-import argparse, time, yaml, logging
+import argparse, time, yaml, logging, sys
 from alive_progress import alive_bar
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from memory import read_memory, write_memory
-from ecu import identify_ecu, print_ecu_identification, enable_security_access
+from ecu import identify_ecu, print_ecu_identification, enable_security_access, ECUIdentificationException, ECU_IDENTIFICATION_TABLE
 from checksum import fix_checksum
 
 def read_vin(bus):
@@ -82,8 +82,8 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 	print(ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data())
 	ecu.bus.set_timeout(12)
 
-	ecu.bus.execute(WriteDataByLocalIdentifier(0x99, [0x20, 0x04, 0x10, 0x20]))
-	ecu.bus.execute(WriteDataByLocalIdentifier(0x98, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
+	#ecu.bus.execute(WriteDataByLocalIdentifier(0x99, [0x20, 0x04, 0x10, 0x20]))
+	#ecu.bus.execute(WriteDataByLocalIdentifier(0x98, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
 	print('    [*] ecu reset')
 	print(ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data())
 
@@ -129,6 +129,39 @@ def initialize_bus (protocol, protocol_config):
 
 	return gkbus.Bus(protocol, interface=interface, **protocol_config)
 
+def cli_choose_ecu ():
+	print('[!] Failed to identify your ECU!')
+	print('[*] If you know what you\'re doing (like trying to revive a soft bricked ECU), you can choose your ECU from the list below:')
+
+	for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
+		print('    [{}] {}'.format(index, ecu['ecu'].get_name()))
+
+	try:
+		choice = int(input('ECU or any other char to abort: '))
+	except ValueError:
+		print('[!] Aborting..')
+		sys.exit(1)
+
+	try:
+		ECU_IDENTIFICATION_TABLE[choice]
+	except IndexError:
+		print('[!] Invalid value!')
+		return cli_choose_ecu()
+
+	return ECU_IDENTIFICATION_TABLE[choice]
+
+def cli_identify_ecu (bus):
+	print('[*] Trying to identify ECU automatically.. ')
+	
+	try:
+		ecu = identify_ecu(bus)
+	except ECUIdentificationException:
+		ecu = cli_choose_ecu()['ecu']
+		ecu.set_bus(bus)
+
+	print('[*] Found! {}'.format(ecu.get_name()))
+	return ecu
+
 def main():
 	GKFlasher_config, args = load_arguments()
 
@@ -172,9 +205,7 @@ def main():
 
 	#print_ecu_identification(bus)
 
-	print('[*] Trying to identify ECU automatically.. ', end='')
-	ecu = identify_ecu(bus)
-	print('[*] Found! {}'.format(ecu.get_name()))
+	ecu = cli_identify_ecu(bus)
 
 	print('[*] Trying to find calibration..')
 	if (args.eeprom_size):
@@ -193,7 +224,7 @@ def main():
 
 	if (args.flash):
 		flash_eeprom(ecu, input_filename=args.flash)
-	if (args.flash_calibration:
+	if (args.flash_calibration):
 		flash_eeprom(ecu, input_filename=args.flash_calibration_zone, flash_calibration=True, flash_program=False)
 	if (args.flash_program):
 		flash_eeprom(ecu, input_filename=args.flash_program_zone, flash_program=True, flash_calibration=False)
