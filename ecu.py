@@ -1,4 +1,5 @@
 from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess, ReadMemoryByAddress
+from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 
 kwp_ecu_identification_parameters = [
@@ -50,26 +51,18 @@ def calculate_key(concat11_seed):
     
     return key
 
-def get_security_key (seed):
-	seed_concat = (seed[0]<<8) | seed[1]
-	key = calculate_key(seed_concat)
-
-	key_byte1 = (key >> 8) & 0xFF
-	key_byte2 = key & 0xFF
-	return [key_byte1, key_byte2]
-
 def enable_security_access (bus):
-	print('[*] Security Access 1')
-	seed = bus.execute(SecurityAccess([0x01])).get_data()[1:]
+	print('[*] Security Access')
+	seed = bus.execute(SecurityAccess(AccessLevel.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
 
 	if (seed == [0x0, 0x0]):
 		print('[*] ECU is not locked.')
 		return
 
-	key = get_security_key(seed)
+	seed_concat = (seed[0]<<8) | seed[1]
+	key = calculate_key(seed_concat)
 
-	print('[*] Security Access 2')
-	bus.execute(SecurityAccess([0x02] + key))
+	bus.execute(SecurityAccess(AccessLevel.PROGRAMMING_SEND_KEY, key))
 
 class ECU:
 	def __init__ (self, 
