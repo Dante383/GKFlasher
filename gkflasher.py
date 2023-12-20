@@ -77,7 +77,7 @@ def flash_eeprom (bus, input_filename):
 		return
 
 	print('[*] start routine 0x00 (erase program code section)')
-	bus.execute(StartRoutineByLocalId([0x00]))
+	bus.execute(StartRoutineByLocalIdentifier([0x00]))
 
 	# program code section
 	flash_start = 0x8A0010
@@ -87,7 +87,7 @@ def flash_eeprom (bus, input_filename):
 	write(bus, input_filename, flash_start, flash_size, payload_start, payload_stop, eeprom)
 
 	print('[*] start routine 0x01 (erase calibration section)')
-	bus.execute(StartRoutineByLocalId([0x01]))
+	bus.execute(StartRoutineByLocalIdentifier([0x01]))
 
 	# cal section
 
@@ -100,7 +100,7 @@ def flash_eeprom (bus, input_filename):
 
 	bus.set_timeout(300)
 	print('    [*] start routine 0x02')
-	print(bus.execute(StartRoutineByLocalId([0x02])).get_data())
+	print(bus.execute(StartRoutineByLocalIdentifier([0x02])).get_data())
 	bus.set_timeout(12)
 
 	bus.execute(WriteDataByLocalIdentifier([0x99, 0x20, 0x04, 0x10, 0x20]))
