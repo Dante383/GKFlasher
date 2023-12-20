@@ -217,7 +217,7 @@ def main():
 	else:
 		eeprom_size, eeprom_size_human = ecu.get_eeprom_size_bytes(), ecu.get_eeprom_size_human()
 		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
-		print('[*] Found! Description: {}, calibration: {}'.format(eeprom_size_human, description, calibration))
+		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 
 	if (args.read):
 		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
