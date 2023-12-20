@@ -109,6 +109,14 @@ class ECU:
 		description = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
 		return ''.join([chr(x) for x in description])
 
+	def read_memory_by_address (self, offset: int, size: int):
+		return self.bus.execute(
+			ReadMemoryByAddress(
+				offset=self.calculate_memory_offset(offset), 
+				size=size
+			)
+		).get_data()
+
 ECU_IDENTIFICATION_TABLE = [
 	{
 		'offset': 0xA00A0,
