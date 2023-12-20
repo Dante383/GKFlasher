@@ -172,8 +172,19 @@ def main():
 
 	print('[*] Access Timing Parameters')
     try:
-    	available_timing = bus.execute(AccessTimingParameters([0x00])).get_data()[1:]
-    	bus.execute(AccessTimingParameters([0x03] + available_timing))
+        available_timing = bus.execute(
+                AccessTimingParameters(
+                        TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS
+                )
+        ).get_data()
+
+
+        bus.execute(
+                AccessTimingParameters(
+                        TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES, 
+                        *available_timing[1:]
+                )
+        )
 	except KWPNegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
