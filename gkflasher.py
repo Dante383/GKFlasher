@@ -170,10 +170,12 @@ def main():
 	bus.set_timeout(12)
 
 	print('[*] Access Timing Parameters')
-    available_timing = bus.execute(AccessTimingParameters([0x00])).get_data()[1:]
-
-    bus.execute(AccessTimingParameters([0x03] + available_timing))
-	
+    try:
+    	available_timing = bus.execute(AccessTimingParameters([0x00])).get_data()[1:]
+    	bus.execute(AccessTimingParameters([0x03] + available_timing))
+	except KWPNegativeResponseException:
+		print('[!] Not supported on this ECU!')
+		
 	enable_security_access(bus)
 
 	#print_ecu_identification(bus)
