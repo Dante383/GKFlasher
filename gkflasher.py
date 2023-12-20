@@ -79,13 +79,11 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 
 	ecu.bus.set_timeout(300)
 	print('    [*] start routine 0x02')
-	print(ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data())
+	ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
 	ecu.bus.set_timeout(12)
 
-	#ecu.bus.execute(WriteDataByLocalIdentifier(0x99, [0x20, 0x04, 0x10, 0x20]))
-	#ecu.bus.execute(WriteDataByLocalIdentifier(0x98, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x4C, 0x31, 0x30, 0x30]))
 	print('    [*] ecu reset')
-	print(ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data())
+	ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 
 
 def load_config (config_filename):
