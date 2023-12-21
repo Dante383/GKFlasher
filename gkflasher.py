@@ -61,7 +61,7 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 		payload_stop = payload_start+flash_size
 		payload = eeprom[payload_start:payload_stop]
 
-		with alive_bar(flash_size+1, unit='B') as bar:
+		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	if flash_calibration:
@@ -74,7 +74,7 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 		payload_stop = payload_start + flash_size
 		payload = eeprom[payload_start:payload_stop]
 
-		with alive_bar(flash_size+1, unit='B') as bar:
+		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.set_timeout(300)
