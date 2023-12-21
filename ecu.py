@@ -119,6 +119,19 @@ class ECU:
 
 ECU_IDENTIFICATION_TABLE = [
 	{
+		'offset': 0x090040,
+		'expected': [99, 97, 54, 54],
+		'ecu': ECU(
+			name = 'SIMK43 2.0 4mbit',
+			eeprom_size_bytes = 524287,
+			eeprom_size_human = 4,
+			memory_offset = 0,
+			bin_offset = -0x080000,
+			single_byte_restriction_start = 0x089FFF,
+			single_byte_restriction_stop = 0x09000F
+		)
+	},
+	{
 		'offset': 0xA00A0,
 		'expected': [54, 54, 51, 54],
 		'ecu': ECU(
@@ -138,19 +151,6 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_human = 4,
 			memory_offset = -0x8000,
 			bin_offset = -0x088000
-		)
-	},
-	{
-		'offset': 0x090040,
-		'expected': [99, 97, 54, 54],
-		'ecu': ECU(
-			name = 'SIMK43 2.0 4mbit',
-			eeprom_size_bytes = 524287,
-			eeprom_size_human = 4,
-			memory_offset = 0,
-			bin_offset = -0x080000,
-			single_byte_restriction_start = 0x089FFF,
-			single_byte_restriction_stop = 0x09000F
 		)
 	},
 	{
