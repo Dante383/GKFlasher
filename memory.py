@@ -96,6 +96,6 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 		packets_written += 1
 
 		if (progress_callback):
-			progress_callback(254)
+			progress_callback(len(payload_packet))
 
 	ecu.bus.execute(RequestTransferExit())
