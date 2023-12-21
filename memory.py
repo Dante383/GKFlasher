@@ -1,6 +1,7 @@
 import logging
 from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
 from gkbus.kwp import KWPNegativeResponseException
+from gkbus import GKBusTimeoutException
 logger = logging.getLogger(__name__)
 
 page_size_b = 16384
@@ -23,6 +24,9 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 		except KWPNegativeResponseException as e:
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
 			fetched = []
+		except GKBusTimeoutException:
+			logger.warning('Timeout at offset %s! Trying again..', hex(address))
+			continue
 
 		payload_start = address-address_start
 		payload_stop = payload_start+len(fetched)

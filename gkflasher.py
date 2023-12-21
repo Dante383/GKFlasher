@@ -173,7 +173,7 @@ def main():
 	try:
 		bus.execute(StopDiagnosticSession())
 		bus.execute(StopCommunication())
-	except KWPNegativeResponseException:
+	except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 
 	bus.init()
