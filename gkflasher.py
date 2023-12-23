@@ -65,9 +65,9 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 		print('[*] start routine 0x01 (erase calibration section)')
 		ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
 
-		flash_start = 0x890000
-		flash_size = 0x00FFF0
-		payload_start = 0x010000
+		flash_start = ecu.calculate_memory_write_offset(0x090000)
+		flash_size = ecu.get_calibration_size_bytes()
+		payload_start = ecu.calculate_bin_offset(0x090000)
 		payload_stop = payload_start + flash_size
 		payload = eeprom[payload_start:payload_stop]
 
@@ -211,7 +211,7 @@ def main():
 	except KWPNegativeResponseException:
 		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
 			sys.exit(1)
-			
+
 	if (args.id):
 		print('[*] Reading ECU Identification..',end='')
 		for parameter_key, parameter in fetch_ecu_identification(bus).items():

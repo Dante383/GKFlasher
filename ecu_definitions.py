@@ -7,9 +7,10 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524287,
 			'memory_offset': 0,
 			'bin_offset': -0x080000,
+			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x089FFF,
 			'single_byte_restriction_stop': 0x09000F,
-			'calibration_size_bytes': 0xFFFF
+			'calibration_size_bytes': 0xFFF0
 		}
 	},
 	{
@@ -20,6 +21,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 1048575,
 			'memory_offset': 0,
 			'bin_offset': 0,
+			'memory_write_offset': 0,
 			'calibration_size_bytes': 0xFFFF
 		}
 	},
@@ -31,6 +33,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524287,
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
+			'memory_write_offset': -0x7000,
 			'calibration_size_bytes': 0x7FFF
 		}
 	},
@@ -42,6 +45,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 262143,
 			'memory_offset': -0x48000,
 			'bin_offset': -0x088000,
+			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x48000,
 			'single_byte_restriction_stop': 0x4800F,
 			'calibration_size_bytes': 0x7FFF

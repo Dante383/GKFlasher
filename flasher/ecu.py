@@ -61,12 +61,12 @@ class ECU:
 	def __init__ (self, 
 		name: str, 
 		eeprom_size_bytes: int,
-		memory_offset: int, bin_offset: int,
+		memory_offset: int, bin_offset: int, memory_write_offset: int,
 		calibration_size_bytes: int,
 		single_byte_restriction_start: int = 0, single_byte_restriction_stop: int = 0):
 		self.name = name
 		self.eeprom_size_bytes = eeprom_size_bytes
-		self.memory_offset, self.bin_offset = memory_offset, bin_offset
+		self.memory_offset, self.bin_offset, self.memory_write_offset = memory_offset, bin_offset, memory_write_offset
 		self.calibration_size_bytes = calibration_size_bytes
 		self.single_byte_restriction_start, self.single_byte_restriction_stop = single_byte_restriction_start, single_byte_restriction_stop
 
@@ -88,6 +88,9 @@ class ECU:
 
 	def calculate_bin_offset (self, offset: int) -> int:
 		return offset + self.bin_offset
+
+	def calculate_memory_write_offset (self, offset: int) -> int:
+		return (offset + self.memory_write_offset) << 4
 
 	def adjust_bytes_at_a_time (self, offset: int, at_a_time: int, og_at_a_time: int) -> int:
 		if (self.single_byte_restriction_start == 0 or self.single_byte_restriction_stop == 0):
