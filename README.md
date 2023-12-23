@@ -58,15 +58,17 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `-r --read`
 
-`-rc --read-calibration` - Read just the calibration zone. You can always use `--address-start` and `--address-stop` manually - this just adjusts the offset based on the ECU for you
+`--read-calibration` - Read just the calibration zone. You can always use `--address-start` and `--address-stop` manually - this just adjusts the offset based on the ECU for you
+
+`--id` - display ECU identification parameters (KWP service 0x1A)
 
 `-o --output {filename}` - Filename to save the EEPROM dump
 
 `-f --flash {input filename}`
 
-`-fc --flash-calibration {input filename}`
+`--flash-calibration {input filename}`
 
-`-fp --flash-program {input filename}`
+`--flash-program {input filename}`
 
 `-s --address_start {offset}` - Offset to start reading/flashing from 
 

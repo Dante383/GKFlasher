@@ -92,11 +92,12 @@ def load_arguments ():
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate')
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
-	parser.add_argument('-fc', '--flash-calibration', help='Filename to flash calibration zone from')
-	parser.add_argument('-fp', '--flash-program', help='Filename to flash program zone from')
+	parser.add_argument('--flash-calibration', help='Filename to flash calibration zone from')
+	parser.add_argument('--flash-program', help='Filename to flash program zone from')
 	parser.add_argument('-r', '--read', action='store_true')
-	parser.add_argument('-rc', '--read-calibration', action='store_true')
-	parser.add_argument('-crc', '--fix-checksum')
+	parser.add_argument('--read-calibration', action='store_true')
+	parser.add_argument('--id', action='store_true')
+	parser.add_argument('--fix-checksum')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
@@ -198,8 +199,6 @@ def main():
 
 	enable_security_access(bus)
 
-	#print_ecu_identification(bus)
-
 	ecu = cli_identify_ecu(bus)
 
 	print('[*] Trying to find calibration..')
@@ -207,6 +206,9 @@ def main():
 	eeprom_size = ecu.get_eeprom_size_bytes()
 	description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
 	print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
+
+	if (args.id):
+		print_ecu_identification(bus)
 
 	if (args.read):
 		read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
