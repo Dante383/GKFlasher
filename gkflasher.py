@@ -9,7 +9,7 @@ from flasher.ecu import ECU, identify_ecu, print_ecu_identification, enable_secu
 from flasher.checksum import fix_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
-def read_eeprom (bus, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+def read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
 		address_stop = eeprom_size
 
@@ -179,7 +179,7 @@ def main():
 	bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 	bus.set_timeout(12)
 
-	print('[*] Access Timing Parameters')
+	print('[*] Set timing parameters to maximum')
 	try:
 		available_timing = bus.execute(
 			AccessTimingParameters(
@@ -209,11 +209,11 @@ def main():
 	print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 
 	if (args.read):
-		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
+		read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 	if (args.read_calibration):
 		if (not args.output):
 			args.output = 'output_calibration.bin'
-		read_eeprom(bus, ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
+		read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
 
 	if (args.flash):
 		flash_eeprom(ecu, input_filename=args.flash)
@@ -221,6 +221,9 @@ def main():
 		flash_eeprom(ecu, input_filename=args.flash_calibration, flash_calibration=True, flash_program=False)
 	if (args.flash_program):
 		flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
+
+	bus.execute(StopDiagnosticSession())
+	bus.execute(StopCommunication())
 
 if __name__ == '__main__':
 	main()
