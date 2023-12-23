@@ -71,5 +71,3 @@ This behaviour is followed by default by GKFlasher's --read command.
 `-s --address_start {offset}` - Offset to start reading/flashing from 
 
 `-e --address_stop {offset}` - Offset to stop reading/flashing at
-
-`--eeprom_size {size}` - EEPROM size in bytes. **Only use this if you're absolutely sure what you're doing! This could potentially result in damage to your ECU**

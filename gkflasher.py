@@ -103,7 +103,6 @@ def load_arguments ():
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
-	parser.add_argument('--eeprom-size', help='EEPROM size in bytes. ONLY USE THIS IF YOU REALLY, REALLY KNOW WHAT YOU\'RE DOING!!', type=int)
 	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
 	parser.add_argument('-v', '--verbose', action='count', default=0)
 	args = parser.parse_args()
@@ -207,16 +206,10 @@ def main():
 	ecu = cli_identify_ecu(bus)
 
 	print('[*] Trying to find calibration..')
-	if (args.eeprom_size):
-		print('[!] EEPROM size was selected by the user as {} bytes!'.format(args.eeprom_size))
-		if (input('[?] Are you absolutely sure you know what you\'re doing? This could potentially result in bricking your ECU [y/n]: ') != 'y'):
-			print('[!] Aborting.')
-			return False
-		eeprom_size = args.eeprom_size
-	else:
-		eeprom_size, eeprom_size_human = ecu.get_eeprom_size_bytes(), ecu.get_eeprom_size_human()
-		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
-		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
+	
+	eeprom_size = ecu.get_eeprom_size_bytes()
+	description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
+	print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 
 	if (args.read):
 		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
