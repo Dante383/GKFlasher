@@ -81,6 +81,7 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 
 	print('    [*] ecu reset')
 	ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
+	return
 
 
 def load_config (config_filename):
