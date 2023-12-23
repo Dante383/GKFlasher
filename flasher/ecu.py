@@ -25,21 +25,15 @@ kwp_ecu_identification_parameters = [
 	{'value': 0x8F, 'name': 'System supplier specific'},
 ]
 
-def print_ecu_identification (bus):
-	print('[*] Reading ECU Identification..',end='')
+def fetch_ecu_identification (bus):
+	values = {}
 	for parameter in kwp_ecu_identification_parameters:
 		try:
 			value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
 		except KWPNegativeResponseException:
 			continue
-
-		value_hex = ' '.join([hex(x) for x in value[1:]])
-		value_ascii = ''.join([chr(x) for x in value[1:]])
-
-		print('')
-		print('    [*] [{}] {}:'.format(hex(parameter['value']), parameter['name']))
-		print('            [HEX]: {}'.format(value_hex))
-		print('            [ASCII]: {}'.format(value_ascii))
+		values[parameter['value']] = {'name': parameter['name'], 'value': value[1:]}
+	return values
 
 def calculate_key(concat11_seed):
     key = 0
@@ -53,11 +47,9 @@ def calculate_key(concat11_seed):
     return key
 
 def enable_security_access (bus):
-	print('[*] Security Access')
 	seed = bus.execute(SecurityAccess(AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
 
 	if (seed == [0x0, 0x0]):
-		print('[*] ECU is not locked.')
 		return
 
 	seed_concat = (seed[0]<<8) | seed[1]

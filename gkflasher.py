@@ -5,7 +5,7 @@ from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from flasher.memory import read_memory, write_memory
-from flasher.ecu import ECU, identify_ecu, print_ecu_identification, enable_security_access, ECUIdentificationException
+from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import fix_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
@@ -197,6 +197,7 @@ def main():
 	except KWPNegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
+	print('[*] Security Access')
 	enable_security_access(bus)
 
 	ecu = cli_identify_ecu(bus)
@@ -208,7 +209,15 @@ def main():
 	print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 
 	if (args.id):
-		print_ecu_identification(bus)
+		print('[*] Reading ECU Identification..',end='')
+		for parameter_key, parameter in fetch_ecu_identification(bus).items():
+			value_hex = ' '.join([hex(x) for x in parameter['value']])
+			value_ascii = ''.join([chr(x) for x in parameter['value']])
+
+			print('')
+			print('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
+			print('            [HEX]: {}'.format(value_hex))
+			print('            [ASCII]: {}'.format(value_ascii))
 
 	if (args.read):
 		read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
