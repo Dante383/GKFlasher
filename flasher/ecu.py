@@ -26,7 +26,7 @@ kwp_ecu_identification_parameters = [
 ]
 
 def print_ecu_identification (bus):
-	print('[*] Reading ECU Identification..')
+	print('[*] Reading ECU Identification..',end='')
 	for parameter in kwp_ecu_identification_parameters:
 		try:
 			value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
