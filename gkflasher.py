@@ -205,9 +205,13 @@ def main():
 	print('[*] Trying to find calibration..')
 	
 	eeprom_size = ecu.get_eeprom_size_bytes()
-	description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
-	print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
-
+	try:
+		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
+		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
+	except KWPNegativeResponseException:
+		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
+			sys.exit(1)
+			
 	if (args.id):
 		print('[*] Reading ECU Identification..',end='')
 		for parameter_key, parameter in fetch_ecu_identification(bus).items():
