@@ -69,10 +69,12 @@ class ECU:
 		name: str, 
 		eeprom_size_bytes: int, eeprom_size_human: int, 
 		memory_offset: int, bin_offset: int,
+		calibration_size_bytes: int,
 		single_byte_restriction_start: int = 0, single_byte_restriction_stop: int = 0):
 		self.name = name
 		self.eeprom_size_bytes, self.eeprom_size_human = eeprom_size_bytes, eeprom_size_human
 		self.memory_offset, self.bin_offset = memory_offset, bin_offset
+		self.calibration_size_bytes = calibration_size_bytes
 		self.single_byte_restriction_start, self.single_byte_restriction_stop = single_byte_restriction_start, single_byte_restriction_stop
 
 	def get_name (self) -> str:
@@ -83,6 +85,9 @@ class ECU:
 
 	def get_eeprom_size_human (self) -> int:
 		return self.eeprom_size_human
+
+	def get_calibration_size_bytes (self) -> int:
+		return self.calibration_size_bytes
 
 	def set_bus (self, bus):
 		self.bus = bus
@@ -128,7 +133,8 @@ ECU_IDENTIFICATION_TABLE = [
 			memory_offset = 0,
 			bin_offset = -0x080000,
 			single_byte_restriction_start = 0x089FFF,
-			single_byte_restriction_stop = 0x09000F
+			single_byte_restriction_stop = 0x09000F,
+			calibration_size_bytes = 0xFFFF
 		)
 	},
 	{
@@ -139,7 +145,8 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_bytes = 1048575,
 			eeprom_size_human = 8,
 			memory_offset = 0,
-			bin_offset = 0
+			bin_offset = 0,
+			calibration_size_bytes = 0xFFFF
 		)
 	},
 	{
@@ -150,7 +157,8 @@ ECU_IDENTIFICATION_TABLE = [
 			eeprom_size_bytes = 524287,
 			eeprom_size_human = 4,
 			memory_offset = -0x8000,
-			bin_offset = -0x088000
+			bin_offset = -0x088000,
+			calibration_size_bytes = 0x7FFF
 		)
 	},
 	{
@@ -163,7 +171,8 @@ ECU_IDENTIFICATION_TABLE = [
 			memory_offset = -0x48000,
 			bin_offset = -0x088000,
 			single_byte_restriction_start = 0x48000,
-			single_byte_restriction_stop = 0x4800F
+			single_byte_restriction_stop = 0x4800F,
+			calibration_size_bytes = 0x7FFF
 		)
 	}
 ]

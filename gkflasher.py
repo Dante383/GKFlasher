@@ -98,6 +98,7 @@ def load_arguments ():
 	parser.add_argument('-fc', '--flash-calibration', help='Filename to flash calibration zone from')
 	parser.add_argument('-fp', '--flash-program', help='Filename to flash program zone from')
 	parser.add_argument('-r', '--read', action='store_true')
+	parser.add_argument('-rc', '--read-calibration', action='store_true')
 	parser.add_argument('-crc', '--fix-checksum')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
@@ -219,6 +220,10 @@ def main():
 
 	if (args.read):
 		read_eeprom(bus, ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
+	if (args.read_calibration):
+		if (not args.output):
+			args.output = 'output_calibration.bin'
+		read_eeprom(bus, ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
 
 	if (args.flash):
 		flash_eeprom(ecu, input_filename=args.flash)
