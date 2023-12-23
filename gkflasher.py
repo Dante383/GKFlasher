@@ -4,13 +4,10 @@ from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 import gkbus
-from memory import read_memory, write_memory
-from ecu import identify_ecu, print_ecu_identification, enable_security_access, ECUIdentificationException, ECU_IDENTIFICATION_TABLE
-from checksum import fix_checksum
-
-def read_vin(bus):
-	vin_hex = bus.execute(ReadEcuIdentification(0x90)).get_data()[1:]
-	return ''.join([chr(x) for x in vin_hex])
+from flasher.memory import read_memory, write_memory
+from flasher.ecu import ECU, identify_ecu, print_ecu_identification, enable_security_access, ECUIdentificationException
+from flasher.checksum import fix_checksum
+from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 def read_eeprom (bus, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
@@ -132,7 +129,7 @@ def cli_choose_ecu ():
 	print('[*] If you know what you\'re doing (like trying to revive a soft bricked ECU), you can choose your ECU from the list below:')
 
 	for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
-		print('    [{}] {}'.format(index, ecu['ecu'].get_name()))
+		print('    [{}] {}'.format(index, ecu['ecu']['name']))
 
 	try:
 		choice = int(input('ECU or any other char to abort: '))
@@ -154,7 +151,7 @@ def cli_identify_ecu (bus):
 	try:
 		ecu = identify_ecu(bus)
 	except ECUIdentificationException:
-		ecu = cli_choose_ecu()['ecu']
+		ecu = ECU(**cli_choose_ecu()['ecu'])
 		ecu.set_bus(bus)
 
 	print('[*] Found! {}'.format(ecu.get_name()))

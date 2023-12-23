@@ -1,6 +1,7 @@
 from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess, ReadMemoryByAddress
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
+from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 kwp_ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
@@ -119,57 +120,6 @@ class ECU:
 			)
 		).get_data()
 
-ECU_IDENTIFICATION_TABLE = [
-	{
-		'offset': 0x090040,
-		'expected': [99, 97, 54, 54],
-		'ecu': ECU(
-			name = 'SIMK43 2.0 4mbit',
-			eeprom_size_bytes = 524287,
-			memory_offset = 0,
-			bin_offset = -0x080000,
-			single_byte_restriction_start = 0x089FFF,
-			single_byte_restriction_stop = 0x09000F,
-			calibration_size_bytes = 0xFFFF
-		)
-	},
-	{
-		'offset': 0xA00A0,
-		'expected': [54, 54, 51, 54],
-		'ecu': ECU(
-			name = 'SIMK43 8mbit',
-			eeprom_size_bytes = 1048575,
-			memory_offset = 0,
-			bin_offset = 0,
-			calibration_size_bytes = 0xFFFF
-		)
-	},
-	{
-		'offset': 0x88040,
-		'expected': [99, 97, 54, 53],
-		'ecu': ECU(
-			name = 'SIMK43 V6 4mbit',
-			eeprom_size_bytes = 524287,
-			memory_offset = -0x8000,
-			bin_offset = -0x088000,
-			calibration_size_bytes = 0x7FFF
-		)
-	},
-	{
-		'offset': 0x48040,
-		'expected': [99, 97, 54, 54],
-		'ecu': ECU(
-			name = 'SIMK41 2mbit',
-			eeprom_size_bytes = 262143,
-			memory_offset = -0x48000,
-			bin_offset = -0x088000,
-			single_byte_restriction_start = 0x48000,
-			single_byte_restriction_stop = 0x4800F,
-			calibration_size_bytes = 0x7FFF
-		)
-	}
-]
-
 class ECUIdentificationException (Exception):
 	pass
 
@@ -181,7 +131,7 @@ def identify_ecu (bus) -> ECU:
 			continue
 
 		if result == ecu_identifier['expected']:
-			ecu = ecu_identifier['ecu']
+			ecu = ECU(**ecu_identifier['ecu'])
 			ecu.set_bus(bus)
 			return ecu
 	raise ECUIdentificationException('Failed to identify ECU!')
