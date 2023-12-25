@@ -44,7 +44,7 @@ def calculate_key(concat11_seed):
             key = key ^ 0xffff << (index & 0x1f)
         index += 1
     
-    return key
+    return key & 0xFFFF
 
 def enable_security_access (bus):
 	seed = bus.execute(SecurityAccess(AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
@@ -117,7 +117,7 @@ class ECU:
 
 	def clear_adaptive_values (self):
 		self.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		self.bus.execute(InputOutputControlByLocalIdentifier([0x50, 0x04]))
+		self.bus.execute(InputOutputControlByLocalIdentifier(0x50, InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):
 	pass

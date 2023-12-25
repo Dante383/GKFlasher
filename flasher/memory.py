@@ -1,5 +1,6 @@
 import logging
 from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
+from gkbus.kwp.enums import CompressionType, EncryptionType
 from gkbus.kwp import KWPNegativeResponseException
 from gkbus import GKBusTimeoutException
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ def read_memory(ecu, address_start, address_stop, progress_callback=False):#, pr
 	return buffer
 
 def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False):
-	ecu.bus.execute(RequestDownload(offset=flash_start, size=flash_size))
+	ecu.bus.execute(RequestDownload(offset=flash_start, size=flash_size, compression_type=CompressionType.UNCOMPRESSED, encryption_type=EncryptionType.UNENCRYPTED))
 
 	packets_to_write = int(flash_size/254)
 	packets_written = 0
