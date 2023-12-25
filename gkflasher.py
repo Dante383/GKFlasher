@@ -180,7 +180,7 @@ def main():
 	except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 
-	bus.init()
+	bus.init(StartCommunication())
 
 	print('[*] Trying to start diagnostic session')
 	bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
