@@ -64,6 +64,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--correct-checksum {filename}`
 
+`--clear-adaptive-values`
+
 `-o --output {filename}` - Filename to save the EEPROM dump
 
 `-f --flash {input filename}`
