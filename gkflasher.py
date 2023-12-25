@@ -9,7 +9,7 @@ from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_secu
 from flasher.checksum import fix_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
-def read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
 		address_stop = eeprom_size
 
@@ -36,7 +36,7 @@ def read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, ou
 
 	print('[*] saved to {}'.format(output_filename))
 
-def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
+def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
 	print('\n[*] Loading up {}'.format(input_filename))
 
 	with open(input_filename, 'rb') as file:
@@ -83,10 +83,9 @@ def flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=Tru
 	ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 	return
 
-def clear_adaptive_values (ecu):
-	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+def cli_clear_adaptive_values (ecu):
 	print('[*] Clearing adaptive values.. ', end='')
-	ecu.bus.execute(InputOutputControlByLocalIdentifier([0x50, 0x04]))
+	ecu.clear_adaptive_values()
 	print('Done!')
 
 def load_config (config_filename):
@@ -231,21 +230,21 @@ def main():
 			print('            [ASCII]: {}'.format(value_ascii))
 
 	if (args.read):
-		read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
+		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 	if (args.read_calibration):
 		if (not args.output):
 			args.output = 'output_calibration.bin'
-		read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
+		cli_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
 
 	if (args.flash):
-		flash_eeprom(ecu, input_filename=args.flash)
+		cli_flash_eeprom(ecu, input_filename=args.flash)
 	if (args.flash_calibration):
-		flash_eeprom(ecu, input_filename=args.flash_calibration, flash_calibration=True, flash_program=False)
+		cli_flash_eeprom(ecu, input_filename=args.flash_calibration, flash_calibration=True, flash_program=False)
 	if (args.flash_program):
-		flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
+		cli_flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
 
 	if (args.clear_adaptive_values):
-		clear_adaptive_values(ecu)
+		cli_clear_adaptive_values(ecu)
 
 	bus.execute(StopDiagnosticSession())
 	bus.execute(StopCommunication())

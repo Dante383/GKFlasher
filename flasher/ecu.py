@@ -1,4 +1,4 @@
-from gkbus.kwp.commands import ReadEcuIdentification, SecurityAccess, ReadMemoryByAddress
+from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
@@ -114,6 +114,10 @@ class ECU:
 				size=size
 			)
 		).get_data()
+
+	def clear_adaptive_values (self):
+		self.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		self.bus.execute(InputOutputControlByLocalIdentifier([0x50, 0x04]))
 
 class ECUIdentificationException (Exception):
 	pass
