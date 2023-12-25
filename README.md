@@ -62,6 +62,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--id` - display ECU identification parameters (KWP service 0x1A)
 
+`--correct-checksum {filename}`
+
 `-o --output {filename}` - Filename to save the EEPROM dump
 
 `-f --flash {input filename}`

@@ -98,7 +98,7 @@ def load_arguments ():
 	parser.add_argument('-r', '--read', action='store_true')
 	parser.add_argument('--read-calibration', action='store_true')
 	parser.add_argument('--id', action='store_true')
-	parser.add_argument('--fix-checksum')
+	parser.add_argument('--correct-checksum')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
@@ -162,8 +162,8 @@ def cli_identify_ecu (bus):
 def main():
 	GKFlasher_config, args = load_arguments()
 
-	if (args.fix_checksum):
-		fix_checksum(filename=args.fix_checksum)
+	if (args.correct_checksum):
+		correct_checksum(filename=args.correct_checksum)
 		return 
 
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
