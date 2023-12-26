@@ -21,8 +21,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 1048575,
 			'memory_offset': 0,
 			'bin_offset': 0,
-			'memory_write_offset': 0,
-			'calibration_size_bytes': 0xFFFF
+			'memory_write_offset': -0x7000,
+			'calibration_size_bytes': 0xFFF0
 		}
 	},
 	{
