@@ -246,8 +246,9 @@ def main():
 	if (args.clear_adaptive_values):
 		cli_clear_adaptive_values(ecu)
 
-	bus.execute(StopDiagnosticSession())
-	bus.execute(StopCommunication())
-
+	try:
+		bus.execute(StopCommunication())
+	except KWPNegativeResponseException, gkbus.GKBusTimeoutException:
+		pass
 if __name__ == '__main__':
 	main()
