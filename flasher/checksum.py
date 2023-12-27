@@ -7,28 +7,31 @@ cks_types = [ # todo: incorporate into ECU definitions
         'offset_address': 0x08000,
         'init_address': 0x00800C,
         'cks_address': 0x0FEE0,
-    },
-	{
-		'name': '4mbit',
-		'flag_address': 0x017EFE,
-		'offset_address': 0x010000,
-		'init_address': 0x01000C,
-		'cks_address': 0x017EE0,
-		'bin_offset': -0x080000
+        'bin_offset': -0x080000
 	},
 	{
-		'name': 'v6',
-		'flag_address': 0xDEFE,
-		'offset_address': 0x08000,
-		'init_address': 0x0800C,
-		'cks_address': 0xDEE0
+        'name': '4mbit',
+        'flag_address': 0x017EFE,
+        'offset_address': 0x010000,
+        'init_address': 0x01000C,
+        'cks_address': 0x017EE0,
+        'bin_offset': -0x080000
+	},
+	{
+        'name': 'v6',
+        'flag_address': 0xDEFE,
+        'offset_address': 0x08000,
+        'init_address': 0x0800C,
+        'cks_address': 0xDEE0,
+        'bin_offset': -0x080000
 	},
 	{
         'name': '8mbit',
         'flag_address': 0x97EFE,
         'offset_address': 0x090000,
         'init_address': 0x09000C,
-        'cks_address': 0x097EE0
+        'cks_address': 0x097EE0,
+        'bin_offset': 0
     }
 ]
 
