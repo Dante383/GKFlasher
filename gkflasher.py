@@ -6,7 +6,7 @@ from gkbus.kwp import KWPNegativeResponseException
 import gkbus
 from flasher.memory import read_memory, write_memory
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
-from flasher.checksum import fix_checksum
+from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
@@ -206,6 +206,9 @@ def main():
 	print('[*] Security Access')
 	enable_security_access(bus)
 
+	print('dis')
+	bus.execute(WriteMemoryByAddress(offset=0x090010, data_to_write=[0x0, 0x1]))
+
 	ecu = cli_identify_ecu(bus)
 
 	print('[*] Trying to find calibration..')
@@ -248,7 +251,7 @@ def main():
 
 	try:
 		bus.execute(StopCommunication())
-	except KWPNegativeResponseException, gkbus.GKBusTimeoutException:
+	except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 if __name__ == '__main__':
 	main()

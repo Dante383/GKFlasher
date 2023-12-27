@@ -1,11 +1,36 @@
 import crcmod
 
-offset_address = 0x010000
-init_address = 0x01000C
-cks_address = 0x017EE0
-flag_address = 0x017EFE # (inhibit)
-
-bin_offset = -0x080000
+cks_types = [ # todo: incorporate into ECU definitions
+	{
+        'name': '2mbit',
+        'flag_address': 0xFEFE,
+        'offset_address': 0x08000,
+        'init_address': 0x00800C,
+        'cks_address': 0x0FEE0,
+    },
+	{
+		'name': '4mbit',
+		'flag_address': 0x017EFE,
+		'offset_address': 0x010000,
+		'init_address': 0x01000C,
+		'cks_address': 0x017EE0,
+		'bin_offset': -0x080000
+	},
+	{
+		'name': 'v6',
+		'flag_address': 0xDEFE,
+		'offset_address': 0x08000,
+		'init_address': 0x0800C,
+		'cks_address': 0xDEE0
+	},
+	{
+        'name': '8mbit',
+        'flag_address': 0x97EFE,
+        'offset_address': 0x090000,
+        'init_address': 0x09000C,
+        'cks_address': 0x097EE0
+    }
+]
 
 def read_and_reverse (payload, start, length):
 	bts = list(payload[start:start+length])
@@ -21,11 +46,22 @@ def checksum (payload, start, stop, init):
 	checksum = crc16(payload[start:stop])
 	return checksum
 
-def fix_checksum (filename):
+def detect_offsets (payload):
+	for cks_type in cks_types:
+		flag = payload[cks_type['flag_address']:cks_type['flag_address']+2]
+		if (flag == b'OK'):
+			return (cks_type['name'], cks_type['flag_address'], cks_type['offset_address'], cks_type['init_address'],
+				cks_type['cks_address'], cks_type['bin_offset']) # todo: unpack
+
+def correct_checksum (filename):
 	print('[*] Reading {}'.format(filename))
 
 	with open(filename, 'rb') as file:
 		payload = file.read()
+
+	print('Trying to detect type.. ', end='')
+	name, flag_address, offset_address, init_address, cks_address, bin_offset = detect_offsets(payload)
+	print(name)
 
 	print('[*] Trying to find addresses of Zone1.. ', end='')
 	zone1_start_offset = cks_address+0x04
