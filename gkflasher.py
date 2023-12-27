@@ -206,9 +206,6 @@ def main():
 	print('[*] Security Access')
 	enable_security_access(bus)
 
-	print('dis')
-	bus.execute(WriteMemoryByAddress(offset=0x090010, data_to_write=[0x0, 0x1]))
-
 	ecu = cli_identify_ecu(bus)
 
 	print('[*] Trying to find calibration..')
