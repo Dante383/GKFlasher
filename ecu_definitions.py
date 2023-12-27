@@ -33,8 +33,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524287,
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
-			'memory_write_offset': -0x7000,
-			'calibration_size_bytes': 0x7FFF
+			'memory_write_offset': -0x1087800,
+			'calibration_size_bytes': 0x5F00
 		}
 	},
 	{
