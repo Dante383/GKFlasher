@@ -18,7 +18,6 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None
 	print('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
 	requested_size = address_stop-address_start
-	print('[*] Requested area\'s size: {} bytes. initializing a table filled with {} 0xFF\'s.'.format(requested_size, eeprom_size))
 	eeprom = [0xFF]*eeprom_size
 
 	with alive_bar(requested_size+1, unit='B') as bar:
