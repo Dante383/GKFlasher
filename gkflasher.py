@@ -99,7 +99,7 @@ def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher')
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
-	parser.add_argument('-b', '--baudrate')
+	parser.add_argument('-b', '--baudrate', type=int)
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
 	parser.add_argument('--flash-calibration', help='Filename to flash calibration zone from')
 	parser.add_argument('--flash-program', help='Filename to flash program zone from')
