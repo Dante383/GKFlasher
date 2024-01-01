@@ -1,4 +1,5 @@
 import argparse, time, yaml, logging, sys
+from datetime import date
 from alive_progress import alive_bar
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
@@ -8,6 +9,7 @@ from flasher.memory import read_memory, write_memory
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
+from flasher.logging import logger
 
 def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
@@ -26,10 +28,13 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None
 	eeprom_end = eeprom_start + len(fetched)
 	eeprom[eeprom_start:eeprom_end] = fetched
 
-	print('[*] received {} bytes of data'.format(len(fetched)))
-
 	if (output_filename == None):
-		output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
+		try:
+			calibration = ecu.get_calibration()
+			description = ecu.get_calibration_description()
+			output_filename = "{}_{}_{}.bin".format(description, calibration, date.today())
+		except: # dirty
+			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
 	
 	with open(output_filename, "wb") as file:
 		file.write(bytes(eeprom))
@@ -104,6 +109,7 @@ def load_arguments ():
 	parser.add_argument('--id', action='store_true')
 	parser.add_argument('--correct-checksum')
 	parser.add_argument('--clear-adaptive-values', action='store_true')
+	parser.add_argument('-l', '--logger', action='store_true')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
 	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
@@ -232,8 +238,6 @@ def main():
 	if (args.read):
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 	if (args.read_calibration):
-		if (not args.output):
-			args.output = 'output_calibration.bin'
 		cli_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
 
 	if (args.flash):
@@ -245,6 +249,9 @@ def main():
 
 	if (args.clear_adaptive_values):
 		cli_clear_adaptive_values(ecu)
+
+	if (args.logger):
+		logger(ecu)
 
 	try:
 		bus.execute(StopCommunication())
