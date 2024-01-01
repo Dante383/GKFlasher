@@ -1,10 +1,8 @@
 import argparse, time, yaml, logging, sys
 from datetime import date
 from alive_progress import alive_bar
-from gkbus.kwp.commands import *
-from gkbus.kwp.enums import *
-from gkbus.kwp import KWPNegativeResponseException
 import gkbus
+from gkbus import kwp
 from flasher.memory import read_memory, write_memory
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
@@ -54,7 +52,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_program:
 		print('[*] start routine 0x00 (erase program code section)')
-		ecu.bus.execute(StartRoutineByLocalIdentifier(0x00))
+		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x00))
 
 		flash_start = 0x8A0010
 		flash_size = 0x05FFF0
@@ -67,7 +65,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
-		ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
+		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x01))
 
 		flash_start = ecu.calculate_memory_write_offset(0x090000)
 		flash_size = ecu.get_calibration_size_bytes()
@@ -80,11 +78,11 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	ecu.bus.set_timeout(300)
 	print('    [*] start routine 0x02')
-	ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
+	ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x02)).get_data()
 	ecu.bus.set_timeout(12)
 
 	print('    [*] ecu reset')
-	ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
+	ecu.bus.execute(kwp.commands.ECUReset(kwp.enums.ResetMode.POWER_ON_RESET)).get_data()
 	return
 
 def cli_clear_adaptive_values (ecu):
@@ -180,32 +178,32 @@ def main():
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
 	try:
-		bus.execute(StopDiagnosticSession())
-		bus.execute(StopCommunication())
-	except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
+		bus.execute(kwp.commands.StopDiagnosticSession())
+		bus.execute(kwp.commands.StopCommunication())
+	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 
-	bus.init(StartCommunication())
+	bus.init(kwp.commands.StartCommunication())
 
 	print('[*] Trying to start diagnostic session')
-	bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	bus.set_timeout(12)
 
 	print('[*] Set timing parameters to maximum')
 	try:
 		available_timing = bus.execute(
-			AccessTimingParameters(
-				TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS
+			kwp.commands.AccessTimingParameters(
+				kwp.enums.TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS
 			)
 		).get_data()
 
 		bus.execute(
-			AccessTimingParameters(
-				TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES, 
+			kwp.commands.AccessTimingParameters(
+				kwp.enums.TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES, 
 				*available_timing[1:]
 			)
 		)
-	except KWPNegativeResponseException:
+	except kwp.KWPNegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
 	print('[*] Security Access')
@@ -219,7 +217,7 @@ def main():
 	try:
 		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
 		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
-	except KWPNegativeResponseException:
+	except kwp.KWPNegativeResponseException:
 		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
 			sys.exit(1)
 
@@ -253,8 +251,8 @@ def main():
 		logger(ecu)
 
 	try:
-		bus.execute(StopCommunication())
-	except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
+		bus.execute(kwp.commands.StopCommunication())
+	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 if __name__ == '__main__':
 	main()

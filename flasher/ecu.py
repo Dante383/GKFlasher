@@ -1,6 +1,4 @@
-from gkbus.kwp.commands import *
-from gkbus.kwp.enums import *
-from gkbus.kwp import KWPNegativeResponseException
+from gkbus import kwp
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 kwp_ecu_identification_parameters = [
@@ -29,8 +27,8 @@ def fetch_ecu_identification (bus):
 	values = {}
 	for parameter in kwp_ecu_identification_parameters:
 		try:
-			value = bus.execute(ReadEcuIdentification(parameter['value'])).get_data()
-		except KWPNegativeResponseException:
+			value = bus.execute(kwp.commands.ReadEcuIdentification(parameter['value'])).get_data()
+		except kwp.KWPNegativeResponseException:
 			continue
 		values[parameter['value']] = {'name': parameter['name'], 'value': value[1:]}
 	return values
@@ -47,7 +45,7 @@ def calculate_key(concat11_seed):
     return key & 0xFFFF
 
 def enable_security_access (bus):
-	seed = bus.execute(SecurityAccess(AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
+	seed = bus.execute(kwp.commands.SecurityAccess(kwp.enums.AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
 
 	if (seed == [0x0, 0x0]):
 		return
@@ -55,7 +53,7 @@ def enable_security_access (bus):
 	seed_concat = (seed[0]<<8) | seed[1]
 	key = calculate_key(seed_concat)
 
-	bus.execute(SecurityAccess(AccessType.PROGRAMMING_SEND_KEY, key))
+	bus.execute(kwp.commands.SecurityAccess(kwp.enums.AccessType.PROGRAMMING_SEND_KEY, key))
 
 class ECU:
 	def __init__ (self, 
@@ -100,24 +98,24 @@ class ECU:
 		return og_at_a_time
 
 	def get_calibration (self) -> str:
-		calibration = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
+		calibration = self.bus.execute(kwp.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
 		return ''.join([chr(x) for x in calibration])
 
 	def get_calibration_description (self) -> str:
-		description = self.bus.execute(ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
+		description = self.bus.execute(kwp.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
 		return ''.join([chr(x) for x in description])
 
 	def read_memory_by_address (self, offset: int, size: int):
 		return self.bus.execute(
-			ReadMemoryByAddress(
+			kwp.commands.ReadMemoryByAddress(
 				offset=self.calculate_memory_offset(offset), 
 				size=size
 			)
 		).get_data()
 
 	def clear_adaptive_values (self):
-		self.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		self.bus.execute(InputOutputControlByLocalIdentifier(0x50, InputOutputControlParameter.RESET_TO_DEFAULT))
+		self.bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(0x50, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):
 	pass
@@ -125,8 +123,8 @@ class ECUIdentificationException (Exception):
 def identify_ecu (bus) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
-			result = bus.execute(ReadMemoryByAddress(offset=ecu_identifier['offset'], size=4)).get_data()
-		except KWPNegativeResponseException:
+			result = bus.execute(kwp.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=4)).get_data()
+		except kwp.KWPNegativeResponseException:
 			continue
 
 		if result == ecu_identifier['expected']:
