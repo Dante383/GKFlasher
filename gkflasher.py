@@ -29,7 +29,9 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None
 		try:
 			calibration = ecu.get_calibration()
 			description = ecu.get_calibration_description()
-			output_filename = "{}_{}_{}.bin".format(description, calibration, date.today())
+			hw_rev_c = ''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data()[1:]])
+			hw_rev_d = ''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data()[1:]])
+			output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, date.today())
 		except: # dirty
 			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
 	
