@@ -38,7 +38,7 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 		if (progress_callback):
 			progress_callback(at_a_time)
 
-		if (address == address_stop):
+		if (address >= address_stop):
 			break
 	return payload
 

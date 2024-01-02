@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>GKFlasher</class>
+ <widget class="QWidget" name="GKFlasher">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>600</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>GKFlasher</string>
+  </property>
+  <widget class="QTabWidget" name="tabWidget">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>40</y>
+     <width>881</width>
+     <height>161</height>
+    </rect>
+   </property>
+   <property name="currentIndex">
+    <number>3</number>
+   </property>
+   <widget class="QWidget" name="tab_reading">
+    <attribute name="title">
+     <string>Reading</string>
+    </attribute>
+    <widget class="QPushButton" name="readCalibrationZone">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>251</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Read calibration zone (recommended)</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_2">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>251</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Read program zone</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="pushButton_3">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>251</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Full read</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="tab_flashing">
+    <attribute name="title">
+     <string>Flashing</string>
+    </attribute>
+   </widget>
+   <widget class="QWidget" name="tab_checksum">
+    <attribute name="title">
+     <string>Checksum</string>
+    </attribute>
+   </widget>
+   <widget class="QWidget" name="tab_id">
+    <attribute name="title">
+     <string>Identification</string>
+    </attribute>
+    <widget class="QPushButton" name="displayECUID">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>191</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Display ECU Identification</string>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+  <widget class="QComboBox" name="interfacesBox">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>351</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="editable">
+    <bool>true</bool>
+   </property>
+   <property name="currentText">
+    <string>Interface</string>
+   </property>
+  </widget>
+  <widget class="QProgressBar" name="progressBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>200</y>
+     <width>801</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="value">
+    <number>0</number>
+   </property>
+  </widget>
+  <widget class="QTextEdit" name="logOutput">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>230</y>
+     <width>801</width>
+     <height>371</height>
+    </rect>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
