@@ -99,10 +99,14 @@ class Ui(QtWidgets.QMainWindow):
 		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 			pass
 
-		bus.init(StartCommunication())
+		try:
+			bus.init(StartCommunication())
+		except gkbus.GKBusTimeoutException:
+			pass
 
 		self.log('[*] Trying to start diagnostic session')
 		bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+
 		bus.set_timeout(12)
 
 		self.log('[*] Set timing parameters to maximum')
@@ -207,7 +211,12 @@ class Ui(QtWidgets.QMainWindow):
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 
 	def read_calibration_zone (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+
 		eeprom_size = ecu.get_eeprom_size_bytes()
 		if (self.readingFileInput.text() == ''):
 			output_filename = None
@@ -223,8 +232,11 @@ class Ui(QtWidgets.QMainWindow):
 		pass
 
 	def display_ecu_identification (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
-
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
@@ -290,22 +302,42 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] Done!')
 
 	def flash_calibration (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False)
 
 	def flash_program (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True)
 
 	def flash_full (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
 
 	def clear_adaptive_values (self):
-		ecu = self.initialize_ecu(self.get_interface_url())
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url())
+		except gkbus.GKBusTimeoutException:
+			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+			
 		self.log('[*] Clearing adaptive values.. ')
 		ecu.clear_adaptive_values()
 		self.log('Done!')
