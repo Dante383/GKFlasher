@@ -13,6 +13,10 @@
   <property name="windowTitle">
    <string>GKFlasher</string>
   </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>../../../Siemens_T_Logo.png</normaloff>../../../Siemens_T_Logo.png</iconset>
+  </property>
   <widget class="QTabWidget" name="tabWidget">
    <property name="geometry">
     <rect>
@@ -23,7 +27,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>2</number>
    </property>
    <widget class="QWidget" name="tab_reading">
     <attribute name="title">
