@@ -10,6 +10,7 @@ from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory
 from flasher.checksum import *
+from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 class Progress(object):
 	def __init__ (self, progress_bar, max_value: int):
@@ -34,6 +35,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.show()
 		
 		self.detect_interfaces()
+		self.load_ecus()
 		self.add_listeners()
 
 	def add_listeners (self):
@@ -77,6 +79,11 @@ class Ui(QtWidgets.QMainWindow):
 		devices = ftdi_ins.list_devices()
 		for device_str in usbtools.UsbTools.build_dev_strings('ftdi', ftdi_ins.VENDOR_IDS, ftdi_ins.PRODUCT_IDS, devices):
 			self.interfacesBox.addItem(' '.join(device_str), device_str[0])
+
+	def load_ecus (self):
+		self.ecusBox.addItem('ECU (autodetect)', -1)
+		for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
+			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu']['name']), index)
 
 	def get_interface_url (self):
 		return self.interfacesBox.currentData()
@@ -129,15 +136,18 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] Security Access')
 		enable_security_access(bus)
 
-		self.log('[*] Trying to identify ECU automatically.. ')
-	
-		try:
-			ecu = identify_ecu(bus)
-		except ECUIdentificationException:
-			ecu = ECU(**self.gui_choose_ecu()['ecu'])
+		self.log('[*] Trying to identify ECU.. ')
+		if self.ecusBox.currentData() == -1:
+			try:
+				ecu = identify_ecu(bus)
+			except ECUIdentificationException:
+				self.log('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
+				return False
+		else:
+			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
 			ecu.set_bus(bus)
-
 		self.log('[*] Found! {}'.format(ecu.get_name()))
+		
 		return ecu
 
 	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
@@ -216,6 +226,8 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		if (ecu == False):
+			return
 
 		eeprom_size = ecu.get_eeprom_size_bytes()
 		if (self.readingFileInput.text() == ''):
@@ -236,6 +248,8 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(self.get_interface_url())
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if (ecu == False):
 			return
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
@@ -307,6 +321,8 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		if (ecu == False):
+			return
 
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False)
@@ -316,6 +332,8 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(self.get_interface_url())
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if (ecu == False):
 			return
 
 		filename = self.flashingFileInput.text()
@@ -327,6 +345,8 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		if (ecu == False):
+			return
 
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
@@ -337,7 +357,9 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-			
+		if (ecu == False):
+			return
+
 		self.log('[*] Clearing adaptive values.. ')
 		ecu.clear_adaptive_values()
 		self.log('Done!')

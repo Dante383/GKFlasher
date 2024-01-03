@@ -250,7 +250,7 @@
     <rect>
      <x>10</x>
      <y>10</y>
-     <width>351</width>
+     <width>371</width>
      <height>23</height>
     </rect>
    </property>
@@ -282,6 +282,22 @@
      <width>801</width>
      <height>371</height>
     </rect>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="ecusBox">
+   <property name="geometry">
+    <rect>
+     <x>420</x>
+     <y>10</y>
+     <width>371</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="editable">
+    <bool>true</bool>
+   </property>
+   <property name="currentText">
+    <string>ECU (autodetect)</string>
    </property>
   </widget>
  </widget>
