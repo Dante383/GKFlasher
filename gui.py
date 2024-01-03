@@ -37,21 +37,25 @@ class Ui(QtWidgets.QMainWindow):
 		self.add_listeners()
 
 	def add_listeners (self):
-		self.readCalibrationZone.clicked.connect(self.handler_read_calibration_zone)
-		self.readProgramZone.clicked.connect(self.handler_read_program_zone)
-		self.readFull.clicked.connect(self.handler_full_read)
-		self.displayECUID.clicked.connect(self.handler_display_ecu_identification)
+		self.readCalibrationZone.clicked.connect(lambda: self.click_handler(self.read_calibration_zone))
+		self.readProgramZone.clicked.connect(lambda: self.click_handler(self.read_program_zone))
+		self.readFull.clicked.connect(lambda: self.click_handler(self.full_read))
+
+		self.displayECUID.clicked.connect(lambda: self.click_handler(self.display_ecu_identification))
+
+		self.checksumCorrectBtn.clicked.connect(lambda: self.click_handler(self.correct_checksum))
 		
+		self.flashingCalibrationBtn.clicked.connect(lambda: self.click_handler(self.flash_calibration))
+		self.flashingProgramBtn.clicked.connect(lambda: self.click_handler(self.flash_program))
+		self.flashingFullBtn.clicked.connect(lambda: self.click_handler(self.flash_full))
+		self.flashingClearAVBtn.clicked.connect(lambda: self.click_handler(self.clear_adaptive_values))
+
 		self.readingFileBtn.clicked.connect(self.handler_select_file_reading)
 		self.flashingFileBtn.clicked.connect(self.handler_select_file_flashing)
-		
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
-		self.checksumCorrectBtn.clicked.connect(self.handler_checksum_correct)
 
-		self.flashingCalibrationBtn.clicked.connect(self.handler_flash_calibration)
-		self.flashingProgramBtn.clicked.connect(self.handler_flash_program)
-		self.flashingFullBtn.clicked.connect(self.handler_flash_full)
-		self.flashingClearAVBtn.clicked.connect(self.handler_clear_adaptive_values)
+	def click_handler (self, callback):
+		self.thread_manager.start(callback)
 
 	def handler_select_file_reading (self):
 		filename = QFileDialog().getSaveFileName()[0]
@@ -202,9 +206,6 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] ecu reset')
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 
-	def handler_read_calibration_zone (self):
-		self.thread_manager.start(self.read_calibration_zone)
-
 	def read_calibration_zone (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -215,20 +216,11 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename)
 
-	def handler_read_program_zone (self):
-		self.thread_manager.start(self.read_program_zone)
-
 	def read_program_zone (self):
 		pass
 
-	def handler_full_read (self):
-		self.thread_manager.start(self.full_read)
-
 	def full_read (self):
 		pass
-
-	def handler_display_ecu_identification (self):
-		self.thread_manager.start(self.display_ecu_identification)
 
 	def display_ecu_identification (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
@@ -242,9 +234,6 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			self.log('            [HEX]: {}'.format(value_hex))
 			self.log('            [ASCII]: {}'.format(value_ascii))
-
-	def handler_checksum_correct (self):
-		self.thread_manager.start(self.correct_checksum)
 
 	def correct_checksum (self):
 		filename = self.checksumFileInput.text()
@@ -300,32 +289,20 @@ class Ui(QtWidgets.QMainWindow):
 			file.write(checksum_reversed.to_bytes(2, "big"))
 		self.log('[*] Done!')
 
-	def handler_flash_calibration (self):
-		self.thread_manager.start(self.flash_calibration)
-
 	def flash_calibration (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False)
-
-	def handler_flash_program (self):
-		self.thread_manager.start(self.flash_program)
 
 	def flash_program (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True)
 
-	def handler_flash_full (self):
-		self.thread_manager.start(self.flash_full)
-
 	def flash_full (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
-
-	def handler_clear_adaptive_values(self):
-		self.thread_manager.start(self.clear_adaptive_values)
 
 	def clear_adaptive_values (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
