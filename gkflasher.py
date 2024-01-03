@@ -6,8 +6,9 @@ from gkbus import kwp
 from flasher.memory import read_memory, write_memory
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
-from ecu_definitions import ECU_IDENTIFICATION_TABLE
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES
 from flasher.logging import logger
+from flasher.checksum import correct_checksum
 
 def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
 	if (address_stop == None):
@@ -100,6 +101,7 @@ def load_arguments ():
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate', type=int)
+	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0))
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
 	parser.add_argument('--flash-calibration', help='Filename to flash calibration zone from')
 	parser.add_argument('--flash-program', help='Filename to flash program zone from')
@@ -187,8 +189,21 @@ def main():
 
 	bus.init(kwp.commands.StartCommunication())
 
-	print('[*] Trying to start diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+	if args.desired_baudrate:
+		try:
+			desired_baudrate = BAUDRATES[args.desired_baudrate]
+		except KeyError:
+			print('[!] Selected baudrate is invalid! Available baudrates:')
+			for key, baudrate in enumerate(BAUDRATES):
+				print('{} - {}'.format(hex(key), baudrate))
+			sys.exit(1)
+
+		print('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[args.desired_baudrate]))
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
+		bus.socket.socket.baudrate = BAUDRATES[args.desired_baudrate]
+	else:
+		print('[*] Trying to start diagnostic session')
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	bus.set_timeout(12)
 
 	print('[*] Set timing parameters to maximum')
