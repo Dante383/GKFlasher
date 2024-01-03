@@ -27,7 +27,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>2</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="tab_reading">
     <attribute name="title">
@@ -166,6 +166,19 @@
      </property>
      <property name="text">
       <string>Full flash</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="flashingClearAVBtn">
+     <property name="geometry">
+      <rect>
+       <x>260</x>
+       <y>40</y>
+       <width>231</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Clear adaptive values</string>
      </property>
     </widget>
    </widget>

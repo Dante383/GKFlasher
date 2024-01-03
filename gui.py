@@ -41,13 +41,17 @@ class Ui(QtWidgets.QMainWindow):
 		self.readProgramZone.clicked.connect(self.handler_read_program_zone)
 		self.readFull.clicked.connect(self.handler_full_read)
 		self.displayECUID.clicked.connect(self.handler_display_ecu_identification)
+		
 		self.readingFileBtn.clicked.connect(self.handler_select_file_reading)
 		self.flashingFileBtn.clicked.connect(self.handler_select_file_flashing)
+		
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
 		self.checksumCorrectBtn.clicked.connect(self.handler_checksum_correct)
+
 		self.flashingCalibrationBtn.clicked.connect(self.handler_flash_calibration)
 		self.flashingProgramBtn.clicked.connect(self.handler_flash_program)
 		self.flashingFullBtn.clicked.connect(self.handler_flash_full)
+		self.flashingClearAVBtn.clicked.connect(self.handler_clear_adaptive_values)
 
 	def handler_select_file_reading (self):
 		filename = QFileDialog().getSaveFileName()[0]
@@ -319,6 +323,15 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
+
+	def handler_clear_adaptive_values(self):
+		self.thread_manager.start(self.clear_adaptive_values)
+
+	def clear_adaptive_values (self):
+		ecu = self.initialize_ecu(self.get_interface_url())
+		self.log('[*] Clearing adaptive values.. ')
+		ecu.clear_adaptive_values()
+		self.log('Done!')
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
