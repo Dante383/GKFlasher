@@ -1,9 +1,9 @@
 import sys
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog
-from PyQt5.QtCore import QThreadPool
+from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
 from pyftdi import ftdi, usbtools
-import gkbus, yaml
+import gkbus, yaml, traceback
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
@@ -13,16 +13,55 @@ from flasher.checksum import *
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 class Progress(object):
-	def __init__ (self, progress_bar, max_value: int):
-		self.progress_bar = progress_bar
-		self.progress_bar.setMaximum(max_value)
-		self.progress_bar.setValue(0)
+	def __init__ (self, progress_callback, max_value: int):
+		self.progress_callback = progress_callback
+		self.progress_callback.emit((max_value, 0))
+		self.progress_callback.emit((0,))
 
 	def __call__ (self, value: int):
-		self.progress_bar.setValue(self.progress_bar.value()+value)
+		self.progress_callback.emit((value,))
 
 	def title (self, title: str):
 		pass
+
+class WorkerSignals(QObject):
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+    progress = pyqtSignal(tuple)
+    log = pyqtSignal(str)
+
+class Worker(QRunnable):
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+        self.signals = WorkerSignals()
+
+        # Add the callback to our kwargs
+        self.kwargs['progress_callback'] = self.signals.progress
+        self.kwargs['log_callback'] = self.signals.log
+
+    @pyqtSlot()
+    def run(self):
+        '''
+        Initialise the runner function with passed args, kwargs.
+        '''
+
+        # Retrieve args/kwargs here; and fire processing using them
+        try:
+            result = self.fn(*self.args, **self.kwargs)
+        except:
+            traceback.print_exc()
+            exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        else:
+            self.signals.result.emit(result)  # Return the result of the processing
+        finally:
+            self.signals.finished.emit()  # Done
 
 class Ui(QtWidgets.QMainWindow):
 	def __init__(self):
@@ -57,7 +96,10 @@ class Ui(QtWidgets.QMainWindow):
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
 
 	def click_handler (self, callback):
-		self.thread_manager.start(callback)
+		worker = Worker(callback)
+		worker.signals.log.connect(self.log)
+		worker.signals.progress.connect(self.progress_callback)
+		self.thread_manager.start(worker)
 
 	def handler_select_file_reading (self):
 		filename = QFileDialog().getSaveFileName()[0]
@@ -89,13 +131,13 @@ class Ui(QtWidgets.QMainWindow):
 		return self.interfacesBox.currentData()
 
 	def progress_callback (self, value):
-		self.progressBar.setValue(value)
+		if (len(value) > 1):
+			self.progressBar.setMaximum(value[0])
+		else:
+			self.progressBar.setValue(self.progressBar.value()+value[0])
 
-	def gui_choose_ecu (self):
-		self.log('Please use CLI!')
-
-	def initialize_ecu (self, interface_url: str):
-		self.log('[*] Initializing interface ' + self.get_interface_url())
+	def initialize_ecu (self, interface_url: str, log_callback):
+		log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
 		config = yaml.safe_load(open('gkflasher.yml'))
 		del config['kline']['interface']
 		bus = gkbus.Bus('kline', interface=interface_url, **config['kline'])
@@ -111,12 +153,12 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			pass
 
-		self.log('[*] Trying to start diagnostic session')
+		log_callback.emit('[*] Trying to start diagnostic session')
 		bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 
 		bus.set_timeout(12)
 
-		self.log('[*] Set timing parameters to maximum')
+		log_callback.emit('[*] Set timing parameters to maximum')
 		try:
 			available_timing = bus.execute(
 				AccessTimingParameters(
@@ -131,35 +173,35 @@ class Ui(QtWidgets.QMainWindow):
 				)
 			)
 		except KWPNegativeResponseException:
-			self.log('[!] Not supported on this ECU!')
+			log_callback.emit('[!] Not supported on this ECU!')
 
-		self.log('[*] Security Access')
+		log_callback.emit('[*] Security Access')
 		enable_security_access(bus)
 
-		self.log('[*] Trying to identify ECU.. ')
+		log_callback.emit('[*] Trying to identify ECU.. ')
 		if self.ecusBox.currentData() == -1:
 			try:
 				ecu = identify_ecu(bus)
 			except ECUIdentificationException:
-				self.log('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
+				log_callback.emit('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
 				return False
 		else:
 			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
 			ecu.set_bus(bus)
-		self.log('[*] Found! {}'.format(ecu.get_name()))
+		log_callback.emit('[*] Found! {}'.format(ecu.get_name()))
 		
 		return ecu
 
-	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None, log_callback=None, progress_callback=None):
 		if (address_stop == None):
 			address_stop = eeprom_size
 
-		self.log('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
+		log_callback.emit('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
 		requested_size = address_stop-address_start
 		eeprom = [0xFF]*eeprom_size
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(self.progressBar, requested_size))
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size))
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)
@@ -178,18 +220,18 @@ class Ui(QtWidgets.QMainWindow):
 		with open(output_filename, "wb") as file:
 			file.write(bytes(eeprom))
 
-		self.log('[*] saved to {}'.format(output_filename))
+		log_callback.emit('[*] saved to {}'.format(output_filename))
 
-	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True):
-		self.log('[*] Loading up {}'.format(input_filename))
+	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True, log_callback=None, progress_callback=None):
+		log_callback.emit('[*] Loading up {}'.format(input_filename))
 
 		with open(input_filename, 'rb') as file:
 			eeprom = file.read()
 
-		self.log('[*] Loaded {} bytes'.format(len(eeprom)))
+		log_callback.emit('[*] Loaded {} bytes'.format(len(eeprom)))
 
 		if flash_program:
-			self.log('[*] start routine 0x00 (erase program code section)')
+			log_callback.emit('[*] start routine 0x00 (erase program code section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(0x00))
 
 			flash_start = 0x8A0010
@@ -198,10 +240,10 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start+flash_size
 			payload = eeprom[payload_start:payload_stop]
 
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(self.progressBar, flash_size))
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		if flash_calibration:
-			self.log('[*] start routine 0x01 (erase calibration section)')
+			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
 
 			flash_start = ecu.calculate_memory_write_offset(0x090000)
@@ -210,21 +252,21 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start + flash_size
 			payload = eeprom[payload_start:payload_stop]
 
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(self.progressBar, flash_size))
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		ecu.bus.set_timeout(300)
-		self.log('[*] start routine 0x02')
+		log_callback.emit('[*] start routine 0x02')
 		ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
 		ecu.bus.set_timeout(12)
 
-		self.log('[*] ecu reset')
+		log_callback.emit('[*] ecu reset')
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 
-	def read_calibration_zone (self):
+	def read_calibration_zone (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
@@ -235,7 +277,7 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			output_filename = self.readingFileInput.text()
 
-		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename)
+		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
 	def read_program_zone (self):
 		pass
@@ -243,11 +285,11 @@ class Ui(QtWidgets.QMainWindow):
 	def full_read (self):
 		pass
 
-	def display_ecu_identification (self):
+	def display_ecu_identification (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
@@ -256,50 +298,50 @@ class Ui(QtWidgets.QMainWindow):
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
 			value_ascii = ''.join([chr(x) for x in parameter['value']])
 
-			self.log('')
-			self.log('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
-			self.log('            [HEX]: {}'.format(value_hex))
-			self.log('            [ASCII]: {}'.format(value_ascii))
+			log_callback.emit('')
+			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
+			log_callback.emit('            [HEX]: {}'.format(value_hex))
+			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 
-	def correct_checksum (self):
+	def correct_checksum (self, progress_callback, log_callback):
 		filename = self.checksumFileInput.text()
-		self.log('[*] Reading {}'.format(filename))
+		log_callback.emit('[*] Reading {}'.format(filename))
 
 		with open(filename, 'rb') as file:
 			payload = file.read()
 
-		self.log('Trying to detect type.. ')
+		log_callback.emit('Trying to detect type.. ')
 		name, flag_address, offset_address, init_address, cks_address, bin_offset = detect_offsets(payload)
-		self.log(name)
+		log_callback.emit(name)
 
-		self.log('[*] Trying to find addresses of Zone1.. ')
+		log_callback.emit('[*] Trying to find addresses of Zone1.. ')
 		zone1_start_offset = cks_address+0x04
 		zone1_start = concat_3_bytes(read_and_reverse(payload, zone1_start_offset, 3)) + bin_offset
 
 		zone1_stop_offset = cks_address+0x08
 		zone1_stop = concat_3_bytes(read_and_reverse(payload, zone1_stop_offset, 3)) + bin_offset + 1
-		self.log('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
+		log_callback.emit('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
 
-		self.log('[*] Trying to find initial value.. ')
+		log_callback.emit('[*] Trying to find initial value.. ')
 		initial_value_bytes = read_and_reverse(payload, init_address, 2)
 		initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
-		self.log(hex(initial_value))
+		log_callback.emit(hex(initial_value))
 
-		self.log('[*] checksum of zone1: ')
+		log_callback.emit('[*] checksum of zone1: ')
 		zone1_cks = checksum(payload, zone1_start, zone1_stop, initial_value)
-		self.log(hex(zone1_cks))
+		log_callback.emit(hex(zone1_cks))
 
-		self.log('[*] Trying to find addresses of Zone2.. ')
+		log_callback.emit('[*] Trying to find addresses of Zone2.. ')
 		zone2_start_offset = cks_address+0xC
 		zone2_start = concat_3_bytes(read_and_reverse(payload, zone2_start_offset, 3)) + bin_offset
 
 		zone2_stop_offset = cks_address+0x10
 		zone2_stop = concat_3_bytes(read_and_reverse(payload, zone2_stop_offset, 3)) + bin_offset + 1
-		self.log('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
+		log_callback.emit('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
 
-		self.log('[*] checksum of zone2: ')
+		log_callback.emit('[*] checksum of zone2: ')
 		zone2_cks = checksum(payload, zone2_start, zone2_stop, zone1_cks)
-		self.log(hex(zone2_cks))
+		log_callback.emit(hex(zone2_cks))
 
 		checksum_b1 = (zone2_cks >> 8) & 0xFF
 		checksum_b2 = (zone2_cks & 0xFF)
@@ -307,62 +349,62 @@ class Ui(QtWidgets.QMainWindow):
 
 		current_checksum = int.from_bytes(payload[cks_address:cks_address+2], "big")
 
-		self.log('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
+		log_callback.emit('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
 
-		self.log('[*] Saving to {}'.format(filename))
+		log_callback.emit('[*] Saving to {}'.format(filename))
 		with open(filename, 'rb+') as file:
 			file.seek(cks_address)
 			file.write(checksum_reversed.to_bytes(2, "big"))
-		self.log('[*] Done!')
+		log_callback.emit('[*] Done!')
 
-	def flash_calibration (self):
+	def flash_calibration (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
 
 		filename = self.flashingFileInput.text()
-		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False)
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False, log_callback=log_callback, progress_callback=progress_callback)
 
-	def flash_program (self):
+	def flash_program (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
 
 		filename = self.flashingFileInput.text()
-		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True)
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True, log_callback=log_callback, progress_callback=progress_callback)
 
-	def flash_full (self):
+	def flash_full (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
 
 		filename = self.flashingFileInput.text()
-		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True, log_callback=log_callback, progress_callback=progress_callback)
 
-	def clear_adaptive_values (self):
+	def clear_adaptive_values (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url())
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
-			self.log('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
 
-		self.log('[*] Clearing adaptive values.. ')
+		log_callback.emit('[*] Clearing adaptive values.. ')
 		ecu.clear_adaptive_values()
-		self.log('Done!')
+		log_callback.emit('Done!')
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
