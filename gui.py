@@ -9,7 +9,7 @@ from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory
-
+from flasher.checksum import *
 
 class Progress(object):
 	def __init__ (self, progress_bar, max_value: int):
@@ -244,6 +244,57 @@ class Ui(QtWidgets.QMainWindow):
 
 	def correct_checksum (self):
 		filename = self.checksumFileInput.text()
+		self.log('[*] Reading {}'.format(filename))
+
+		with open(filename, 'rb') as file:
+			payload = file.read()
+
+		self.log('Trying to detect type.. ')
+		name, flag_address, offset_address, init_address, cks_address, bin_offset = detect_offsets(payload)
+		self.log(name)
+
+		self.log('[*] Trying to find addresses of Zone1.. ')
+		zone1_start_offset = cks_address+0x04
+		zone1_start = concat_3_bytes(read_and_reverse(payload, zone1_start_offset, 3)) + bin_offset
+
+		zone1_stop_offset = cks_address+0x08
+		zone1_stop = concat_3_bytes(read_and_reverse(payload, zone1_stop_offset, 3)) + bin_offset + 1
+		self.log('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
+
+		self.log('[*] Trying to find initial value.. ')
+		initial_value_bytes = read_and_reverse(payload, init_address, 2)
+		initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
+		self.log(hex(initial_value))
+
+		self.log('[*] checksum of zone1: ')
+		zone1_cks = checksum(payload, zone1_start, zone1_stop, initial_value)
+		self.log(hex(zone1_cks))
+
+		self.log('[*] Trying to find addresses of Zone2.. ')
+		zone2_start_offset = cks_address+0xC
+		zone2_start = concat_3_bytes(read_and_reverse(payload, zone2_start_offset, 3)) + bin_offset
+
+		zone2_stop_offset = cks_address+0x10
+		zone2_stop = concat_3_bytes(read_and_reverse(payload, zone2_stop_offset, 3)) + bin_offset + 1
+		self.log('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
+
+		self.log('[*] checksum of zone2: ')
+		zone2_cks = checksum(payload, zone2_start, zone2_stop, zone1_cks)
+		self.log(hex(zone2_cks))
+
+		checksum_b1 = (zone2_cks >> 8) & 0xFF
+		checksum_b2 = (zone2_cks & 0xFF)
+		checksum_reversed = (checksum_b2 << 8) | checksum_b1
+
+		current_checksum = int.from_bytes(payload[cks_address:cks_address+2], "big")
+
+		self.log('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
+
+		self.log('[*] Saving to {}'.format(filename))
+		with open(filename, 'rb+') as file:
+			file.seek(cks_address)
+			file.write(checksum_reversed.to_bytes(2, "big"))
+		self.log('[*] Done!')
 
 	def handler_flash_calibration (self):
 		self.thread_manager.start(self.flash_calibration)
