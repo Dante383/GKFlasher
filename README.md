@@ -6,6 +6,7 @@ While it has been developed and tested on a Hyundai Tiburon, the basic functiona
 should work on any vehicle supporting KWP2000 over K-line or CANbus. Adjusting some 
 parameters might be necessary for other vehicles. 
 
+![GUI interface](assets/gkflasher_gui.png)
 ![Reading over CANbus](assets/gkflasher_canbus_read.png)
 
 ## Installation 
