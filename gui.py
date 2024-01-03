@@ -1,19 +1,21 @@
 import sys
 from PyQt5 import QtWidgets, uic
+from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtCore import QThreadPool
 from pyftdi import ftdi, usbtools
 import gkbus, yaml
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu
-from flasher.memory import read_memory
+from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
+from flasher.memory import read_memory, write_memory
 
 
 class Progress(object):
 	def __init__ (self, progress_bar, max_value: int):
 		self.progress_bar = progress_bar
 		self.progress_bar.setMaximum(max_value)
+		self.progress_bar.setValue(0)
 
 	def __call__ (self, value: int):
 		self.progress_bar.setValue(self.progress_bar.value()+value)
@@ -36,7 +38,28 @@ class Ui(QtWidgets.QMainWindow):
 
 	def add_listeners (self):
 		self.readCalibrationZone.clicked.connect(self.handler_read_calibration_zone)
+		self.readProgramZone.clicked.connect(self.handler_read_program_zone)
+		self.readFull.clicked.connect(self.handler_full_read)
 		self.displayECUID.clicked.connect(self.handler_display_ecu_identification)
+		self.readingFileBtn.clicked.connect(self.handler_select_file_reading)
+		self.flashingFileBtn.clicked.connect(self.handler_select_file_flashing)
+		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
+		self.checksumCorrectBtn.clicked.connect(self.handler_checksum_correct)
+		self.flashingCalibrationBtn.clicked.connect(self.handler_flash_calibration)
+		self.flashingProgramBtn.clicked.connect(self.handler_flash_program)
+		self.flashingFullBtn.clicked.connect(self.handler_flash_full)
+
+	def handler_select_file_reading (self):
+		filename = QFileDialog().getSaveFileName()[0]
+		self.readingFileInput.setText(filename)
+
+	def handler_select_file_flashing (self):
+		filename = QFileDialog().getOpenFileName()[0]
+		self.flashingFileInput.setText(filename)
+
+	def handler_select_file_checksum (self):
+		filename = QFileDialog().getOpenFileName()[0]
+		self.checksumFileInput.setText(filename)
 
 	def log (self, text):
 		self.logOutput.append(text)
@@ -52,6 +75,9 @@ class Ui(QtWidgets.QMainWindow):
 
 	def progress_callback (self, value):
 		self.progressBar.setValue(value)
+
+	def gui_choose_ecu (self):
+		self.log('Please use CLI!')
 
 	def initialize_ecu (self, interface_url: str):
 		self.log('[*] Initializing interface ' + self.get_interface_url())
@@ -111,7 +137,7 @@ class Ui(QtWidgets.QMainWindow):
 		requested_size = address_stop-address_start
 		eeprom = [0xFF]*eeprom_size
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(self.progressBar, requested_size+1))
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(self.progressBar, requested_size))
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)
@@ -132,14 +158,70 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.log('[*] saved to {}'.format(output_filename))
 
+	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True):
+		self.log('[*] Loading up {}'.format(input_filename))
+
+		with open(input_filename, 'rb') as file:
+			eeprom = file.read()
+
+		self.log('[*] Loaded {} bytes'.format(len(eeprom)))
+
+		if flash_program:
+			self.log('[*] start routine 0x00 (erase program code section)')
+			ecu.bus.execute(StartRoutineByLocalIdentifier(0x00))
+
+			flash_start = 0x8A0010
+			flash_size = 0x05FFF0
+			payload_start = 0x020010
+			payload_stop = payload_start+flash_size
+			payload = eeprom[payload_start:payload_stop]
+
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(self.progressBar, flash_size))
+
+		if flash_calibration:
+			self.log('[*] start routine 0x01 (erase calibration section)')
+			ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
+
+			flash_start = ecu.calculate_memory_write_offset(0x090000)
+			flash_size = ecu.get_calibration_size_bytes()
+			payload_start = ecu.calculate_bin_offset(0x090000)
+			payload_stop = payload_start + flash_size
+			payload = eeprom[payload_start:payload_stop]
+
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(self.progressBar, flash_size))
+
+		ecu.bus.set_timeout(300)
+		self.log('[*] start routine 0x02')
+		ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
+		ecu.bus.set_timeout(12)
+
+		self.log('[*] ecu reset')
+		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
+
 	def handler_read_calibration_zone (self):
 		self.thread_manager.start(self.read_calibration_zone)
 
 	def read_calibration_zone (self):
 		ecu = self.initialize_ecu(self.get_interface_url())
 		eeprom_size = ecu.get_eeprom_size_bytes()
+		if (self.readingFileInput.text() == ''):
+			output_filename = None
+		else:
+			output_filename = self.readingFileInput.text()
 
-		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes())
+		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename)
+
+	def handler_read_program_zone (self):
+		self.thread_manager.start(self.read_program_zone)
+
+	def read_program_zone (self):
+		pass
+
+	def handler_full_read (self):
+		self.thread_manager.start(self.full_read)
+
+	def full_read (self):
+		pass
 
 	def handler_display_ecu_identification (self):
 		self.thread_manager.start(self.display_ecu_identification)
@@ -157,6 +239,35 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('            [HEX]: {}'.format(value_hex))
 			self.log('            [ASCII]: {}'.format(value_ascii))
 
+	def handler_checksum_correct (self):
+		self.thread_manager.start(self.correct_checksum)
+
+	def correct_checksum (self):
+		filename = self.checksumFileInput.text()
+
+	def handler_flash_calibration (self):
+		self.thread_manager.start(self.flash_calibration)
+
+	def flash_calibration (self):
+		ecu = self.initialize_ecu(self.get_interface_url())
+		filename = self.flashingFileInput.text()
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False)
+
+	def handler_flash_program (self):
+		self.thread_manager.start(self.flash_program)
+
+	def flash_program (self):
+		ecu = self.initialize_ecu(self.get_interface_url())
+		filename = self.flashingFileInput.text()
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True)
+
+	def handler_flash_full (self):
+		self.thread_manager.start(self.flash_full)
+
+	def flash_full (self):
+		ecu = self.initialize_ecu(self.get_interface_url())
+		filename = self.flashingFileInput.text()
+		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True)
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)

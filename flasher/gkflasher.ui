@@ -23,7 +23,7 @@
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>1</number>
    </property>
    <widget class="QWidget" name="tab_reading">
     <attribute name="title">
@@ -42,7 +42,7 @@
       <string>Read calibration zone (recommended)</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pushButton_2">
+    <widget class="QPushButton" name="readProgramZone">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -55,7 +55,7 @@
       <string>Read program zone</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="pushButton_3">
+    <widget class="QPushButton" name="readFull">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -68,16 +68,146 @@
       <string>Full read</string>
      </property>
     </widget>
+    <widget class="QPushButton" name="readingFileBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>80</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Save as.. </string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="readingFileInput">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>100</y>
+       <width>681</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>Leave empty to autogenerate name</string>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_flashing">
     <attribute name="title">
      <string>Flashing</string>
     </attribute>
+    <widget class="QPushButton" name="flashingFileBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>80</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Select file..</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="flashingFileInput">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>10</y>
+       <width>681</width>
+       <height>22</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="flashingCalibrationBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>231</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Flash calibration (recommended)</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="flashingProgramBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>231</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Flash program</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="flashingFullBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>231</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Full flash</string>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_checksum">
     <attribute name="title">
      <string>Checksum</string>
     </attribute>
+    <widget class="QPushButton" name="checksumFileBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>80</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Select file..</string>
+     </property>
+     <property name="flat">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="checksumFileInput">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>10</y>
+       <width>681</width>
+       <height>22</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="checksumCorrectBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>50</y>
+       <width>131</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Correct checksum</string>
+     </property>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_id">
     <attribute name="title">
