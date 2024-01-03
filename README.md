@@ -24,6 +24,13 @@ Install required packages
 Connect your K-line or CANbus adapter to your computer and the vehicle (or ECU for bench setup).
 Pinouts for the Tiburon can be found on https://opengk.org. 
 
+### GUI
+
+Launch `python3 gui.py` 
+
+
+### CLI
+
 Launch `python3 gkflasher.py --protocol {canbus/kline} --interface {can0//dev/ttyUSB0}`. If it detects EEPROM size and calibration - all is good, you can proceed! 
 
 ### Reading 
