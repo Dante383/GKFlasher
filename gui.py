@@ -67,6 +67,7 @@ class Ui(QtWidgets.QMainWindow):
 	def __init__(self):
 		super(Ui, self).__init__()
 		self.load_ui()
+		self.previous_baudrate = False
 
 	def load_ui(self):
 		uic.loadUi('flasher/gkflasher.ui', self)
@@ -155,6 +156,9 @@ class Ui(QtWidgets.QMainWindow):
 		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 			pass
 
+		if (self.previous_baudrate):
+			bus.socket.baudrate = self.previous_baudrate
+
 		try:
 			bus.init(StartCommunication())
 		except gkbus.GKBusTimeoutException:
@@ -168,6 +172,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[desired_baudrate]))
 			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
 			bus.socket.socket.baudrate = BAUDRATES[desired_baudrate]
+			self.previous_baudrate = BAUDRATES[desired_baudrate]
 
 		bus.set_timeout(12)
 
@@ -214,7 +219,7 @@ class Ui(QtWidgets.QMainWindow):
 		requested_size = address_stop-address_start
 		eeprom = [0xFF]*eeprom_size
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size))
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size-0xFF))
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)
