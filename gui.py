@@ -86,7 +86,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.displayECUID.clicked.connect(lambda: self.click_handler(self.display_ecu_identification))
 
-		self.checksumCorrectBtn.clicked.connect(lambda: self.click_handler(self.correct_checksum))
+		self.checksumCorrectBtn.clicked.connect(self.correct_checksum)
 		
 		self.flashingCalibrationBtn.clicked.connect(lambda: self.click_handler(self.flash_calibration))
 		self.flashingProgramBtn.clicked.connect(lambda: self.click_handler(self.flash_program))
@@ -328,45 +328,45 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 		self.disconnect_ecu(ecu)
 
-	def correct_checksum (self, progress_callback, log_callback):
+	def correct_checksum (self):
 		filename = self.checksumFileInput.text()
-		log_callback.emit('[*] Reading {}'.format(filename))
+		self.log('[*] Reading {}'.format(filename))
 
 		with open(filename, 'rb') as file:
 			payload = file.read()
 
-		log_callback.emit('Trying to detect type.. ')
+		self.log('Trying to detect type.. ')
 		name, flag_address, offset_address, init_address, cks_address, bin_offset = detect_offsets(payload)
-		log_callback.emit(name)
+		self.log(name)
 
-		log_callback.emit('[*] Trying to find addresses of Zone1.. ')
+		self.log('[*] Trying to find addresses of Zone1.. ')
 		zone1_start_offset = cks_address+0x04
 		zone1_start = concat_3_bytes(read_and_reverse(payload, zone1_start_offset, 3)) + bin_offset
 
 		zone1_stop_offset = cks_address+0x08
 		zone1_stop = concat_3_bytes(read_and_reverse(payload, zone1_stop_offset, 3)) + bin_offset + 1
-		log_callback.emit('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
+		self.log('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
 
-		log_callback.emit('[*] Trying to find initial value.. ')
+		self.log('[*] Trying to find initial value.. ')
 		initial_value_bytes = read_and_reverse(payload, init_address, 2)
 		initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
-		log_callback.emit(hex(initial_value))
+		self.log(hex(initial_value))
 
-		log_callback.emit('[*] checksum of zone1: ')
+		self.log('[*] checksum of zone1: ')
 		zone1_cks = checksum(payload, zone1_start, zone1_stop, initial_value)
-		log_callback.emit(hex(zone1_cks))
+		self.log(hex(zone1_cks))
 
-		log_callback.emit('[*] Trying to find addresses of Zone2.. ')
+		self.log('[*] Trying to find addresses of Zone2.. ')
 		zone2_start_offset = cks_address+0xC
 		zone2_start = concat_3_bytes(read_and_reverse(payload, zone2_start_offset, 3)) + bin_offset
 
 		zone2_stop_offset = cks_address+0x10
 		zone2_stop = concat_3_bytes(read_and_reverse(payload, zone2_stop_offset, 3)) + bin_offset + 1
-		log_callback.emit('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
+		self.log('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
 
-		log_callback.emit('[*] checksum of zone2: ')
+		self.log('[*] checksum of zone2: ')
 		zone2_cks = checksum(payload, zone2_start, zone2_stop, zone1_cks)
-		log_callback.emit(hex(zone2_cks))
+		self.log(hex(zone2_cks))
 
 		checksum_b1 = (zone2_cks >> 8) & 0xFF
 		checksum_b2 = (zone2_cks & 0xFF)
@@ -374,13 +374,22 @@ class Ui(QtWidgets.QMainWindow):
 
 		current_checksum = int.from_bytes(payload[cks_address:cks_address+2], "big")
 
-		log_callback.emit('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
+		self.log('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
 
-		log_callback.emit('[*] Saving to {}'.format(filename))
-		with open(filename, 'rb+') as file:
-			file.seek(cks_address)
-			file.write(checksum_reversed.to_bytes(2, "big"))
-		log_callback.emit('[*] Done!')
+		if QMessageBox.question(
+				self, 
+				'Save checksum to file?', 
+				'Current checksum: {}, new checksum: {}. Save?'.format(hex(current_checksum), hex(checksum_reversed)),
+				QMessageBox.Yes | QMessageBox.No, 
+				QMessageBox.No
+			) == QMessageBox.Yes:
+
+			self.log('[*] Saving to {}'.format(filename))
+			with open(filename, 'rb+') as file:
+				file.seek(cks_address)
+				file.write(checksum_reversed.to_bytes(2, "big"))
+
+		self.log('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):
 		try:
