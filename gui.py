@@ -156,9 +156,6 @@ class Ui(QtWidgets.QMainWindow):
 		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 			pass
 
-		if (self.previous_baudrate):
-			bus.socket.baudrate = self.previous_baudrate
-
 		try:
 			bus.init(StartCommunication())
 		except gkbus.GKBusTimeoutException:
@@ -170,9 +167,12 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			desired_baudrate = self.baudratesBox.currentData()
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[desired_baudrate]))
-			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+			try:
+				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+			except gkbus.GKBusTimeoutException:
+				bus.socket.socket.baudrate = BAUDRATES[desired_baudrate]
+				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
 			bus.socket.socket.baudrate = BAUDRATES[desired_baudrate]
-			self.previous_baudrate = BAUDRATES[desired_baudrate]
 
 		bus.set_timeout(12)
 
@@ -210,6 +210,12 @@ class Ui(QtWidgets.QMainWindow):
 		
 		return ecu
 
+	def disconnect_ecu (self, ecu):
+		try:
+			ecu.bus.execute(StopCommunication())
+		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
+			pass
+
 	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None, log_callback=None, progress_callback=None):
 		if (address_stop == None):
 			address_stop = eeprom_size
@@ -219,7 +225,7 @@ class Ui(QtWidgets.QMainWindow):
 		requested_size = address_stop-address_start
 		eeprom = [0xFF]*eeprom_size
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size-0xFF))
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size-0x468))
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)
@@ -239,6 +245,7 @@ class Ui(QtWidgets.QMainWindow):
 			file.write(bytes(eeprom))
 
 		log_callback.emit('[*] saved to {}'.format(output_filename))
+		self.disconnect_ecu(ecu)
 
 	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
@@ -279,6 +286,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		log_callback.emit('[*] ecu reset')
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
+		self.disconnect_ecu(ecu)
 
 	def read_calibration_zone (self, progress_callback, log_callback):
 		try:
@@ -320,6 +328,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			log_callback.emit('            [HEX]: {}'.format(value_hex))
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
+		self.disconnect_ecu(ecu)
 
 	def correct_checksum (self, progress_callback, log_callback):
 		filename = self.checksumFileInput.text()
@@ -423,6 +432,7 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Clearing adaptive values.. ')
 		ecu.clear_adaptive_values()
 		log_callback.emit('Done!')
+		self.disconnect_ecu(ecu)
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
