@@ -60,11 +60,6 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		flash_start = 0x8A0010
 		flash_size = 0x05FFF0
 		payload_start = 0x020010
-		payload_stop = payload_start+flash_size
-		payload = eeprom[payload_start:payload_stop]
-
-		with alive_bar(flash_size, unit='B') as bar:
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
@@ -73,11 +68,12 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		flash_start = ecu.calculate_memory_write_offset(0x090000)
 		flash_size = ecu.get_calibration_size_bytes()
 		payload_start = ecu.calculate_bin_offset(0x090000)
-		payload_stop = payload_start + flash_size
-		payload = eeprom[payload_start:payload_stop]
+	
+	payload_stop = payload_start + flash_size
+	payload = eeprom[payload_start:payload_stop]
 
-		with alive_bar(flash_size, unit='B') as bar:
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
+	with alive_bar(flash_size, unit='B') as bar:
+		write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.set_timeout(300)
 	print('    [*] start routine 0x02')

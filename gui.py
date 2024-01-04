@@ -262,8 +262,6 @@ class Ui(QtWidgets.QMainWindow):
 			flash_start = 0x8A0010
 			flash_size = 0x05FFF0
 			payload_start = 0x020010
-			payload_stop = payload_start+flash_size
-			payload = eeprom[payload_start:payload_stop]
 
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
@@ -272,8 +270,9 @@ class Ui(QtWidgets.QMainWindow):
 			flash_start = ecu.calculate_memory_write_offset(0x090000)
 			flash_size = ecu.get_calibration_size_bytes()
 			payload_start = ecu.calculate_bin_offset(0x090000)
-			payload_stop = payload_start + flash_size
-			payload = eeprom[payload_start:payload_stop]
+
+		payload_stop = payload_start + flash_size
+		payload = eeprom[payload_start:payload_stop]
 
 		log_callback.emit('[*] Uploading data to the ECU')
 		write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
