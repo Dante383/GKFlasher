@@ -139,6 +139,7 @@ class Ui(QtWidgets.QMainWindow):
 	def progress_callback (self, value):
 		if (len(value) > 1):
 			self.progressBar.setMaximum(value[0])
+			self.progressBar.setValue(0)
 		else:
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
