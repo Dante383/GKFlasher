@@ -265,8 +265,6 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start+flash_size
 			payload = eeprom[payload_start:payload_stop]
 
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
-
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
@@ -277,7 +275,8 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start + flash_size
 			payload = eeprom[payload_start:payload_stop]
 
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+		log_callback.emit('[*] Uploading data to the ECU')
+		write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		ecu.bus.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02')
@@ -378,19 +377,10 @@ class Ui(QtWidgets.QMainWindow):
 
 		log_callback.emit('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
 
-		if QMessageBox.question(
-				self, 
-				'Save checksum to file?', 
-				'Current checksum: {}, new checksum: {}. Save?'.format(hex(current_checksum), hex(checksum_reversed)),
-				QMessageBox.Yes | QMessageBox.No, 
-				QMessageBox.No
-			) == QMessageBox.Yes:
-
-			log_callback.emit('[*] Saving to {}'.format(filename))
-			with open(filename, 'rb+') as file:
-				file.seek(cks_address)
-				file.write(checksum_reversed.to_bytes(2, "big"))
-		
+		log_callback.emit('[*] Saving to {}'.format(filename))
+		with open(filename, 'rb+') as file:
+			file.seek(cks_address)
+			file.write(checksum_reversed.to_bytes(2, "big"))
 		log_callback.emit('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):

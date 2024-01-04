@@ -23,7 +23,7 @@
      <x>0</x>
      <y>50</y>
      <width>881</width>
-     <height>201</height>
+     <height>171</height>
     </rect>
    </property>
    <property name="currentIndex">
@@ -265,7 +265,7 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>250</y>
+     <y>220</y>
      <width>801</width>
      <height>23</height>
     </rect>
@@ -278,9 +278,9 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>270</y>
+     <y>240</y>
      <width>801</width>
-     <height>371</height>
+     <height>401</height>
     </rect>
    </property>
   </widget>
