@@ -1,6 +1,6 @@
 import sys
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
 from pyftdi import ftdi, usbtools
 import gkbus, yaml, traceback
@@ -378,10 +378,19 @@ class Ui(QtWidgets.QMainWindow):
 
 		log_callback.emit('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
 
-		log_callback.emit('[*] Saving to {}'.format(filename))
-		with open(filename, 'rb+') as file:
-			file.seek(cks_address)
-			file.write(checksum_reversed.to_bytes(2, "big"))
+		if QMessageBox.question(
+				self, 
+				'Save checksum to file?', 
+				'Current checksum: {}, new checksum: {}. Save?'.format(hex(current_checksum), hex(checksum_reversed)),
+				QMessageBox.Yes | QMessageBox.No, 
+				QMessageBox.No
+			) == QMessageBox.Yes:
+
+			log_callback.emit('[*] Saving to {}'.format(filename))
+			with open(filename, 'rb+') as file:
+				file.seek(cks_address)
+				file.write(checksum_reversed.to_bytes(2, "big"))
+		
 		log_callback.emit('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):
