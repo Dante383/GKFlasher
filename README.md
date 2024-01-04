@@ -62,6 +62,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `-b --baudrate {baudrate}`
 
+`--desired-baudrate {baudrate identifier}` - See ecu_definitions.py
+
 `-i --interface {interface}`
 
 `-r --read`

@@ -194,7 +194,7 @@ def main():
 			desired_baudrate = BAUDRATES[args.desired_baudrate]
 		except KeyError:
 			print('[!] Selected baudrate is invalid! Available baudrates:')
-			for key, baudrate in enumerate(BAUDRATES):
+			for key, baudrate in BAUDRATES.items():
 				print('{} - {}'.format(hex(key), baudrate))
 			sys.exit(1)
 

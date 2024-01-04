@@ -10,7 +10,7 @@ from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory
 from flasher.checksum import *
-from ecu_definitions import ECU_IDENTIFICATION_TABLE
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
@@ -75,6 +75,7 @@ class Ui(QtWidgets.QMainWindow):
 		
 		self.detect_interfaces()
 		self.load_ecus()
+		self.load_baudrates()
 		self.add_listeners()
 
 	def add_listeners (self):
@@ -127,6 +128,11 @@ class Ui(QtWidgets.QMainWindow):
 		for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
 			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu']['name']), index)
 
+	def load_baudrates (self):
+		self.baudratesBox.addItem('Desired baudrate (default)', -1)
+		for index, baudrate in BAUDRATES.items():
+			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
+
 	def get_interface_url (self):
 		return self.interfacesBox.currentData()
 
@@ -153,8 +159,14 @@ class Ui(QtWidgets.QMainWindow):
 		except gkbus.GKBusTimeoutException:
 			pass
 
-		log_callback.emit('[*] Trying to start diagnostic session')
-		bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+		if self.baudratesBox.currentData() == -1:
+			log_callback.emit('[*] Trying to start diagnostic session')
+			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+		else:
+			desired_baudrate = self.baudratesBox.currentData()
+			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[desired_baudrate]))
+			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+			bus.socket.socket.baudrate = BAUDRATES[desired_baudrate]
 
 		bus.set_timeout(12)
 

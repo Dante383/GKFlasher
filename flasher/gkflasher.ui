@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>600</height>
+    <height>642</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -21,13 +21,13 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>40</y>
+     <y>50</y>
      <width>881</width>
-     <height>161</height>
+     <height>201</height>
     </rect>
    </property>
    <property name="currentIndex">
-    <number>3</number>
+    <number>0</number>
    </property>
    <widget class="QWidget" name="tab_reading">
     <attribute name="title">
@@ -265,7 +265,7 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>200</y>
+     <y>250</y>
      <width>801</width>
      <height>23</height>
     </rect>
@@ -278,7 +278,7 @@
    <property name="geometry">
     <rect>
      <x>0</x>
-     <y>230</y>
+     <y>270</y>
      <width>801</width>
      <height>371</height>
     </rect>
@@ -298,6 +298,22 @@
    </property>
    <property name="currentText">
     <string>ECU (autodetect)</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="baudratesBox">
+   <property name="geometry">
+    <rect>
+     <x>420</x>
+     <y>40</y>
+     <width>371</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="editable">
+    <bool>true</bool>
+   </property>
+   <property name="currentText">
+    <string>Desired baudrate - 10.4k (default)</string>
    </property>
   </widget>
  </widget>
