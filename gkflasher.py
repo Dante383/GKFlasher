@@ -10,9 +10,11 @@ from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES
 from flasher.logging import logger
 from flasher.checksum import correct_checksum
 
-def cli_read_eeprom (ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None):
+def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, output_filename=None):
+	if (address_start == None):
+		address_start = abs(ecu.bin_offset)
 	if (address_stop == None):
-		address_stop = eeprom_size
+		address_stop = address_start+eeprom_size
 
 	print('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
@@ -103,12 +105,13 @@ def load_arguments ():
 	parser.add_argument('--flash-program', help='Filename to flash program zone from')
 	parser.add_argument('-r', '--read', action='store_true')
 	parser.add_argument('--read-calibration', action='store_true')
+	parser.add_argument('--read-program', action='store_true')
 	parser.add_argument('--id', action='store_true')
 	parser.add_argument('--correct-checksum')
 	parser.add_argument('--clear-adaptive-values', action='store_true')
 	parser.add_argument('-l', '--logger', action='store_true')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
-	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0), default=0x000000)
+	parser.add_argument('-s', '--address-start', help='Offset to start reading/flashing from.', type=lambda x: int(x,0))
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
 	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
 	parser.add_argument('-v', '--verbose', action='count', default=0)
@@ -249,6 +252,10 @@ def main():
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 	if (args.read_calibration):
 		cli_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
+	if (args.read_program):
+		address_start = ecu.get_program_section_offset()
+		address_stop = address_start+ecu.get_program_section_size()
+		cli_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=args.output)
 
 	if (args.flash):
 		cli_flash_eeprom(ecu, input_filename=args.flash)

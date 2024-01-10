@@ -304,10 +304,44 @@ class Ui(QtWidgets.QMainWindow):
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
 	def read_program_zone (self):
-		pass
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if (ecu == False):
+			return
+
+		eeprom_size = ecu.get_eeprom_size_bytes()
+		if (self.readingFileInput.text() == ''):
+			output_filename = None
+		else:
+			output_filename = self.readingFileInput.text()
+
+		address_start = ecu.get_program_section_offset()
+		address_stop = address_start + ecu.get_program_section_size()
+
+		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
 	def full_read (self):
-		pass
+		try:
+			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if (ecu == False):
+			return
+
+		eeprom_size = ecu.get_eeprom_size_bytes()
+		if (self.readingFileInput.text() == ''):
+			output_filename = None
+		else:
+			output_filename = self.readingFileInput.text()
+
+		address_start = abs(ecu.bin_offset)
+		address_stop = address_start + eeprom_size
+
+		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
 		try:

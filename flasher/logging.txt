@@ -1,0 +1,186 @@
+o2 sensor volt (b1/s1)
+o2 sensor bolt (b1/s2)
+mass air flow
+[7-9] battery voltage
+coolant temp. sensor
+coolant temperature sensor (v)
+oil temp sensor
+oil temp sensor (v)
+intake air temp sensor 
+intake air temp sensor (V)
+throttle p sensor
+throttle p sensor (v)
+adapted throttle
+cranking signal
+idle state 
+part load status
+vehicle speed
+engine speed
+[65 - 68 LSB] target idle speed 
+trans. range switch 
+AC switch 
+AC pressure switch
+AC comp relay
+ignition timing
+injection duration
++ 11 more
+
+7A
+1D 
+D2 
+4D D - battery voltage
+3 
+31 
+00 
+C9 
+55 
+48 
+38 
+0D 
+10 
+01 
+00 
+00 
+22 
+2F 
+00 
+00 
+7E 
+22 
+2F 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+95 04 - target idle (LSB) 
+00 
+00 
+00 
+56 
+00 
+56 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+6D 
+6D 
+6D 
+3B
+94 
+FF 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+10 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+E1 
+3A 
+00 
+00 
+9A 
+09 
+00 
+54 
+02 
+00 
+00 
+21 
+1F 
+FF 
+FF 
+6C 
+F9 
+93 
+06 
+00 
+00 
+8D 
+20 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+93 
+06 
+00 
+00 
+00 
+00 
+93 
+06 
+42 
+07 
+AD 
+AD 
+01 
+00 
+00 
+00 
+00 
+00 
+00 
+00 
+80 
+00 
+00 
+00 
+00 
+2A 
+A0 
+2A 
+01 
