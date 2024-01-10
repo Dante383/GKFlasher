@@ -78,11 +78,12 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.set_timeout(300)
-	print('    [*] start routine 0x02 (verify blocks and mark as ready to execute)')
+	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
 	ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x02)).get_data()
 	ecu.bus.set_timeout(12)
 
-	print('    [*] ecu reset')
+	print('[*] ecu reset')
+	print('[*] done!')
 	ecu.bus.execute(kwp.commands.ECUReset(kwp.enums.ResetMode.POWER_ON_RESET)).get_data()
 	return
 

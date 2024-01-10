@@ -283,6 +283,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu.bus.set_timeout(12)
 
 		log_callback.emit('[*] ecu reset')
+		log_callback.emit('[*] Done!')
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
 		self.disconnect_ecu(ecu)
 
