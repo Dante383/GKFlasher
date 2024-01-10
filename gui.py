@@ -278,7 +278,7 @@ class Ui(QtWidgets.QMainWindow):
 		write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		ecu.bus.set_timeout(300)
-		log_callback.emit('[*] start routine 0x02')
+		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
 		ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
 		ecu.bus.set_timeout(12)
 
