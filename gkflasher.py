@@ -57,9 +57,9 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		print('[*] start routine 0x00 (erase program code section)')
 		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x00))
 
-		flash_start = 0x8A0010
-		flash_size = 0x05FFF0
-		payload_start = 0x020010
+		flash_start = ecu.get_program_section_offset()
+		flash_size = ecu.get_program_section_size()
+		payload_start = ecu.get_program_section_flash_offset()
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')

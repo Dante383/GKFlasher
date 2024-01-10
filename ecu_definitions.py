@@ -10,7 +10,10 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x089FFF,
 			'single_byte_restriction_stop': 0x09000F,
-			'calibration_size_bytes': 0xFFF0
+			'calibration_size_bytes': 0xFFF0,
+			'program_section_offset': 0x8A0010,
+			'program_section_size': 0x05FFF0,
+			'program_section_flash_offset': 0x020010,
 		}
 	},
 	{
@@ -22,7 +25,10 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': 0,
 			'bin_offset': 0,
 			'memory_write_offset': -0x7000,
-			'calibration_size_bytes': 0xFFF0
+			'calibration_size_bytes': 0xFFF0,
+			'program_section_offset': 0xA0010,
+			'program_section_size': 0x05FFF0,
+			'program_section_flash_offset': 0xA0010
 		}
 	},
 	{
@@ -34,7 +40,10 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
 			'memory_write_offset': -0x87800,
-			'calibration_size_bytes': 0x5F00
+			'calibration_size_bytes': 0x5F00,
+			'program_section_offset': 0x890010,
+			'program_section_size': 0x05FFF0,
+			'program_section_flash_offset': 0xA0010
 		}
 	},
 	{
@@ -48,7 +57,10 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x48000,
 			'single_byte_restriction_stop': 0x4800F,
-			'calibration_size_bytes': 0x7FFF
+			'calibration_size_bytes': 0x7FFF,
+			'program_section_offset': 0x890010,
+			'program_section_size': 0x05FFF0,
+			'program_section_flash_offset': 0x010010
 		}
 	}
 ]
