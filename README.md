@@ -70,6 +70,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--read-calibration` - Read just the calibration zone. You can always use `--address-start` and `--address-stop` manually - this just adjusts the offset based on the ECU for you
 
+`--read-program` - Read just the program zone.
+
 `--id` - display ECU identification parameters (KWP service 0x1A)
 
 `--correct-checksum {filename}`
