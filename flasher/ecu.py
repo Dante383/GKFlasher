@@ -67,9 +67,9 @@ class ECU:
 		self.name = name
 		self.eeprom_size_bytes = eeprom_size_bytes
 		self.memory_offset, self.bin_offset, self.memory_write_offset = memory_offset, bin_offset, memory_write_offset
-		self.calibration_size_bytes = calibration_size_bytes,
-		self.program_section_offset, self.program_section_size = program_section_offset, program_section_size,
-		self.program_section_flash_offset = program_section_flash_offset,
+		self.calibration_size_bytes = calibration_size_bytes
+		self.program_section_offset, self.program_section_size = program_section_offset, program_section_size
+		self.program_section_flash_offset = program_section_flash_offset
 		self.single_byte_restriction_start, self.single_byte_restriction_stop = single_byte_restriction_start, single_byte_restriction_stop
 
 	def get_name (self) -> str:
