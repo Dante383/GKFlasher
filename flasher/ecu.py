@@ -17,8 +17,8 @@ kwp_ecu_identification_parameters = [
 	{'value': 0x9F, 'name': 'ECU Boot Fingerprint'},
 	{'value': 0x8A, 'name': 'System supplier specific'},
 	{'value': 0x8B, 'name': 'System supplier specific'},
-	{'value': 0x8C, 'name': 'Hardware revision'},
-	{'value': 0x8D, 'name': 'Hardware subsystem'},
+	{'value': 0x8C, 'name': 'Bootloader version'},
+	{'value': 0x8D, 'name': 'Program code version'},
 	{'value': 0x8E, 'name': 'Calibration version'},
 	{'value': 0x8F, 'name': 'System supplier specific'},
 ]
