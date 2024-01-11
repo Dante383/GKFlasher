@@ -304,7 +304,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
-	def read_program_zone (self):
+	def read_program_zone (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:
@@ -324,7 +324,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
-	def full_read (self):
+	def full_read (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
 		except gkbus.GKBusTimeoutException:

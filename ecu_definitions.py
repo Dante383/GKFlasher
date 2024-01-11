@@ -11,7 +11,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'single_byte_restriction_start': 0x089FFF,
 			'single_byte_restriction_stop': 0x09000F,
 			'calibration_size_bytes': 0xFFF0,
-			'program_section_offset': 0x8A0010,
+			'program_section_offset': 0x0A0010,
 			'program_section_size': 0x05FFF0,
 			'program_section_flash_offset': 0x020010,
 		}
