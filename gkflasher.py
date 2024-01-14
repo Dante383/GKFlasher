@@ -175,6 +175,31 @@ def cli_identify_ecu (bus):
 	print('[*] Found! {}'.format(ecu.get_name()))
 	return ecu
 
+immo_status = {
+	0: 'Not learnt',
+	1: 'Learnt'
+}
+
+def cli_immo_info (bus):
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	try:
+		immo_data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
+	except (kwp.KWPNegativeResponseException):
+		print('[*] Immo seems to be disabled')
+		return
+
+	print('[*] Immo keys learnt: {}'.format(immo_data[1]))
+	try:
+		ecu_status = immo_status[immo_data[2]]
+	except KeyError:
+		ecu_status = immo_data[2]
+	try:
+		key_status = immo_status[immo_data[3]]
+	except KeyError:
+		key_status = immo_data[3]
+	print('[*] Immo ECU status: {}'.format(ecu_status))
+	print('[*] Immo key status: {}'.format(key_status))
+
 def main():
 	GKFlasher_config, args = load_arguments()
 
@@ -252,6 +277,8 @@ def main():
 			print('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			print('            [HEX]: {}'.format(value_hex))
 			print('            [ASCII]: {}'.format(value_ascii))
+
+		cli_immo_info(bus)
 
 	if (args.read):
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
