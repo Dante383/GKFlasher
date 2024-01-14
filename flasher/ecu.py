@@ -1,5 +1,5 @@
 from gkbus import kwp
-from ecu_definitions import ECU_IDENTIFICATION_TABLE
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier
 
 kwp_ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
@@ -128,7 +128,7 @@ class ECU:
 
 	def clear_adaptive_values (self):
 		self.bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
-		self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(0x50, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
+		self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):
 	pass
