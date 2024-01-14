@@ -262,6 +262,11 @@ class Ui(QtWidgets.QMainWindow):
 			flash_start = ecu.get_program_section_offset()
 			flash_size = ecu.get_program_section_size()
 			payload_start = ecu.get_program_section_flash_offset()
+			payload_stop = payload_start + flash_size
+			payload = eeprom[payload_start:payload_stop]
+
+			log_callback.emit('[*] Uploading data to the ECU')
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
@@ -270,12 +275,11 @@ class Ui(QtWidgets.QMainWindow):
 			flash_start = ecu.calculate_memory_write_offset(0x090000)
 			flash_size = ecu.get_calibration_size_bytes()
 			payload_start = ecu.calculate_bin_offset(0x090000)
+			payload_stop = payload_start + flash_size
+			payload = eeprom[payload_start:payload_stop]
 
-		payload_stop = payload_start + flash_size
-		payload = eeprom[payload_start:payload_stop]
-
-		log_callback.emit('[*] Uploading data to the ECU')
-		write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			log_callback.emit('[*] Uploading data to the ECU')
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		ecu.bus.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
