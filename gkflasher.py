@@ -6,7 +6,7 @@ from gkbus import kwp
 from flasher.memory import read_memory, write_memory
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from flasher.logging import logger
 from flasher.checksum import correct_checksum
 
@@ -57,7 +57,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_program:
 		print('[*] start routine 0x00 (erase program code section)')
-		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x00))
+		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 		flash_start = ecu.get_program_section_offset()
 		flash_size = ecu.get_program_section_size()
@@ -70,7 +70,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
-		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x01))
+		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
 		flash_start = ecu.calculate_memory_write_offset(0x090000)
 		flash_size = ecu.get_calibration_size_bytes()
@@ -83,7 +83,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	ecu.bus.set_timeout(300)
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-	ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x02)).get_data()
+	ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
 	ecu.bus.set_timeout(12)
 
 	print('[*] ecu reset')

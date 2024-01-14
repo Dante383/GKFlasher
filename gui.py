@@ -10,7 +10,7 @@ from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory
 from flasher.checksum import *
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
@@ -257,7 +257,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		if flash_program:
 			log_callback.emit('[*] start routine 0x00 (erase program code section)')
-			ecu.bus.execute(StartRoutineByLocalIdentifier(0x00))
+			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 			flash_start = ecu.get_program_section_offset()
 			flash_size = ecu.get_program_section_size()
@@ -270,7 +270,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
-			ecu.bus.execute(StartRoutineByLocalIdentifier(0x01))
+			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
 			flash_start = ecu.calculate_memory_write_offset(0x090000)
 			flash_size = ecu.get_calibration_size_bytes()
@@ -283,7 +283,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		ecu.bus.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-		ecu.bus.execute(StartRoutineByLocalIdentifier(0x02)).get_data()
+		ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
 		ecu.bus.set_timeout(12)
 
 		log_callback.emit('[*] ecu reset')
