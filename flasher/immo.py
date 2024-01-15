@@ -48,9 +48,12 @@ def cli_limp_home (bus):
 	password_b = (password & 0xFF)
 
 	print('[*] starting routine 0x18 with password as parameter')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x18, password_a, password_b))
-			
-	print(data)
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x18, password_a, password_b)).get_data()
+	print(' '.join([hex(x) for x in data]))
+
+	if (len(data) > 1):
+		if (data[1] == 1):
+			print('[*] limp home activated!')
 
 def cli_immo_reset (bus):
 	print('[*] starting default diagnostic session')
