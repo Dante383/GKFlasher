@@ -66,10 +66,13 @@ def cli_immo_reset (bus):
 			return
 
 	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
+	key_a = (key >> 16) & 0xFF
+	key_b = (key >> 8) & 0xFF
+	key_c = key & 0xFF
 
 
 	print('[*] Sending.. something 0b')
-	bus._write([0x90, 0x11, 0xf1, 0x0b, 0x31, 0x1a, 0x12, 0x34, 0x56, 0xff])
+	bus._write([0x90, 0x11, 0xf1, 0x0b, 0x31, 0x1a, key_a, key_b, key_c, 0xff])
 	print(bus._read(20))
 
 immo_menus = [
