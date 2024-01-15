@@ -5,7 +5,7 @@ immo_status = {
 	0: 'Not learnt',
 	1: 'Learnt',
 	2: 'Virgin',
-	3: 'Locked by timer',
+	3: 'Virgin',
 	4: 'Teaching not accepted (locked by wrong data)'
 }
 
@@ -79,6 +79,8 @@ def cli_immo_reset (bus):
 
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
 		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x20, 0x01)).get_data())
+
+	print('[*] ECU virginized!')
 
 immo_menus = [
 	['Information', cli_immo_info],
