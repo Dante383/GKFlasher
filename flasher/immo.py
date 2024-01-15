@@ -6,7 +6,7 @@ immo_status = {
 	1: 'Learnt',
 	2: 'Virgin',
 	3: 'Locked by timer',
-	4: 'Teaching not accepted'
+	4: 'Teaching not accepted (locked by wrong data)'
 }
 
 def cli_immo_info (bus):
@@ -37,6 +37,10 @@ def cli_limp_home (bus):
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x16)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
+	if (data[1] == 4):
+		print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+		return
+
 	password = int('0x' + input('Enter 4 digit password: '), 0)
 	
 	password_a = (password >> 8)
@@ -54,6 +58,10 @@ def cli_immo_reset (bus):
 	print('[*] starting routine 0x15')
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x15)).get_data()
 	print(' '.join([hex(x) for x in data]))
+
+	if (data[1] == 4):
+		print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+		return
 
 immo_menus = [
 	['Information', cli_immo_info],
