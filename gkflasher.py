@@ -9,6 +9,7 @@ from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from flasher.logging import logger
 from flasher.checksum import correct_checksum
+from flasher.immo import cli_immo, cli_immo_info
 
 def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, output_filename=None):
 	if (address_start == None):
@@ -120,6 +121,7 @@ def load_arguments ():
 	parser.add_argument('-e', '--address-stop', help='Offset to stop reading/flashing at.', type=lambda x: int(x,0))
 	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
 	parser.add_argument('-v', '--verbose', action='count', default=0)
+	parser.add_argument('--immo', action='store_true')
 	args = parser.parse_args()
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
@@ -175,34 +177,6 @@ def cli_identify_ecu (bus):
 	print('[*] Found! {}'.format(ecu.get_name()))
 	return ecu
 
-immo_status = {
-	0: 'Not learnt',
-	1: 'Learnt',
-	2: 'Virgin',
-	3: 'Locked by timer',
-	4: 'Teaching not accepted'
-}
-
-def cli_immo_info (bus):
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
-	try:
-		immo_data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
-	except (kwp.KWPNegativeResponseException):
-		print('[*] Immo seems to be disabled')
-		return
-
-	print('[*] Immo keys learnt: {}'.format(immo_data[1]))
-	try:
-		ecu_status = immo_status[immo_data[2]]
-	except KeyError:
-		ecu_status = immo_data[2]
-	try:
-		key_status = immo_status[immo_data[3]]
-	except KeyError:
-		key_status = immo_data[3]
-	print('[*] Immo ECU status: {}'.format(ecu_status))
-	print('[*] Immo key status: {}'.format(key_status))
-
 def main():
 	GKFlasher_config, args = load_arguments()
 
@@ -220,6 +194,9 @@ def main():
 		pass
 
 	bus.init(kwp.commands.StartCommunication())
+
+	if (args.immo):
+		return cli_immo(bus)
 
 	if args.desired_baudrate:
 		try:
