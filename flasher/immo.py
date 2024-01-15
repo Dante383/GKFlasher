@@ -71,9 +71,8 @@ def cli_immo_reset (bus):
 	key_c = key & 0xFF
 
 
-	print('[*] Sending.. something 0b')
-	bus._write([0x90, 0x11, 0xf1, 0x0b, 0x31, 0x1a, key_a, key_b, key_c, 0xff])
-	print(bus._read(20))
+	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1A, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)))
 
 immo_menus = [
 	['Information', cli_immo_info],
