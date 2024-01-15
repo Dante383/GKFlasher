@@ -77,6 +77,9 @@ def cli_immo_reset (bus):
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
 	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1A, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
+	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x20, 0x01)).get_data())
+
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
