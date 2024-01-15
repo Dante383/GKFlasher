@@ -37,9 +37,10 @@ def cli_limp_home (bus):
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x16)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
-	if (data[1] == 4):
-		print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
-		return
+	if (len(data) > 1):
+		if (data[1] == 4):
+			print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+			return
 
 	password = int('0x' + input('Enter 4 digit password: '), 0)
 	
@@ -59,9 +60,17 @@ def cli_immo_reset (bus):
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x15)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
-	if (data[1] == 4):
-		print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
-		return
+	if (len(data) > 1):
+		if (data[1] == 4):
+			print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+			return
+
+	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
+
+
+	print('[*] Sending.. something 0b')
+	bus._write([0x90, 0x11, 0xf1, 0x0b, 0x31, 0x1a, 0x12, 0x34, 0x56, 0xff])
+	print(bus._read(20))
 
 immo_menus = [
 	['Information', cli_immo_info],
@@ -74,7 +83,8 @@ def cli_immo (bus):
 		print('    [{}] {}'.format(key, menu[0]))
 	menu = input('Select immo menu: ')
 	try:
-		immo_menus[int(menu)][1](bus)
+		handler = immo_menus[int(menu)][1]
 	except (KeyError, IndexError, ValueError):
 		print('[!] Invalid choice! Try again')
 		cli_immo(bus)
+	handler(bus)
