@@ -82,10 +82,32 @@ def cli_immo_reset (bus):
 
 	print('[*] ECU virginized!')
 
+def cli_immo_teach_keys (bus):
+	print('[*] starting default diagnostic session')
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+
+	print('[*] starting routine 0x14')
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x15)).get_data()
+	print(' '.join([hex(x) for x in data]))
+
+	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
+	key_a = (key >> 16) & 0xFF
+	key_b = (key >> 8) & 0xFF
+	key_c = key & 0xFF
+
+
+	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1A, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+
+	print('[*] Starting routine 0x1B')
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B, 0x01)).get_data()
+	print(' '.join([hex(x) for x in data]))
+
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
-	['Immo reset', cli_immo_reset]
+	['Immo reset', cli_immo_reset],
+	['Teach keys', cli_immo_teach_keys]
 ]
 
 def cli_immo (bus):
