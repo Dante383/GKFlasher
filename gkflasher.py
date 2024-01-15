@@ -177,7 +177,10 @@ def cli_identify_ecu (bus):
 
 immo_status = {
 	0: 'Not learnt',
-	1: 'Learnt'
+	1: 'Learnt',
+	2: 'Virgin',
+	3: 'Locked by timer',
+	4: 'Teaching not accepted'
 }
 
 def cli_immo_info (bus):
