@@ -114,10 +114,12 @@ def cli_read_vin (bus):
 	print(''.join([chr(x) for x in vin]))
 
 def cli_write_vin (bus):
+	print('[*] starting flash reprogramming session')
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
 	cmd = kwp.KWPCommand()
-	cmd.command = 0x16 # undocumented service
+	cmd.command = 0x13 # undocumented service
 	cmd.data = [0x3B, 0x90] + [ord(c) for c in vin]
 	print(bus.execute(cmd).get_data())
 
