@@ -144,7 +144,7 @@ def cli_immo_teach_keys (bus):
 def cli_read_vin (bus):
 	cmd = kwp.KWPCommand()
 	cmd.command = 0x09 # undocumented service
-	cmd.data = [0x10]
+	cmd.data = [0x02]
 		
 	vin = bus.execute(cmd).get_data()
 
