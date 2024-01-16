@@ -68,7 +68,7 @@ def cli_immo_reset (bus):
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x15')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value).get_data())
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
 	if (len(data) > 1):
@@ -138,6 +138,7 @@ def cli_immo_teach_keys (bus):
 		if (input('[?] Teach immo key {}? [y/n]: '.format(x+1)) == 'y'):
 			data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x, 0x01)).get_data()
 		else:
+			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x+1, 0x02))
 			break
 
 def cli_read_vin (bus):
