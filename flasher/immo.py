@@ -123,11 +123,35 @@ def cli_write_vin (bus):
 	cmd = kwp.commands.WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin])
 	print(bus.execute(cmd).get_data())
 
+def cli_limp_home_teach (bus):
+	print('[*] starting default diagnostic session')
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+
+	status = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x13)).get_data()[1]
+	print('[*] Current ECU status: {}'.format(immo_status[status]))
+
+	if (status == 1): # learnt 
+		password = int('0x' + input('[*] Enter current 4 digit password: '), 0)
+		password_a = (password >> 8)
+		password_b = (password & 0xFF)
+		try:
+			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x18, password_a, password_b))
+		except (kwp.KWPNegativeResponseException):
+			print('[!] Invalid password!')
+			return 
+
+	password = int('0x' + input('[*] Enter new 4 digit password: '), 0)
+	password_a = (password >> 8)
+	password_b = (password & 0xFF)
+
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x17, password_a, password_b)).get_data())
+
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
 	['Immo reset', cli_immo_reset],
 	['Teach keys', cli_immo_teach_keys],
+	['Limp home password teaching/changing', cli_limp_home_teach],
 	['Read VIN', cli_read_vin],
 	['Write VIN', cli_write_vin]
 ]
