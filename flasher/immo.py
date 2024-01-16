@@ -5,7 +5,7 @@ immo_status = {
 	0: 'Not learnt',
 	1: 'Learnt',
 	2: 'Virgin',
-	3: 'Virgin',
+	3: 'Neutral',
 	4: 'Teaching not accepted (locked by wrong data)'
 }
 
@@ -87,7 +87,7 @@ def cli_immo_teach_keys (bus):
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x14')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x15)).get_data()
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x14)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
 	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
@@ -103,11 +103,24 @@ def cli_immo_teach_keys (bus):
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B, 0x01)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
+def cli_read_vin (bus):
+	cmd = kwp.commands.StartCommunication()
+	cmd.command = 0x09 # undocumented command
+	cmd.data = [0x02]
+	vin = bus.execute(cmd).get_data()
+	print(' '.join([hex(x) for x in vin]))
+	print(''.join([chr(x) for x in vin]))
+
+def cli_write_vin (bus):
+	pass
+
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
 	['Immo reset', cli_immo_reset],
-	['Teach keys', cli_immo_teach_keys]
+	['Teach keys', cli_immo_teach_keys],
+	['Read VIN', cli_read_vin],
+	['Write VIN', cli_write_vin]
 ]
 
 def cli_immo (bus):
@@ -118,5 +131,5 @@ def cli_immo (bus):
 		handler = immo_menus[int(menu)][1]
 	except (KeyError, IndexError, ValueError):
 		print('[!] Invalid choice! Try again')
-		cli_immo(bus)
+		return cli_immo(bus)
 	handler(bus)
