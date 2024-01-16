@@ -104,15 +104,22 @@ def cli_immo_teach_keys (bus):
 	print(' '.join([hex(x) for x in data]))
 
 def cli_read_vin (bus):
-	cmd = kwp.commands.StartCommunication()
-	cmd.command = 0x09 # undocumented command
-	cmd.data = [0x02]
+	cmd = kwp.KWPCommand()
+	cmd.command = 0x09 # undocumented service
+	cmd.data = [0x10]
+		
 	vin = bus.execute(cmd).get_data()
+
 	print(' '.join([hex(x) for x in vin]))
 	print(''.join([chr(x) for x in vin]))
 
 def cli_write_vin (bus):
-	pass
+	vin = input('Enter VIN. WARNING! No validation!: ')
+
+	cmd = kwp.KWPCommand()
+	cmd.command = 0x16 # undocumented service
+	cmd.data = [0x3B, 0x90] + [ord(c) for c in vin]
+	print(bus.execute(cmd).get_data())
 
 immo_menus = [
 	['Information', cli_immo_info],
