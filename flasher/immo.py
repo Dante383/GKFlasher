@@ -35,7 +35,7 @@ def cli_limp_home (bus):
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x16')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x16)).get_data()
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
 	if (len(data) > 1):
@@ -43,13 +43,17 @@ def cli_limp_home (bus):
 			print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
 			return
 
-	password = int('0x' + input('Enter 4 digit password: '), 0)
+	password = int('0x' + input('Enter 4 digit password (default: 2345): '), 0)
 	
 	password_a = (password >> 8)
 	password_b = (password & 0xFF)
 
 	print('[*] starting routine 0x18 with password as parameter')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x18, password_a, password_b)).get_data()
+	try:
+		data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b)).get_data()
+	except (kwp.KWPNegativeResponseException):
+		print('[!] Invalid password! Try the default one: 2345')
+
 	print(' '.join([hex(x) for x in data]))
 
 	if (len(data) > 1):
@@ -61,7 +65,7 @@ def cli_immo_reset (bus):
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x15')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x15)).get_data()
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value).get_data())
 	print(' '.join([hex(x) for x in data]))
 
 	if (len(data) > 1):
@@ -76,10 +80,10 @@ def cli_immo_reset (bus):
 
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1A, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x20, 0x01)).get_data())
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
 	print('[*] ECU virginized!')
 
@@ -88,7 +92,7 @@ def cli_immo_teach_keys (bus):
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x14')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x14)).get_data()
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
 	print(' '.join([hex(x) for x in data]))
 
 	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
@@ -98,11 +102,13 @@ def cli_immo_teach_keys (bus):
 
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1A, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
-	print('[*] Starting routine 0x1B')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B, 0x01)).get_data()
-	print(' '.join([hex(x) for x in data]))
+	for x in range(4):
+		if (input('[?] Teach immo key {}? [y/n]: '.format(x+1)) == 'y'):
+			data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x, 0x01)).get_data()
+		else:
+			break
 
 def cli_read_vin (bus):
 	cmd = kwp.KWPCommand()

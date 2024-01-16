@@ -81,6 +81,19 @@ class Routine (Enum):
 	VERIFY_BLOCKS = 0x02
 
 	QUERY_IMMO_INFO = 0x12
+	BEFORE_LIMP_HOME = 0x16 # what does this actually do?
+	ACTIVATE_LIMP_HOME = 0x18 # user 4 pin code password as parameters
+
+	BEFORE_IMMO_RESET = 0x15 # what does this actually do?
+	IMMO_INPUT_PASSWORD = 0x1A # 6 digit pin code as parameter
+	IMMO_RESET_CONFIRM = 0x20
+
+	BEFORE_IMMO_KEY_TEACHING = 0x14 # what does this actually do?
+	# these enums below are not actually used, just serve as documentation
+	IMMO_TEACH_KEY_1 = 0x1B
+	IMMO_TEACH_KEY_2 = 0x1C
+	IMMO_TEACH_KEY_3 = 0x1D
+	IMMO_TEACH_KEY_4 = 0x1E
 
 class IOIdentifier (Enum):
 	CHECK_ENGINE_LIGHT = 0x10
