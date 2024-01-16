@@ -146,6 +146,9 @@ def cli_limp_home_teach (bus):
 
 	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x17, password_a, password_b)).get_data())
 
+	if (input('[?] Are you sure? [y/n]: ') == 'y'):
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x19, 0x01)).get_data())
+
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
