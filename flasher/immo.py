@@ -27,8 +27,11 @@ def cli_immo_info (bus):
 		key_status = immo_status[immo_data[3]]
 	except KeyError:
 		key_status = immo_data[3]
+
 	print('[*] Immo ECU status: {}'.format(ecu_status))
 	print('[*] Immo key status: {}'.format(key_status))
+	if (len(immo_data) > 4):
+		print('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
 
 def cli_limp_home (bus):
 	print('[*] starting default diagnostic session')
