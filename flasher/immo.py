@@ -1,5 +1,6 @@
 from gkbus import kwp
 from ecu_definitions import Routine
+from flasher.ecu import enable_security_access
 
 immo_status = {
 	0: 'Not learnt',
@@ -116,11 +117,10 @@ def cli_read_vin (bus):
 def cli_write_vin (bus):
 	print('[*] starting flash reprogramming session')
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+	enable_security_access(bus)
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
-	cmd = kwp.KWPCommand()
-	cmd.command = 0x13 # undocumented service
-	cmd.data = [0x3B, 0x90] + [ord(c) for c in vin]
+	cmd = kwp.commands.WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin])
 	print(bus.execute(cmd).get_data())
 
 immo_menus = [
