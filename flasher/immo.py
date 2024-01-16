@@ -85,7 +85,34 @@ def cli_immo_reset (bus):
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
 		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
-	print('[*] ECU virginized!')
+	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
+
+def cli_smartra_neutralize (bus):
+	print('[*] starting default diagnostic session')
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+
+	print('[*] starting routine 0x25')
+	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
+	print(' '.join([hex(x) for x in data]))
+
+	if (len(data) > 1):
+		if (data[1] == 4):
+			print('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+			return
+
+	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
+	key_a = (key >> 16) & 0xFF
+	key_b = (key >> 8) & 0xFF
+	key_c = key & 0xFF
+
+
+	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+
+	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.SMARTRA_NEUTRALIZE.value, 0x01)).get_data())
+
+	print('[*] SMARTRA neutralized! Turn ignition off for 5 seconds for changes to take effect.')
 
 def cli_immo_teach_keys (bus):
 	print('[*] starting default diagnostic session')
@@ -159,6 +186,7 @@ immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
 	['Immo reset', cli_immo_reset],
+	['Smartra neutralize', cli_smartra_neutralize],
 	['Teach keys', cli_immo_teach_keys],
 	['Limp home password teaching/changing', cli_limp_home_teach],
 	['Read VIN', cli_read_vin],
