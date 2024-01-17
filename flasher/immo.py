@@ -158,7 +158,8 @@ def cli_write_vin (bus):
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
 	cmd = kwp.commands.WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin])
-	print(bus.execute(cmd).get_data())
+	bus.execute(cmd)
+	print('[*] VIN changed! Turn ignition off for 5 seconds for changes to take effect.')
 
 def cli_limp_home_teach (bus):
 	print('[*] starting default diagnostic session')
