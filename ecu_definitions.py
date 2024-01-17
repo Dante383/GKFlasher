@@ -83,6 +83,9 @@ class Routine (Enum):
 	QUERY_IMMO_INFO = 0x12
 	BEFORE_LIMP_HOME = 0x16 # what does this actually do?
 	ACTIVATE_LIMP_HOME = 0x18 # user 4 pin code password as parameters
+	BEFORE_LIMP_HOME_TEACHING = 0x13
+	LIMP_HOME_INPUT_NEW_PASSWORD = 0x17
+	LIMP_HOME_CONFIRM_NEW_PASSWORD = 0x19
 
 	BEFORE_IMMO_RESET = 0x15 # what does this actually do?
 	IMMO_INPUT_PASSWORD = 0x1A # 6 digit pin code as parameter

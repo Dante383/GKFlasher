@@ -165,7 +165,7 @@ def cli_limp_home_teach (bus):
 	print('[*] starting default diagnostic session')
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
-	status = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x13)).get_data()[1]
+	status = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 	print('[*] Current ECU status: {}'.format(immo_status[status]))
 
 	if (status == 1): # learnt 
@@ -173,7 +173,7 @@ def cli_limp_home_teach (bus):
 		password_a = (password >> 8)
 		password_b = (password & 0xFF)
 		try:
-			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x18, password_a, password_b))
+			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b))
 		except (kwp.KWPNegativeResponseException):
 			print('[!] Invalid password!')
 			return 
@@ -182,10 +182,10 @@ def cli_limp_home_teach (bus):
 	password_a = (password >> 8)
 	password_b = (password & 0xFF)
 
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x17, password_a, password_b)).get_data())
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD, password_a, password_b)).get_data())
 
 	if (input('[?] Are you sure? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x19, 0x01)).get_data())
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD, 0x01)).get_data())
 
 immo_menus = [
 	['Information', cli_immo_info],
