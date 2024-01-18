@@ -22,7 +22,7 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 	requested_size = address_stop-address_start
 	eeprom = [0xFF]*eeprom_size
 
-	with alive_bar(requested_size+1, unit='B') as bar:
+	with alive_bar(requested_size, unit='B') as bar:
 		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=bar)
 
 	eeprom_start = ecu.calculate_bin_offset(address_start)
