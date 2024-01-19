@@ -138,7 +138,7 @@ def cli_immo_teach_keys (bus):
 		if (input('[?] Teach immo key {}? [y/n]: '.format(x+1)) == 'y'):
 			data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x, 0x01)).get_data()
 		else:
-			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x+1, 0x02))
+			# bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x+1, 0x02)) # cascade did this, but it throws 0x10. seems to be not needed?
 			break
 
 def cli_read_vin (bus):
