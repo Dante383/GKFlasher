@@ -140,6 +140,7 @@ def cli_immo_teach_keys (bus):
 		else:
 			# bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x+1, 0x02)) # cascade did this, but it throws 0x10. seems to be not needed?
 			break
+	print('[*] Done! Turn off ignition for 10 seconds for changes to take effect')
 
 def cli_read_vin (bus):
 	cmd = kwp.KWPCommand()
@@ -182,10 +183,10 @@ def cli_limp_home_teach (bus):
 	password_a = (password >> 8)
 	password_b = (password & 0xFF)
 
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD, password_a, password_b)).get_data())
+	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD.value, password_a, password_b)).get_data())
 
 	if (input('[?] Are you sure? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD, 0x01)).get_data())
+		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data())
 
 immo_menus = [
 	['Information', cli_immo_info],
