@@ -6,15 +6,15 @@ ECU_IDENTIFICATION_TABLE = [
 		'expected': [99, 97, 54, 54],
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
-			'eeprom_size_bytes': 524287,
+			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': 0,
 			'bin_offset': -0x080000,
 			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x089FFF,
 			'single_byte_restriction_stop': 0x09000F,
-			'calibration_size_bytes': 0xFFF0,
+			'calibration_size_bytes': 0xFFF0, # 65520 bytes (63.9 KiB)
 			'program_section_offset': 0x0A0010,
-			'program_section_size': 0x05FFF0,
+			'program_section_size': 0x05FFF0, # 392200 bytes (383.007 KiB)
 			'program_section_flash_offset': 0x020010,
 		}
 	},
@@ -23,7 +23,7 @@ ECU_IDENTIFICATION_TABLE = [
 		'expected': [54, 54, 51, 54],
 		'ecu': {
 			'name': 'SIMK43 8mbit',
-			'eeprom_size_bytes': 1048575,
+			'eeprom_size_bytes': 1048576, # (1024 KiB)
 			'memory_offset': 0,
 			'bin_offset': 0,
 			'memory_write_offset': -0x7000,
@@ -38,7 +38,7 @@ ECU_IDENTIFICATION_TABLE = [
 		'expected': [99, 97, 54, 53],
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit',
-			'eeprom_size_bytes': 524287,
+			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
 			'memory_write_offset': -0x87800,
@@ -53,16 +53,16 @@ ECU_IDENTIFICATION_TABLE = [
 		'expected': [99, 97, 54, 54],
 		'ecu': {
 			'name': 'SIMK41 2mbit',
-			'eeprom_size_bytes': 262143,
+			'eeprom_size_bytes': 262144, # (256 KiB)
 			'memory_offset': -0x48000,
 			'bin_offset': -0x088000,
 			'memory_write_offset': -0x7000,
-			'single_byte_restriction_start': 0x48000,
-			'single_byte_restriction_stop': 0x4800F,
-			'calibration_size_bytes': 0x7FFF,
-			'program_section_offset': 0x890010,
-			'program_section_size': 0x05FFF0,
-			'program_section_flash_offset': 0x010010
+			'single_byte_restriction_start': 0x089FFF,
+			'single_byte_restriction_stop': 0x09000F,
+			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
+			'program_section_offset': 0x98000,
+			'program_section_size': 0x30000, # 196,608 bytes (192 KiB)
+			'program_section_flash_offset': 0x010000
 		}
 	}
 ]
