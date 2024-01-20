@@ -15,7 +15,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0xFFF0, # 65520 bytes (63.9 KiB)
 			'program_section_offset': 0x0A0010,
 			'program_section_size': 0x05FFF0, # 392200 bytes (383.007 KiB)
-			'program_section_flash_offset': 0x020010,
+			'program_section_flash_bin_offset': 0x020010,
+			'program_section_flash_memory_offset': 0
 		}
 	},
 	{
@@ -30,7 +31,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0xFFF0,
 			'program_section_offset': 0xA0010,
 			'program_section_size': 0x05FFF0,
-			'program_section_flash_offset': 0xA0010
+			'program_section_flash_bin_offset': 0xA0010,
+			'program_section_flash_memory_offset': 0
 		}
 	},
 	{
@@ -45,7 +47,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x5F00,
 			'program_section_offset': 0x890010,
 			'program_section_size': 0x05FFF0,
-			'program_section_flash_offset': 0xA0010
+			'program_section_flash_bin_offset': 0xA0010,
+			'program_section_flash_memory_offset': 0
 		}
 	},
 	{
@@ -62,7 +65,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x30000, # 196,608 bytes (192 KiB)
-			'program_section_flash_offset': 0x010000
+			'program_section_flash_bin_offset': 0x010000,
+			'program_section_flash_memory_offset': 0x10
 		}
 	}
 ]

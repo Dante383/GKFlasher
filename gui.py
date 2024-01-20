@@ -259,9 +259,9 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] start routine 0x00 (erase program code section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
-			flash_start = ecu.get_program_section_offset()
+			flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
 			flash_size = ecu.get_program_section_size()
-			payload_start = ecu.get_program_section_flash_offset()
+			payload_start = ecu.get_program_section_flash_bin_offset()
 			payload_stop = payload_start + flash_size
 			payload = eeprom[payload_start:payload_stop]
 
