@@ -7,7 +7,9 @@ immo_status = {
 	1: 'Learnt',
 	2: 'Virgin',
 	3: 'Neutral',
-	4: 'Teaching not accepted (locked by wrong data)'
+	4: 'Teaching not accepted (locked by wrong data)',
+	5: 'Virgin status - no teaching',
+	6: 'Invalid key'
 }
 
 def cli_immo_info (bus):
