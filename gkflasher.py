@@ -11,6 +11,9 @@ from flasher.logging import logger
 from flasher.checksum import correct_checksum
 from flasher.immo import cli_immo, cli_immo_info
 
+def strip (string):
+	return ''.join(x for x in string if x.isalnum())
+
 def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, output_filename=None):
 	if (address_start == None):
 		address_start = abs(ecu.bin_offset)
@@ -33,8 +36,8 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 		try:
 			calibration = ecu.get_calibration()
 			description = ecu.get_calibration_description()
-			hw_rev_c = ''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data()[1:]])
-			hw_rev_d = ''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data()[1:]])
+			hw_rev_c = strip(''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data()[1:]]))
+			hw_rev_d = strip(''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data()[1:]]))
 			output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, date.today())
 		except: # dirty
 			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
@@ -251,7 +254,7 @@ def main():
 		print('[*] Reading ECU Identification..',end='')
 		for parameter_key, parameter in fetch_ecu_identification(bus).items():
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
-			value_ascii = ''.join([chr(x) for x in parameter['value']])
+			value_ascii = strip(''.join([chr(x) for x in parameter['value']]))
 
 			print('')
 			print('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))

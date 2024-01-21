@@ -11,6 +11,7 @@ from flasher.ecu import enable_security_access, fetch_ecu_identification, identi
 from flasher.memory import read_memory, write_memory
 from flasher.checksum import *
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
+from gkflasher import strip
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
@@ -235,8 +236,8 @@ class Ui(QtWidgets.QMainWindow):
 			try:
 				calibration = ecu.get_calibration()
 				description = ecu.get_calibration_description()
-				hw_rev_c = ''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8c)).get_data()[1:]])
-				hw_rev_d = ''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8d)).get_data()[1:]])
+				hw_rev_c = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8c)).get_data()[1:]]))
+				hw_rev_d = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8d)).get_data()[1:]]))
 				output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, date.today())
 			except: # dirty
 				output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
@@ -359,7 +360,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
-			value_ascii = ''.join([chr(x) for x in parameter['value']])
+			value_ascii = strip(''.join([chr(x) for x in parameter['value']]))
 
 			log_callback.emit('')
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
