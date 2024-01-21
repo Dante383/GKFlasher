@@ -227,7 +227,7 @@ class Ui(QtWidgets.QMainWindow):
 		requested_size = address_stop-address_start
 		eeprom = [0xFF]*eeprom_size
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size-0x468))
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size))
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)

@@ -12,7 +12,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_write_offset': -0x7000,
 			'single_byte_restriction_start': 0x089FFF,
 			'single_byte_restriction_stop': 0x09000F,
-			'calibration_size_bytes': 0xFFF0, # 65520 bytes (63.9 KiB)
+			'calibration_size_bytes': 0x10000, # 65520 bytes (63.9 KiB)
 			'calibration_size_bytes_flash': 0xFFF0, # 65520 bytes (63.9 KiB)
 			'program_section_offset': 0x0A0000,
 			'program_section_size': 0x60000, # 393216 bytes (384 KiB)
@@ -29,7 +29,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': 0,
 			'bin_offset': 0,
 			'memory_write_offset': -0x7000,
-			'calibration_size_bytes': 0xFFF0,
+			'calibration_size_bytes': 0x10000,
 			'calibration_size_bytes_flash': 0xFFF0,
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x05FFF0,
@@ -46,7 +46,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
 			'memory_write_offset': -0x87800,
-			'calibration_size_bytes': 0x5F00,
+			'calibration_size_bytes': 0x8000,
 			'calibration_size_bytes_flash': 0x5F00,
 			'program_section_offset': 0x890000,
 			'program_section_size': 0x05FFF0,
