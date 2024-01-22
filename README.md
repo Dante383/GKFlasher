@@ -1,10 +1,6 @@
 # GKFlasher
 
-CLI flashing tool for SIMK41/43-based vehicles. 
-
-While it has been developed and tested on a Hyundai Tiburon, the basic functionality
-should work on any vehicle supporting KWP2000 over K-line or CANbus. Adjusting some 
-parameters might be necessary for other vehicles. 
+CLI flashing tool for SIMK41/43-based vehicles. This project is a result of research gathered by black-box reverse engineering
 
 ![GUI interface](assets/gkflasher_gui.png)
 ![Reading over CANbus](assets/gkflasher_canbus_read.png)
