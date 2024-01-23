@@ -247,6 +247,7 @@ class Ui(QtWidgets.QMainWindow):
 			file.write(bytes(eeprom))
 
 		log_callback.emit('[*] saved to {}'.format(output_filename))
+		log_callback.emit('[*] Done!')
 		self.disconnect_ecu(ecu)
 
 	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True, log_callback=None, progress_callback=None):

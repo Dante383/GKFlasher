@@ -46,6 +46,7 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 		file.write(bytes(eeprom))
 
 	print('[*] saved to {}'.format(output_filename))
+	print('[*] Done!')
 
 def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
 	print('\n[*] Loading up {}'.format(input_filename))
