@@ -239,7 +239,7 @@ class Ui(QtWidgets.QMainWindow):
 				description = ecu.get_calibration_description()
 				hw_rev_c = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8c)).get_data()[1:]]))
 				hw_rev_d = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8d)).get_data()[1:]]))
-				output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.datetime.now().strftime('%Y-%m-%d_%H%M'))
+				output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.now().strftime('%Y-%m-%d_%H%M'))
 			except: # dirty
 				output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
 		
