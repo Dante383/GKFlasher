@@ -45,11 +45,11 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
 			'bin_offset': -0x088000,
-			'memory_write_offset': -0x87800,
+			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000,
 			'calibration_size_bytes_flash': 0x5F00,
-			'program_section_offset': 0x98000,
-			'program_section_size': 0x05FFF0,
+			'program_section_offset': 0x90000,
+			'program_section_size': 0x039990,
 			'program_section_flash_bin_offset': 0x010010,
 			'program_section_flash_memory_offset': 0x10
 		}
