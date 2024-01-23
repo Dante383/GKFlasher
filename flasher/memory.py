@@ -58,7 +58,7 @@ def read_memory(ecu, address_start, address_stop, progress_callback=False):#, pr
 		page = 0
 		while True:
 			if (progress_callback):
-				progress_callback.title('Page {}/{}, offset {}'.format(page+1, pages, hex(address)))
+				progress_callback.title('Page {}/{}, offset {}'.format(page, pages, hex(address)))
 
 			fetched = read_page_16kib(ecu, offset=address, progress_callback=progress_callback)
 			
