@@ -2,21 +2,22 @@ from enum import Enum
 
 ECU_IDENTIFICATION_TABLE = [
 	{
-		'offset': 0x090040,
+		'offset': 0x90040,
 		'expected': [99, 97, 54, 54],
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': 0,
-			'bin_offset': -0x080000,
+			'bin_offset': -0x80000,
 			'memory_write_offset': -0x7000,
-			'single_byte_restriction_start': 0x089FFF,
-			'single_byte_restriction_stop': 0x09000F,
-			'calibration_size_bytes': 0x10000, # 65546 bytes (64 KiB)
-			'calibration_size_bytes_flash': 0xFFF0, # 65520 bytes (63.9 KiB)
-			'program_section_offset': 0x0A0000,
-			'program_section_size': 0x05FFF0, #392200 bytes
-			'program_section_flash_bin_offset': 0x020010,
+			'single_byte_restriction_start': 0x89FFF,
+			'single_byte_restriction_stop': 0x9000F,
+			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
+			'calibration_size_bytes_flash': 0xFFF0,
+			'program_section_offset': 0xA0000,
+			'program_section_size': 0x60000,
+			'program_section_flash_size': 0x5FFF0,
+			'program_section_flash_bin_offset': 0x20010,
 			'program_section_flash_memory_offset': 0x10
 		}
 	},
@@ -29,10 +30,11 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': 0,
 			'bin_offset': 0,
 			'memory_write_offset': -0x7000,
-			'calibration_size_bytes': 0x10000,
+			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'calibration_size_bytes_flash': 0xFFF0,
 			'program_section_offset': 0xA0000,
-			'program_section_size': 0x05FFF0,
+			'program_section_size': 0x60000,
+			'program_section_flash_size': 0x5FFF0,
 			'program_section_flash_bin_offset': 0xA0010,
 			'program_section_flash_memory_offset': 0x10
 		}
@@ -44,13 +46,14 @@ ECU_IDENTIFICATION_TABLE = [
 			'name': 'SIMK43 V6 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
-			'bin_offset': -0x088000,
+			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7800,
-			'calibration_size_bytes': 0x8000,
+			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'calibration_size_bytes_flash': 0x5F00,
 			'program_section_offset': 0x90000,
-			'program_section_size': 0x039990,
-			'program_section_flash_bin_offset': 0x010010,
+			'program_section_size': 0x70000,
+			'program_section_flash_size': 0x6FFF0,
+			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': 0x10
 		}
 	},
@@ -61,15 +64,16 @@ ECU_IDENTIFICATION_TABLE = [
 			'name': 'SIMK41 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)
 			'memory_offset': -0x48000,
-			'bin_offset': -0x088000,
+			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7000,
-			'single_byte_restriction_start': 0x089FFF,
-			'single_byte_restriction_stop': 0x09000F,
+			'single_byte_restriction_start': 0x89FFF,
+			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'calibration_size_bytes_flash': 0x5F00,
 			'program_section_offset': 0x98000,
-			'program_section_size': 0x02FE22, # 196,130 bytes | zone size: 0x30000 - 196,608 bytes (192 KiB)
-			'program_section_flash_bin_offset': 0x010010,
+			'program_section_size': 0x30000,
+			'program_section_flash_size': 0x2FE22, # 196,130 bytes | zone size: 0x30000 - 196,608 bytes (192 KiB)
+			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': 0x10
 		}
 	}

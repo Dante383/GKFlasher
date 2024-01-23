@@ -64,7 +64,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 		flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
-		flash_size = ecu.get_program_section_size()
+		flash_size = ecu.get_program_section_flash_size()
 		payload_start = ecu.get_program_section_flash_bin_offset()
 		payload_stop = payload_start + flash_size
 		payload = eeprom[payload_start:payload_stop]
