@@ -11,6 +11,7 @@ from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory
 from flasher.checksum import *
+from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from gkflasher import strip
 
@@ -368,6 +369,23 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			log_callback.emit('            [HEX]: {}'.format(value_hex))
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
+
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		try:
+			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
+		except (KWPNegativeResponseException):
+			log_callback.emit('[*] Immo seems to be disabled')
+			return
+
+		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
+		ecu_status = immo_status[immo_data[2]]
+		key_status = immo_status[immo_data[3]]
+	
+		log_callback.emit('[*] Immo ECU status: {}'.format(ecu_status))
+		log_callback.emit('[*] Immo key status: {}'.format(key_status))
+		if (len(immo_data) > 4):
+			log_callback.emit('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
+
 		self.disconnect_ecu(ecu)
 
 	def correct_checksum (self):
