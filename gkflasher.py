@@ -197,7 +197,7 @@ def main():
 	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
 
-	bus.init(kwp.commands.StartCommunication())
+	bus.init(kwp.commands.StartCommunication(), keepalive_payload=kwp.commands.TesterPresent(kwp.enums.ResponseType.REQUIRED), keepalive_timeout=2)
 
 	if (args.immo):
 		return cli_immo(bus)
@@ -290,5 +290,6 @@ def main():
 		bus.execute(kwp.commands.StopCommunication())
 	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 		pass
+	bus.shutdown()
 if __name__ == '__main__':
 	main()

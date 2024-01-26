@@ -160,7 +160,7 @@ class Ui(QtWidgets.QMainWindow):
 			pass
 
 		try:
-			bus.init(StartCommunication())
+			bus.init(StartCommunication(), keepalive_payload=TesterPresent(ResponseType.REQUIRED), keepalive_timeout=2)
 		except gkbus.GKBusTimeoutException:
 			pass
 
@@ -218,6 +218,7 @@ class Ui(QtWidgets.QMainWindow):
 			ecu.bus.execute(StopCommunication())
 		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
 			pass
+		ecu.bus.shutdown()
 
 	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None, log_callback=None, progress_callback=None):
 		if (address_stop == None):

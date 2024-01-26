@@ -211,3 +211,4 @@ def cli_immo (bus):
 		print('[!] Invalid choice! Try again')
 		return cli_immo(bus)
 	handler(bus)
+	bus.shutdown()
