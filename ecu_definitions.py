@@ -2,6 +2,24 @@ from enum import Enum
 
 ECU_IDENTIFICATION_TABLE = [
 	{
+		'offset': 0x3FE0,
+		'expected': [53, 50, 52, 50],
+		'ecu': {
+			'name': 'SIMK43 8mbit',
+			'eeprom_size_bytes': 1048576, # (1024 KiB)
+			'memory_offset': 0,
+			'bin_offset': 0,
+			'memory_write_offset': -0x7000,
+			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
+			'calibration_size_bytes_flash': 0xFFF0,
+			'program_section_offset': 0xA0000,
+			'program_section_size': 0x60000,
+			'program_section_flash_size': 0x5FFF0,
+			'program_section_flash_bin_offset': 0xA0010,
+			'program_section_flash_memory_offset': 0x10
+		}
+	},
+	{
 		'offset': 0x90040,
 		'expected': [99, 97, 54, 54],
 		'ecu': {
@@ -18,24 +36,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'program_section_size': 0x60000,
 			'program_section_flash_size': 0x5FFF0,
 			'program_section_flash_bin_offset': 0x20010,
-			'program_section_flash_memory_offset': 0x10
-		}
-	},
-	{
-		'offset': 0xA00A0,
-		'expected': [54, 54, 51, 54],
-		'ecu': {
-			'name': 'SIMK43 8mbit',
-			'eeprom_size_bytes': 1048576, # (1024 KiB)
-			'memory_offset': 0,
-			'bin_offset': 0,
-			'memory_write_offset': -0x7000,
-			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
-			'calibration_size_bytes_flash': 0xFFF0,
-			'program_section_offset': 0xA0000,
-			'program_section_size': 0x60000,
-			'program_section_flash_size': 0x5FFF0,
-			'program_section_flash_bin_offset': 0xA0010,
 			'program_section_flash_memory_offset': 0x10
 		}
 	},
