@@ -73,7 +73,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		flash_size = len(payload_adjusted)
 
 		with alive_bar(flash_size, unit='B') as bar:
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
+			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=bar)
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
