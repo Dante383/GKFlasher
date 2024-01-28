@@ -148,9 +148,13 @@ def cli_read_vin (bus):
 	cmd = kwp.KWPCommand()
 	cmd.command = 0x09 # undocumented service
 	cmd.data = [0x02]
+	
+	try:
+		vin = bus.execute(cmd).get_data()
+	except (kwp.KWPNegativeResponseException):
+		print('[!] Not supported!')
+		return
 		
-	vin = bus.execute(cmd).get_data()
-
 	print(' '.join([hex(x) for x in vin]))
 	print(''.join([chr(x) for x in vin]))
 
