@@ -3,7 +3,7 @@ from datetime import datetime
 from alive_progress import alive_bar
 import gkbus
 from gkbus import kwp
-from flasher.memory import read_memory, write_memory
+from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
@@ -69,6 +69,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		payload_start = ecu.get_program_section_flash_bin_offset()
 		payload_stop = payload_start + flash_size
 		payload = eeprom[payload_start:payload_stop]
+		payload = payload[:dynamic_find_end(payload)]
 
 		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
