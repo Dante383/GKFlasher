@@ -98,8 +98,6 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 	print('[*] ecu reset')
 	print('[*] done!')
 	ecu.bus.execute(kwp.commands.ECUReset(kwp.enums.ResetMode.POWER_ON_RESET)).get_data()
-	ecu.bus.shutdown()
-	return
 
 def cli_clear_adaptive_values (ecu):
 	print('[*] Clearing adaptive values.. ', end='')
