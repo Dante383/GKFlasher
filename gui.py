@@ -9,7 +9,7 @@ from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
-from flasher.memory import read_memory, write_memory
+from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
@@ -269,6 +269,8 @@ class Ui(QtWidgets.QMainWindow):
 			payload_start = ecu.get_program_section_flash_bin_offset()
 			payload_stop = payload_start + flash_size
 			payload = eeprom[payload_start:payload_stop]
+			payload_adjusted = payload[:dynamic_find_end(payload)]
+			flash_size = len(payload_adjusted)
 
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))

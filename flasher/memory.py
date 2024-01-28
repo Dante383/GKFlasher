@@ -8,10 +8,13 @@ logger = logging.getLogger(__name__)
 page_size_b = 16384
 
 def dynamic_find_end (payload):
-	end_offset = len(payload)
+	payload_len = len(payload)
+	end_offset = payload_len
 	for index, x in enumerate(reversed(payload)):
 		if x == 0xFF:
-			end_offset = index
+			end_offset = payload_len-index
+		else:
+			break
 	return end_offset
 
 def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
