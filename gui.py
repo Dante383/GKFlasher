@@ -380,7 +380,7 @@ class Ui(QtWidgets.QMainWindow):
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except (KWPNegativeResponseException):
 			log_callback.emit('[*] Immo seems to be disabled')
-			return
+			return self.disconnect_ecu(ecu)
 
 		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
 		ecu_status = immo_status[immo_data[2]]
@@ -390,7 +390,6 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Immo key status: {}'.format(key_status))
 		if (len(immo_data) > 4):
 			log_callback.emit('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
-
 		self.disconnect_ecu(ecu)
 
 	def correct_checksum (self):
