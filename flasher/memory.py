@@ -106,7 +106,8 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 			try:
 				ecu.bus.execute(TransferData(list(payload_packet)))
 				break
-			except (gkbus.GKBusTimeoutException):
+			except (GKBusTimeoutException):
+				print('timeouted! trying again')
 				continue
 		packets_written += 1
 
