@@ -216,7 +216,7 @@ class Ui(QtWidgets.QMainWindow):
 	def disconnect_ecu (self, ecu):
 		try:
 			ecu.bus.execute(StopCommunication())
-		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
+		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException, AttributeError):
 			pass
 		ecu.bus.shutdown()
 
