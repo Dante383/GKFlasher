@@ -273,7 +273,7 @@ class Ui(QtWidgets.QMainWindow):
 			flash_size = len(payload_adjusted)
 
 			log_callback.emit('[*] Uploading data to the ECU')
-			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
