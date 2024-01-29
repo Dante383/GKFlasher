@@ -102,8 +102,12 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 		payload_packet_end = payload_packet_start+254
 		payload_packet = payload[payload_packet_start:payload_packet_end]
 
-		ecu.bus.execute(TransferData(list(payload_packet)))
-
+		while True:
+			try:
+				ecu.bus.execute(TransferData(list(payload_packet)))
+				break
+			except (gkbus.GKBusTimeoutException):
+				continue
 		packets_written += 1
 
 		if (progress_callback):
