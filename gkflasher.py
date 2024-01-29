@@ -184,15 +184,8 @@ def cli_identify_ecu (bus):
 	print('[*] Found! {}'.format(ecu.get_name()))
 	return ecu
 
-def main():
-	GKFlasher_config, args = load_arguments()
-
-	if (args.correct_checksum):
-		correct_checksum(filename=args.correct_checksum)
-		return 
-
-	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
-	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
+def main(bus, args):
+	
 
 	try:
 		bus.execute(kwp.commands.StopDiagnosticSession())
@@ -291,8 +284,21 @@ def main():
 
 	try:
 		bus.execute(kwp.commands.StopCommunication())
-	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
+	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException, AttributeError):
 		pass
 	bus.shutdown()
+
 if __name__ == '__main__':
-	main()
+	GKFlasher_config, args = load_arguments()
+
+	if (args.correct_checksum):
+		correct_checksum(filename=args.correct_checksum)
+
+	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
+	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
+
+	try:
+		main(bus, args)
+	except KeyboardInterrupt:
+		bus.shutdown()
+		sys.exit()
