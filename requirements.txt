@@ -1,5 +1,5 @@
 alive_progress==3.1.5
 crcmod==1.7
-gkbus==0.1.72
+gkbus==0.1.78
 pyftdi==0.55.0
 pyqt5==5.15.9
