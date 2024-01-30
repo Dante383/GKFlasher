@@ -3,16 +3,23 @@ from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress, Reques
 from gkbus.kwp.enums import CompressionType, EncryptionType
 from gkbus.kwp import KWPNegativeResponseException
 from gkbus import GKBusTimeoutException
+from math import ceil
 logger = logging.getLogger(__name__)
 
 page_size_b = 16384
+
+# This function rounds upto the nearest multiple. 
+# KWP frames are 256 bytes and the FTDI buffer 512 bytes.
+# This prevents an overflow situation when writing different sized binaries.
+def round_to_multiple(number, multiple, direction='up'):  
+        return multiple * ceil(number / multiple)
 
 def dynamic_find_end (payload):
 	payload_len = len(payload)
 	end_offset = payload_len
 	for index, x in enumerate(reversed(payload)):
 		if x == 0xFF:
-			end_offset = payload_len-index
+			end_offset = (round_to_multiple(payload_len-index, 255))
 		else:
 			break
 	return end_offset
@@ -107,7 +114,7 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 				ecu.bus.execute(TransferData(list(payload_packet)))
 				break
 			except (GKBusTimeoutException):
-				print('timeouted! trying again')
+				print('Timed Out! Trying again...')
 				continue
 		packets_written += 1
 
