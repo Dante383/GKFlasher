@@ -10,14 +10,14 @@ cks_types = [ # todo: incorporate into ECU definitions
 		        'flag_address': 0xFEFE,
 		        'init_address': 0x00800C,
 		        'cks_address': 0x0FEE0,
-		        'bin_offset': -0x88000
+		        'bin_offset': -0x080000
 		    },
 		    {
 		    	'name': 'Program',
 		    	'flag_address': 0xFEFE,
 		    	'init_address': 0x010052,
 		    	'cks_address': 0x010010,
-		    	'bin_offset': -0x88000
+		    	'bin_offset': -0x080000
 		    }
 	    ]
 	},
@@ -50,14 +50,14 @@ cks_types = [ # todo: incorporate into ECU definitions
 		        'flag_address': 0xDEFE,
 		        'init_address': 0x0800C,
 		        'cks_address': 0xDEE0,
-		        'bin_offset': -0x88000
+		        'bin_offset': -0x080000
 		    },
 		    {
 		    	'name': 'Program',
 		    	'flag_address': 0xDEFE,
 		    	'init_address': 0x010052,
 		    	'cks_address': 0x010010,
-		    	'bin_offset': -0x88000
+		    	'bin_offset': -0x080000
 		    }
 	    ]
 	},
