@@ -400,58 +400,71 @@ class Ui(QtWidgets.QMainWindow):
 			payload = file.read()
 
 		self.log('Trying to detect type.. ')
-		name, flag_address, offset_address, init_address, cks_address, bin_offset = detect_offsets(payload)
-		self.log(name)
+		cks_type = detect_offsets(payload)
+		self.log(cks_type['name'])
 
-		self.log('[*] Trying to find addresses of Zone1.. ')
-		zone1_start_offset = cks_address+0x04
-		zone1_start = concat_3_bytes(read_and_reverse(payload, zone1_start_offset, 3)) + bin_offset
+		for region in cks_type['regions']:
+			self.log('[*] Calculating checksum for region {}'.format(region['name']))
+			flag_address, init_address, cks_address, bin_offset = region['flag_address'], region['init_address'], region['cks_address'], region['bin_offset']
 
-		zone1_stop_offset = cks_address+0x08
-		zone1_stop = concat_3_bytes(read_and_reverse(payload, zone1_stop_offset, 3)) + bin_offset + 1
-		self.log('{} - {}'.format(hex(zone1_start), hex(zone1_stop)))
+			amount_of_zones = int.from_bytes(payload[cks_address+2:cks_address+3], "big")
+			self.log('[*] Amount of zones: {}'.format(amount_of_zones))
 
-		self.log('[*] Trying to find initial value.. ')
-		initial_value_bytes = read_and_reverse(payload, init_address, 2)
-		initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
-		self.log(hex(initial_value))
+			checksums = []
 
-		self.log('[*] checksum of zone1: ')
-		zone1_cks = checksum(payload, zone1_start, zone1_stop, initial_value)
-		self.log(hex(zone1_cks))
+			zone_address = cks_address
+			for zone_index in range(amount_of_zones):
 
-		self.log('[*] Trying to find addresses of Zone2.. ')
-		zone2_start_offset = cks_address+0xC
-		zone2_start = concat_3_bytes(read_and_reverse(payload, zone2_start_offset, 3)) + bin_offset
+				self.log('[*] Trying to find addresses of zone #{}.. '.format(zone_index+1))
+				zone_start_offset = zone_address+0x04
+				zone_start = concat_3_bytes(read_and_reverse(payload, zone_start_offset, 3)) + bin_offset
 
-		zone2_stop_offset = cks_address+0x10
-		zone2_stop = concat_3_bytes(read_and_reverse(payload, zone2_stop_offset, 3)) + bin_offset + 1
-		self.log('{} - {}'.format(hex(zone2_start), hex(zone2_stop)))
+				zone_stop_offset = zone_address+0x08
+				zone_stop = concat_3_bytes(read_and_reverse(payload, zone_stop_offset, 3)) + bin_offset + 1
+				self.log('{} - {}'.format(hex(zone_start), hex(zone_stop)))
 
-		self.log('[*] checksum of zone2: ')
-		zone2_cks = checksum(payload, zone2_start, zone2_stop, zone1_cks)
-		self.log(hex(zone2_cks))
+				self.log('[*] Trying to find initial value.. ')
+				if (zone_index == 0):
+					initial_value_bytes = read_and_reverse(payload, init_address, 2)
+					initial_value = (initial_value_bytes[0]<< 8) | initial_value_bytes[1]
+				else:
+					initial_value = checksums[zone_index-1]
+				self.log(hex(initial_value))
 
-		checksum_b1 = (zone2_cks >> 8) & 0xFF
-		checksum_b2 = (zone2_cks & 0xFF)
-		checksum_reversed = (checksum_b2 << 8) | checksum_b1
+				self.log('[*] checksum of zone #{}: '.format(zone_index+1))
+				zone_cks = checksum(payload, zone_start, zone_stop, initial_value)
+				self.log(hex(zone_cks))
+				checksums.append(zone_cks)
+				zone_address += 0x08
 
-		current_checksum = int.from_bytes(payload[cks_address:cks_address+2], "big")
+			checksum_b1 = (checksums[-1] >> 8) & 0xFF
+			checksum_b2 = (checksums[-1] & 0xFF)
+			checksum_reversed = (checksum_b2 << 8) | checksum_b1
 
-		self.log('[*] OK! Current checksum: {}, new checksum: {}'.format(hex(current_checksum), hex(checksum_reversed)))
+			current_checksum = int.from_bytes(payload[cks_address:cks_address+2], "big")
+			region['current_checksum'] = current_checksum
+			region['checksum'] = checksum_reversed
+
+			self.log('[*] OK! Current {} checksum: {}, new checksum: {}'.format(region['name'], hex(current_checksum), hex(checksum_reversed)))
+
+		dialog_message = ''
+		for region in cks_type['regions']:
+			dialog_message += 'Current {} checksum: {}, new checksum: {}\n'.format(region['name'], hex(region['current_checksum']), hex(region['checksum']))
+		dialog_message += 'Save?'
 
 		if QMessageBox.question(
 				self, 
 				'Save checksum to file?', 
-				'Current checksum: {}, new checksum: {}. Save?'.format(hex(current_checksum), hex(checksum_reversed)),
+				dialog_message,
 				QMessageBox.Yes | QMessageBox.No, 
 				QMessageBox.No
 			) == QMessageBox.Yes:
 
 			self.log('[*] Saving to {}'.format(filename))
 			with open(filename, 'rb+') as file:
-				file.seek(cks_address)
-				file.write(checksum_reversed.to_bytes(2, "big"))
+				for region in cks_type['regions']:
+					file.seek(region['cks_address'])
+					file.write(region['checksum'].to_bytes(2, "big"))
 
 		self.log('[*] Done!')
 
