@@ -24,6 +24,13 @@ cks_types = [ # todo: incorporate into ECU definitions
 		        'init_address': 0x01000C,
 		        'cks_address': 0x017EE0,
 		        'bin_offset': -0x080000
+		    },
+		    {
+		    	'name': 'Program',
+		    	'flag_address': 0x17EFE,
+		    	'init_address': 0x020052,
+		    	'cks_address': 0x020010,
+		    	'bin_offset': -0x080000
 		    }
 	    ]
 	},
@@ -81,7 +88,7 @@ def detect_offsets (payload):
 		flag = payload[cks_type['identification_flag_address']:cks_type['identification_flag_address']+2]
 		if (flag == b'OK'):
 			return cks_type # todo: unpack
-			
+
 def correct_checksum (filename):
 	print('[*] Reading {}'.format(filename))
 
