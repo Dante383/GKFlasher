@@ -11,7 +11,7 @@ page_size_b = 16384
 # This function rounds upto the nearest multiple. 
 # KWP frames are 256 bytes and the FTDI buffer 512 bytes.
 # This prevents an overflow situation when writing different sized binaries.
-def round_to_multiple(number, multiple, direction='up'):  
+def round_to_multiple(number, multiple):  
         return multiple * ceil(number / multiple)
 
 def dynamic_find_end (payload):
