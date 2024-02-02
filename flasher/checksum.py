@@ -5,19 +5,26 @@ cks_types = [ # todo: incorporate into ECU definitions
         'name': '2mbit',
         'identification_flag_address': 0xFEFE,
         'regions': [
+			{
+	        	'name': 'Boot',
+		        'flag_address': 0xDEFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EF4,
+		        'bin_offset': 0
+		    },
         	{
 	        	'name': 'Calibration', 
 		        'flag_address': 0xFEFE,
 		        'init_address': 0x00800C,
 		        'cks_address': 0x0FEE0,
-		        'bin_offset': -0x080000
+		        'bin_offset': -0x040000
 		    },
 		    {
 		    	'name': 'Program',
 		    	'flag_address': 0xFEFE,
 		    	'init_address': 0x010052,
 		    	'cks_address': 0x010010,
-		    	'bin_offset': -0x080000
+		    	'bin_offset': -0x040000
 		    }
 	    ]
 	},
@@ -25,6 +32,13 @@ cks_types = [ # todo: incorporate into ECU definitions
         'name': '4mbit',
         'identification_flag_address': 0x017EFE,
         'regions': [
+			{
+	        	'name': 'Boot',
+		        'flag_address': 0x017EFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EF4,
+		        'bin_offset': 0
+		    },
         	{
 		        'name': 'Calibration',
 		        'flag_address': 0x017EFE,
@@ -46,6 +60,13 @@ cks_types = [ # todo: incorporate into ECU definitions
         'identification_flag_address': 0xDEFE,
         'regions': [
         	{
+	        	'name': 'Boot',
+		        'flag_address': 0xDEFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EF4,
+		        'bin_offset': 0
+		    },	
+        	{
 	        	'name': 'Calibration',
 		        'flag_address': 0xDEFE,
 		        'init_address': 0x0800C,
@@ -65,6 +86,13 @@ cks_types = [ # todo: incorporate into ECU definitions
         'name': '8mbit',
         'identification_flag_address': 0x97EFE,
         'regions': [
+			{
+	        	'name': 'Boot',
+		        'flag_address': 0x97EFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EEC,
+		        'bin_offset': 0
+		    },
         	{
 	        	'name': 'Calibration',
 		        'flag_address': 0x97EFE,
