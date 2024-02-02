@@ -2,8 +2,8 @@ from enum import Enum
 
 ECU_IDENTIFICATION_TABLE = [
 	{
-		'offset': 0x3FE0,
-		'expected': [[53, 50, 52, 50]],
+		'offset': 0x3FE0, # BL workaround
+		'expected': [[53, 50, 52, 50]], #5242
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
@@ -21,7 +21,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x90040,
-		'expected': [[99, 97, 54, 54]],
+		'expected': [[99, 97, 54, 54]], #CA66
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -41,7 +41,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [[99, 97, 54, 53]],
+		'expected': [[99, 97, 54, 53, 52], [99, 97, 54, 53, 53]], #CA654, CA655
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -59,9 +59,9 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x48040,
-		'expected': [[99, 97, 54, 54]],
+		'expected': [[99, 97, 54, 54, 48], [99, 97, 54, 53, 50], [99, 97, 54, 53, 48]], #CA660, CA652, CA650
 		'ecu': {
-			'name': 'SIMK41 2mbit',
+			'name': 'SIMK41 / V6 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)
 			'memory_offset': -0x48000,
 			'bin_offset': -0x88000,
