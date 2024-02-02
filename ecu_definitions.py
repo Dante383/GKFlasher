@@ -3,7 +3,7 @@ from enum import Enum
 ECU_IDENTIFICATION_TABLE = [
 	{
 		'offset': 0x3FE0,
-		'expected': [53, 50, 52, 50],
+		'expected': [[53, 50, 52, 50]],
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
@@ -21,7 +21,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x90040,
-		'expected': [99, 97, 54, 54],
+		'expected': [[99, 97, 54, 54]],
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -41,7 +41,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [99, 97, 54, 53],
+		'expected': [[99, 97, 54, 53]],
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -59,7 +59,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x48040,
-		'expected': [99, 97, 54, 54],
+		'expected': [[99, 97, 54, 54]],
 		'ecu': {
 			'name': 'SIMK41 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)

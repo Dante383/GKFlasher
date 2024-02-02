@@ -145,11 +145,11 @@ class ECUIdentificationException (Exception):
 def identify_ecu (bus) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
-			result = bus.execute(kwp.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=4)).get_data()
+			result = bus.execute(kwp.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0]))).get_data()
 		except kwp.KWPNegativeResponseException:
 			continue
 
-		if result == ecu_identifier['expected']:
+		if result in ecu_identifier['expected']:
 			ecu = ECU(**ecu_identifier['ecu'])
 			ecu.set_bus(bus)
 			return ecu
