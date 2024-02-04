@@ -352,8 +352,10 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			output_filename = self.readingFileInput.text()
 
-		address_start = abs(ecu.bin_offset)
-		address_stop = address_start + eeprom_size
+		#address_start = abs(ecu.bin_offset)
+		#address_stop = address_start + eeprom_size
+		address_start = 0x090000
+		address_stop = ecu.get_program_section_offset()+ecu.get_program_section_size()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 
