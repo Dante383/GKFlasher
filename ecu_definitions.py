@@ -65,7 +65,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 262144, # (256 KiB)
 			'memory_offset': -0x48000,
 			'bin_offset': -0x88000,
-			'memory_write_offset': -0x7800,
+			'memory_write_offset': -0x8800,
 			'single_byte_restriction_start': 0x89FFF,
 			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
