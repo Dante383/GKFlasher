@@ -72,7 +72,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'program_section_size': 0x30000,
 			'program_section_flash_size': 0x2FFF0, # 196,592 bytes | zone size: 0x30000 - 196,608 bytes (192 KiB)
 			'program_section_flash_bin_offset': 0x10010,
-			'program_section_flash_memory_offset': -0x3FFF0 #write at 0x50010
+			'program_section_flash_memory_offset': -0x47FF0 #write at 0x50010
 		}
 	}
 ]
