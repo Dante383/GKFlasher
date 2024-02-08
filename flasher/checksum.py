@@ -161,11 +161,20 @@ def detect_offsets (payload):
 def correct_checksum (filename):
 	print('[*] Reading {}'.format(filename))
 
-	with open(filename, 'rb') as file:
-		payload = file.read()
-
+	try:
+		with open(filename, 'rb') as file:
+			payload = file.read()
+	except FileNotFoundError:
+		print('\n[!] Error: No such file or directory:', filename)
+		sys.exit(1)
+	
 	print('[*] Trying to detect type.. ', end='')
 	cks_type = detect_offsets(payload)
+
+	if cks_type == None:
+		print('\n[!] Error: Calibration zone not detected.')
+		sys.exit(1)
+
 	print(cks_type['name'])
 
 	for region in cks_type['regions']:
