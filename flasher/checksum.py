@@ -83,6 +83,33 @@ cks_types = [ # todo: incorporate into ECU definitions
 	    ]
 	},
 	{
+        'name': 'v6 5WY1Fv2',
+        'identification_flag_address': 0xEEFE,
+        'regions': [
+        	{
+	        	'name': 'Boot',
+		        'flag_address': 0xEEFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EF4,
+		        'bin_offset': 0
+		    },	
+        	{
+	        	'name': 'Calibration',
+		        'flag_address': 0xEEFE,
+		        'init_address': 0x0800C,
+		        'cks_address': 0xEEE0,
+		        'bin_offset': -0x080000
+		    },
+		    {
+		    	'name': 'Program',
+		    	'flag_address': 0xEEFE,
+		    	'init_address': 0x010052,
+		    	'cks_address': 0x010010,
+		    	'bin_offset': -0x080000
+		    }
+	    ]
+	},	
+	{
         'name': '8mbit',
         'identification_flag_address': 0x97EFE,
         'regions': [
