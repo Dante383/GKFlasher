@@ -66,6 +66,8 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': -0x48000,
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0xB800, # write at 0x84800
+			'single_byte_restriction_start': 0x89FFF, #required for SIMK41 only.
+			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'calibration_size_bytes_flash': 0x7F00,
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
