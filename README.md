@@ -11,9 +11,29 @@ Clone the repository
 
 `git clone https://github.com/Dante383/GKFlasher`
 
+Install Python 3.10 for your specific operating system
+https://www.python.org/downloads/release/python-31011/
+
 Install required packages
 
 `python3 -m pip install -r requirements.txt`
+
+Confirm that no errors ocurred
+
+Running the command `pip list` should show the following packages
+-about-time
+-alive-progress
+-crcmod
+-gkbus
+-grapheme
+-pyftdi
+-PyQt5
+-PyQt5-Qt5
+-PyQt5-sip
+-pyserial
+-pyusb
+-PyYAML
+-setuptools
 
 ## Usage 
 

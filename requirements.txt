@@ -3,3 +3,4 @@ crcmod==1.7
 gkbus==0.1.791
 pyftdi==0.55.0
 pyqt5==5.15.9
+PyYAML==6.0.1
