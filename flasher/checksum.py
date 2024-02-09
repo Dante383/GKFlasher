@@ -83,6 +83,33 @@ cks_types = [ # todo: incorporate into ECU definitions
 	    ]
 	},
 	{
+        'name': 'v6 5WY1Fv2',
+        'identification_flag_address': 0xEEFE,
+        'regions': [
+        	{
+	        	'name': 'Boot',
+		        'flag_address': 0xEEFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EF4,
+		        'bin_offset': 0
+		    },	
+        	{
+	        	'name': 'Calibration',
+		        'flag_address': 0xEEFE,
+		        'init_address': 0x0800C,
+		        'cks_address': 0xEEE0,
+		        'bin_offset': -0x080000
+		    },
+		    {
+		    	'name': 'Program',
+		    	'flag_address': 0xEEFE,
+		    	'init_address': 0x010052,
+		    	'cks_address': 0x010010,
+		    	'bin_offset': -0x080000
+		    }
+	    ]
+	},	
+	{
         'name': '8mbit',
         'identification_flag_address': 0x97EFE,
         'regions': [
@@ -134,11 +161,20 @@ def detect_offsets (payload):
 def correct_checksum (filename):
 	print('[*] Reading {}'.format(filename))
 
-	with open(filename, 'rb') as file:
-		payload = file.read()
-
+	try:
+		with open(filename, 'rb') as file:
+			payload = file.read()
+	except FileNotFoundError:
+		print('\n[!] Error: No such file or directory:', filename)
+		sys.exit(1)
+	
 	print('[*] Trying to detect type.. ', end='')
 	cks_type = detect_offsets(payload)
+
+	if cks_type == None:
+		print('\n[!] Error: Calibration zone not detected.')
+		sys.exit(1)
+
 	print(cks_type['name'])
 
 	for region in cks_type['regions']:

@@ -398,11 +398,18 @@ class Ui(QtWidgets.QMainWindow):
 		filename = self.checksumFileInput.text()
 		self.log('[*] Reading {}'.format(filename))
 
-		with open(filename, 'rb') as file:
-			payload = file.read()
-
+		try:
+			with open(filename, 'rb') as file:
+				payload = file.read()
+		except FileNotFoundError:
+			self.log('[!] Error: No such file or directory.')
+			return
 		self.log('Trying to detect type.. ')
 		cks_type = detect_offsets(payload)
+		
+		if cks_type == None:
+			self.log('[!] Error: Calibration zone not detected.')
+			return
 		self.log(cks_type['name'])
 
 		for region in cks_type['regions']:
