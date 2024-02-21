@@ -54,7 +54,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'program_section_size': 0x70000,
 			'program_section_flash_size': 0x6FFE4, #rounded down to nearest 254 bytes was 0x6FFF0
 			'program_section_flash_bin_offset': 0x10010,
-			'program_section_flash_memory_offset': 0x10
+			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
 		}
 	},
 		{
@@ -72,7 +72,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'program_section_size': 0x70000,
 			'program_section_flash_size': 0x6FFE4, #rounded down to nearest 254 bytes was 0x6FFF0
 			'program_section_flash_bin_offset': 0x10010,
-			'program_section_flash_memory_offset': 0x10
+			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
 		}
 	},
 	{
