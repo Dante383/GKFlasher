@@ -90,7 +90,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes_flash': 0x7F00, #already rounded to 254!
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
 			'program_section_size': 0x30000,
-			'program_section_flash_size': 0x2FEF6, #was 0x2FFF0, 196,592 bytes | zone size: 0x30000 - 196,608 bytes (192 KiB)
+			'program_section_flash_size': 0x2FFF0, #196,592 bytes | zone size: 0x30000 - 196,608 bytes (192 KiB)
 			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x47FF0 #write at 0x50010
 		}
