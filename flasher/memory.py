@@ -98,12 +98,12 @@ def read_memory(ecu, address_start, address_stop, progress_callback=False):#, pr
 def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False):
 	ecu.bus.execute(RequestDownload(offset=flash_start, size=flash_size, compression_type=CompressionType.UNCOMPRESSED, encryption_type=EncryptionType.UNENCRYPTED))
 
-	packets_to_write = int((flash_size-254)/254)
+	packets_to_write = int(flash_size)/254)
 	packets_written = 0
 
-	while packets_to_write >= packets_written:
+	while packets_to_write > packets_written:
 		if (progress_callback):
-			progress_callback.title('Packet {}/{}'.format(packets_written+1, packets_to_write+1))
+			progress_callback.title('Packet {}/{}'.format(packets_written+1, packets_to_write))
 
 		payload_packet_start = packets_written*254
 		payload_packet_end = payload_packet_start+254
