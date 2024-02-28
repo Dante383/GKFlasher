@@ -43,7 +43,7 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
 			fetched = []
 		except GKBusTimeoutException:
-			logger.warning('Timeout at offset %s! Trying again..', hex(address))
+			logger.warning('Timeout at Offset %s! Trying again...', hex(address))
 			continue
 
 		payload_start = address-address_start
@@ -116,7 +116,7 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 						ecu.bus.execute(TransferData(list(payload_packet)))
 						break
 					except (GKBusTimeoutException):
-						print('Timed Out! Trying again...')
+						logger.warning('Timeout at Block %s! Trying again...', packets_written)
 						continue
 			
 				packets_written += 1
@@ -137,7 +137,7 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 						ecu.bus.execute(TransferData(list(payload_packet)))
 						break
 					except (GKBusTimeoutException):
-						print('Timed Out! Trying again...')
+						logger.warning('Timeout at Block %s! Trying again...', packets_written)
 						continue
 
 				packets_written += 1
