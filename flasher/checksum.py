@@ -56,7 +56,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 	    ]
 	},
 	{
-        'name': 'v6',
+        'name': 'v6 (5WY17)',
         'identification_flag_address': 0xDEFE,
         'regions': [
         	{
@@ -83,7 +83,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 	    ]
 	},
 	{
-        'name': 'v6 5WY1Fv2',
+        'name': 'v6 (5WY18+)',
         'identification_flag_address': 0xEEFE,
         'regions': [
         	{
