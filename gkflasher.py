@@ -4,9 +4,9 @@ from alive_progress import alive_bar
 import gkbus
 from gkbus import kwp
 from flasher.memory import read_memory, write_memory, dynamic_find_end
-from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
+from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException, ECU_IDENTIFICATION_TABLE
 from flasher.checksum import correct_checksum
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
+from ecu_definitions import BAUDRATES, Routine
 from flasher.logging import logger
 from flasher.checksum import correct_checksum
 from flasher.immo import cli_immo, cli_immo_info
@@ -157,7 +157,7 @@ def cli_choose_ecu ():
 	print('[*] If you know what you\'re doing (like trying to revive a soft bricked ECU), you can choose your ECU from the list below:')
 
 	for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
-		print('    [{}] {}'.format(index, ecu['ecu']['name']))
+		print('    [{}] {}'.format(index, ecu['ecu'].name))
 
 	try:
 		choice = int(input('ECU or any other char to abort: '))
@@ -179,7 +179,7 @@ def cli_identify_ecu (bus):
 	try:
 		ecu = identify_ecu(bus)
 	except ECUIdentificationException:
-		ecu = ECU(**cli_choose_ecu()['ecu'])
+		ecu = cli_choose_ecu()['ecu']()
 		ecu.set_bus(bus)
 
 	print('[*] Found! {}'.format(ecu.get_name()))

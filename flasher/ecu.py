@@ -1,5 +1,6 @@
 from gkbus import kwp
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier
+from ecu_definitions import IOIdentifier
+import os, importlib.util, inspect
 
 kwp_ecu_identification_parameters = [
 	{'value': 0x86, 'name': 'DCS ECU Identification'},
@@ -56,22 +57,6 @@ def enable_security_access (bus):
 	bus.execute(kwp.commands.SecurityAccess(kwp.enums.AccessType.PROGRAMMING_SEND_KEY, key))
 
 class ECU:
-	def __init__ (self, 
-		name: str, 
-		eeprom_size_bytes: int,
-		memory_offset: int, bin_offset: int, memory_write_offset: int,
-		calibration_size_bytes: int, calibration_size_bytes_flash: int,
-		program_section_offset: int, program_section_size: int, program_section_flash_size: int,
-		program_section_flash_bin_offset: int, program_section_flash_memory_offset: int,
-		single_byte_restriction_start: int = 0, single_byte_restriction_stop: int = 0):
-		self.name = name
-		self.eeprom_size_bytes = eeprom_size_bytes
-		self.memory_offset, self.bin_offset, self.memory_write_offset = memory_offset, bin_offset, memory_write_offset
-		self.calibration_size_bytes, self.calibration_size_bytes_flash = calibration_size_bytes, calibration_size_bytes_flash
-		self.program_section_offset, self.program_section_size, self.program_section_flash_size  = program_section_offset, program_section_size, program_section_flash_size
-		self.program_section_flash_bin_offset, self.program_section_flash_memory_offset = program_section_flash_bin_offset, program_section_flash_memory_offset 
-		self.single_byte_restriction_start, self.single_byte_restriction_stop = single_byte_restriction_start, single_byte_restriction_stop
-
 	def get_name (self) -> str:
 		return self.name 
 
@@ -139,18 +124,46 @@ class ECU:
 		self.bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 		self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
+	@staticmethod
+	def get_identification_offset(subclass):
+		return subclass.identification_offset
+
+	@staticmethod
+	def get_identification_expected(subclass):
+		return subclass.identification_expected
+
 class ECUIdentificationException (Exception):
 	pass
 
+def load_identification_table ():
+	identification_table = []
+	for module_file in [f for f in os.listdir('ecu_definitions') if f.endswith('.py')]:
+		module_name = os.path.splitext(module_file)[0]
+		
+		spec = importlib.util.spec_from_file_location(module_name, os.path.join('ecu_definitions', module_file))
+		module = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(module)
+
+		ecu = getattr(module, module_name)
+		identification_table.append({
+			'offset': ECU.get_identification_offset(ecu),
+			'expected': ECU.get_identification_expected(ecu),
+			'ecu': ecu
+		})
+	return identification_table
+
 def identify_ecu (bus) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
+		continue
 		try:
 			result = bus.execute(kwp.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0]))).get_data()
 		except kwp.KWPNegativeResponseException:
 			continue
 
 		if result in ecu_identifier['expected']:
-			ecu = ECU(**ecu_identifier['ecu'])
+			ecu = ecu_identifier['ecu']()
 			ecu.set_bus(bus)
 			return ecu
 	raise ECUIdentificationException('Failed to identify ECU!')
+
+ECU_IDENTIFICATION_TABLE = load_identification_table()

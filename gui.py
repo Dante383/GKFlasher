@@ -8,11 +8,11 @@ import gkbus, yaml, traceback
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
+from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU, ECU_IDENTIFICATION_TABLE
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
+from ecu_definitions import BAUDRATES, Routine
 from gkflasher import strip
 
 class Progress(object):
@@ -130,7 +130,7 @@ class Ui(QtWidgets.QMainWindow):
 	def load_ecus (self):
 		self.ecusBox.addItem('ECU (autodetect)', -1)
 		for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
-			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu']['name']), index)
+			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu'].name), index)
 
 	def load_baudrates (self):
 		self.baudratesBox.addItem('Desired baudrate (default)', -1)
@@ -207,7 +207,7 @@ class Ui(QtWidgets.QMainWindow):
 				log_callback.emit('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
 				return False
 		else:
-			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
+			ecu = ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu']()
 			ecu.set_bus(bus)
 		log_callback.emit('[*] Found! {}'.format(ecu.get_name()))
 		
