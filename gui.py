@@ -77,7 +77,12 @@ class Ui(QtWidgets.QMainWindow):
 		self.thread_manager = QThreadPool()
 		self.show()
 		
-		self.detect_interfaces()
+		try:
+			self.detect_interfaces()
+		except ValueError:
+			print('[!] No backend found! This usually means that you forgot to use Zadig to replace drivers for your adapter with libusb.')
+			sys.exit(1)
+
 		self.load_ecus()
 		self.load_baudrates()
 		self.add_listeners()
