@@ -94,7 +94,27 @@ ECU_IDENTIFICATION_TABLE = [
 			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x47FF0 #write at 0x50010
 		}
-	}
+	},
+	{
+		'offset': 0x88040,
+		'expected': [[99, 97, 54, 54, 49]], #CA661 (Sonata)
+		'ecu': {
+			'name': 'SIMK43 2.0 4mbit (Sonata)',
+			'eeprom_size_bytes': 524288, # (512 KiB)
+			'memory_offset': -0x8000,
+			'bin_offset': -0x88000,
+			'memory_write_offset': -0x7800,
+			'single_byte_restriction_start': 0x89FFF,
+			'single_byte_restriction_stop': 0x9000F,
+			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
+			'calibration_size_bytes_flash': 0x5F40, #rounded upto nearest 254 was 0x5F00
+			'program_section_offset': 0x98000,
+			'program_section_size': 0x70000,
+			'program_section_flash_size': 0x6FFE4, #rounded down to nearest 254 bytes was 0x6FFF0
+			'program_section_flash_bin_offset': 0x10010,
+			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
+		}
+	},	
 ]
 
 BAUDRATES = {
