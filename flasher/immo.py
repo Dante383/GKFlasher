@@ -39,9 +39,11 @@ def cli_limp_home (bus):
 	print('[*] starting default diagnostic session')
 	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
 
-	print('[*] starting routine 0x16')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
-	print(' '.join([hex(x) for x in data]))
+	try:
+		data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
+	except (kwp.KWPNegativeResponseException):
+		print('[!] Received an exception from the ECU! This usually means that immo is inactive or limp home pin wasn\'t set (common for Tiburon FL2)')
+		return
 
 	if (len(data) > 1):
 		if (data[1] == 4):
