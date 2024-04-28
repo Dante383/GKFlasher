@@ -424,7 +424,7 @@ class Ui(QtWidgets.QMainWindow):
 			amount_of_zones = int.from_bytes(payload[cks_address+2:cks_address+3], "big")
 			self.log('[*] Amount of zones: {}'.format(amount_of_zones))
 
-			if (amount_of_zones == 0):
+			if (amount_of_zones == 0 or amount_of_zones == 0xFF):
 				continue
 
 			checksums = []
