@@ -184,6 +184,9 @@ def correct_checksum (filename):
 		amount_of_zones = int.from_bytes(payload[cks_address+2:cks_address+3], "big")
 		print('[*] Amount of zones: {}'.format(amount_of_zones))
 
+		if (amount_of_zones == 0):
+			continue
+
 		checksums = []
 
 		zone_address = cks_address
@@ -224,7 +227,10 @@ def correct_checksum (filename):
 		with open(filename, 'rb+') as file:
 			for region in cks_type['regions']:
 				file.seek(region['cks_address'])
-				file.write(region['checksum'].to_bytes(2, "big"))
+				try:
+					file.write(region['checksum'].to_bytes(2, "big"))
+				except KeyError:
+					continue
 		print('[*] Done!')
 
 	sys.exit(1)

@@ -424,6 +424,9 @@ class Ui(QtWidgets.QMainWindow):
 			amount_of_zones = int.from_bytes(payload[cks_address+2:cks_address+3], "big")
 			self.log('[*] Amount of zones: {}'.format(amount_of_zones))
 
+			if (amount_of_zones == 0):
+				continue
+
 			checksums = []
 
 			zone_address = cks_address
@@ -463,7 +466,10 @@ class Ui(QtWidgets.QMainWindow):
 
 		dialog_message = ''
 		for region in cks_type['regions']:
-			dialog_message += 'Current {} checksum: {}, new checksum: {}\n'.format(region['name'], hex(region['current_checksum']), hex(region['checksum']))
+			try:
+				dialog_message += 'Current {} checksum: {}, new checksum: {}\n'.format(region['name'], hex(region['current_checksum']), hex(region['checksum']))
+			except KeyError:
+				continue
 		dialog_message += 'Save?'
 
 		if QMessageBox.question(
@@ -478,7 +484,10 @@ class Ui(QtWidgets.QMainWindow):
 			with open(filename, 'rb+') as file:
 				for region in cks_type['regions']:
 					file.seek(region['cks_address'])
-					file.write(region['checksum'].to_bytes(2, "big"))
+					try:
+						file.write(region['checksum'].to_bytes(2, "big"))
+					except KeyError:
+						continue
 
 		self.log('[*] Done!')
 
