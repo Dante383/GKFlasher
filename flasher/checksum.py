@@ -212,6 +212,7 @@ def correct_checksum (filename):
 		print('[*] Amount of zones: {}'.format(amount_of_zones))
 
 		if (amount_of_zones == 0 or amount_of_zones == 0xFF):
+			print('[*] Skipping region {}'.format(region['name']))
 			continue
 
 		checksums = []
