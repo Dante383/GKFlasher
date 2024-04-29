@@ -179,6 +179,30 @@ data_id1 = [
 		'unit': '%',
 		'conversion': lambda a: a*0.390625, 
 		'precision': 2
+	},
+	{
+		'name': 'CVVT Status',
+		'position': 145,
+		'size': 1,
+		'unit': '',
+		'precision': 1,
+		'conversion': lambda a: (a >> 0x07) & 1
+	},
+	{
+		'name': 'CVVT Actuation Status',
+		'position': 146,
+		'size': 1,
+		'unit': '',
+		'precision': 1,
+		'conversion': lambda a: (a >> 0x03) & 1
+	},
+	{
+		'name': 'CVVT Duty Control Status',
+		'position': 160,
+		'size': 1,
+		'unit': '',
+		'precision': 1,
+		'conversion': lambda a: (a >> 0x03) & 1
 	}
 ]
 
