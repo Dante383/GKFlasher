@@ -9,7 +9,7 @@ data_id1 = [
 		'unit': 'mV',
 		'position': 38,
 		'size': 2,
-		'conversion': lambda a: a * 4.883
+		'conversion': lambda a: a * 4.883,
 	},
 	{
 		'name': 'Air Flow Rate from Mass Air Flow Sensor',
@@ -110,19 +110,61 @@ data_id1 = [
 		'conversion': lambda a: (a*0.375)-60
 	},
 	{
+		'name': 'Camshaft position target',
+		'position': 143,
+		'size': 1,
+		'unit': "'",
+		'conversion': lambda a: (a*0.375)-60
+	},
+	{
+		'name': 'Ignition dwell time',
+		'position': 106,
+		'size': 2,
+		'unit': 'ms',
+		'conversion': lambda a: a*0.004
+	},
+	{
+		'name': 'EVAP Purge valve',
+		'position': 101,
+		'size': 2,
+		'unit': '%',
+		'conversion': lambda a: a*0.003052
+	},
+	{
+		'name': 'Idle speed control actuator',
+		'position': 99,
+		'size': 2,
+		'unit': '%',
+		'conversion': lambda a: a*0.001529
+	},
+	{
 		'name': 'CVVT Valve Duty',
 		'position': 156,
 		'size': 2,
 		'unit': '%',
 		'conversion': lambda a: a * 0.001526
+	},
+	{
+		'name': 'Oxygen Sensor Heater Duty-Bank1/Sensor1',
+		'position': 93,
+		'size': 1,
+		'unit': '%',
+		'conversion': lambda a: a*0.390625
+	},
+	{
+		'name': 'Oxygen Sensor Heater Duty-Bank1/Sensor2',
+		'position': 93,
+		'size': 1,
+		'unit': '%',
+		'conversion': lambda a: a*0.390625
 	}
 ]
 
 def grab (payload, parameter):
-	return parameter['conversion'](int.from_bytes(payload[parameter['position']:parameter['position']+parameter['size']], "big"))
+	return parameter['conversion'](int.from_bytes(payload[parameter['position']:parameter['position']+parameter['size']], "little"))
 
 def poll (ecu):
-	data = [time.time()]
+	data = [int(time.time())]
 	raw_data = bytes(ecu.bus.execute(ReadDataByLocalIdentifier(0x01)).get_data())
 	for parameter in data_id1:
 		value = grab(raw_data, parameter)
