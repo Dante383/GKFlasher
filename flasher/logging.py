@@ -205,7 +205,7 @@ def logger(ecu):
 	try:
 		while True:
 			data.append(poll(ecu))
-	except KeyboardInterrupt:
+	except (KeyboardInterrupt, AttributeError):
 		with open('log.csv', 'w') as csvfile:
 			logwriter = csv.writer(csvfile)
 			for entry in data:
