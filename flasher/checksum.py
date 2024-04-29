@@ -29,6 +29,33 @@ cks_types = [ # todo: incorporate into ECU definitions
 	    ]
 	},
 	{
+        'name': '4mbit (FL2)',
+        'identification_flag_address': 0x16135, # This is a random "OK" in the middle of the prog zone.
+        'regions': [
+			{
+	        	'name': 'Boot',
+		        'flag_address': 0x017EFE,
+		        'init_address': 0x3F25,
+		        'cks_address': 0x3EEC, # 663057/58
+		        'bin_offset': 0
+		    },
+        	{
+		        'name': 'Calibration',
+		        'flag_address': 0x017EFE,
+		        'init_address': 0x01000C,
+		        'cks_address': 0x017EE0,
+		        'bin_offset': -0x080000
+		    },
+		    {
+		    	'name': 'Program',
+		    	'flag_address': 0x17EFE,
+		    	'init_address': 0x020052,
+		    	'cks_address': 0x020010,
+		    	'bin_offset': -0x080000
+		    }
+	    ]
+	},
+	{
         'name': '4mbit',
         'identification_flag_address': 0x017EFE,
         'regions': [
@@ -185,6 +212,7 @@ def correct_checksum (filename):
 		print('[*] Amount of zones: {}'.format(amount_of_zones))
 
 		if (amount_of_zones == 0 or amount_of_zones == 0xFF):
+			print('[*] Skipping region {}'.format(region['name']))
 			continue
 
 		checksums = []

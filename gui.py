@@ -425,6 +425,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[*] Amount of zones: {}'.format(amount_of_zones))
 
 			if (amount_of_zones == 0 or amount_of_zones == 0xFF):
+				self.log('[*] Skipping region {}'.format(region['name']))
 				continue
 
 			checksums = []
