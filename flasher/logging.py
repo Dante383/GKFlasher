@@ -189,7 +189,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: (a >> 0x07) & 1
+				'conversion': lambda a: hex(a)
 			},
 			{
 				'name': 'CVVT Actuation Status',
@@ -197,7 +197,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: (a >> 0x03) & 1
+				'conversion': lambda a: hex(a)
 			},
 			{
 				'name': 'CVVT Duty Control Status',
@@ -205,7 +205,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: (a >> 0x03) & 1
+				'conversion': lambda a: hex(a)
 			}
 		]
 	},
