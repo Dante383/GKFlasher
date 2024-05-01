@@ -30,7 +30,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 	},
 	{
         'name': '4mbit (FL2)',
-        'identification_flag_address': 0x16135, # This is a random "OK" in the middle of the prog zone.
+        'identification_flag_address': 0x16135, # This is a random "OK" towards the end of the cal zone.
         'regions': [
 			{
 	        	'name': 'Boot',
