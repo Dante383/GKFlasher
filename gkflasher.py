@@ -1,3 +1,4 @@
+import os
 import argparse, time, yaml, logging, sys
 from datetime import datetime
 from alive_progress import alive_bar
@@ -41,11 +42,22 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 			output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.now().strftime('%Y-%m-%d_%H%M'))
 		except: # dirty
 			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
-	
-	with open(output_filename, "wb") as file:
+
+		# Change the working directory
+		home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
+
+		if not os.path.exists(home):
+			os.makedirs(home)
+		os.chdir (home)
+
+	with open (output_filename, "wb") as file:
 		file.write(bytes(eeprom))
 
-	print('[*] saved to {}'.format(output_filename))
+	# Display user friendly path based on OS
+	if os.name == 'nt':
+		print('[*] saved to {}'.format(home + "\\" + output_filename))
+	else: # nix
+		print('[*] saved to {}'.format(home + "/" + output_filename))
 	print('[*] Done!')
 
 def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
