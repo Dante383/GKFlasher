@@ -33,15 +33,12 @@ def fetch_ecu_identification (bus):
 		values[parameter['value']] = {'name': parameter['name'], 'value': value[1:]}
 	return values
 
-def calculate_key(concat11_seed):
-    key = 0
-    index = 0
+def calculate_key (concat11_seed):
+    key = 0x9360
     
-    while index < 0x10:
-        if (concat11_seed & (1 << (index & 0x1f))) != 0:
-            key = key ^ 0xffff << (index & 0x1f)
-        index += 1
-    
+    for index in range(0x24):
+        key = key * 2 ^ concat11_seed
+        
     return key & 0xFFFF
 
 def enable_security_access (bus):
