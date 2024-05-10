@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import datetime
 from PyQt5 import QtWidgets, uic
@@ -14,6 +15,9 @@ from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from gkflasher import strip
+
+# Set user friendly working directory variable
+home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
@@ -72,8 +76,13 @@ class Ui(QtWidgets.QMainWindow):
 		self.load_ui()
 		self.previous_baudrate = False
 
+		# Change the working directory
+		if not os.path.exists(home):
+			os.makedirs(home)
+		os.chdir (home)
+
 	def load_ui(self):
-		uic.loadUi('flasher/gkflasher.ui', self)
+		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
 		self.thread_manager = QThreadPool()
 		self.show()
 		
@@ -154,7 +163,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def initialize_ecu (self, interface_url: str, log_callback):
 		log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
-		config = yaml.safe_load(open('gkflasher.yml'))
+		config = yaml.safe_load(open(os.path.dirname(os.path.abspath(__file__)) + '/gkflasher.yml'))
 		del config['kline']['interface']
 		bus = gkbus.Bus('kline', interface=interface_url, **config['kline'])
 
@@ -253,7 +262,12 @@ class Ui(QtWidgets.QMainWindow):
 		with open(output_filename, "wb") as file:
 			file.write(bytes(eeprom))
 
-		log_callback.emit('[*] saved to {}'.format(output_filename))
+		# Display user friendly path based on OS
+		if os.name == 'nt':
+			log_callback.emit('[*] saved to {}'.format(home + "\\" + output_filename))
+		else: # nix
+			log_callback.emit('[*] saved to {}'.format(home + "/" + output_filename))
+
 		log_callback.emit('[*] Done!')
 		self.disconnect_ecu(ecu)
 
