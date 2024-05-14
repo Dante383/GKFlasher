@@ -28,8 +28,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': 0,
 			'bin_offset': -0x80000,
 			'memory_write_offset': -0x7000,
-			'single_byte_restriction_start': 0x89FFF,
-			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'calibration_size_bytes_flash': 0xFEFE, #rounded down to nearest 254 bytes was 0xFFF0
 			'program_section_offset': 0xA0000,
@@ -84,8 +82,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': -0x48000,
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0xB800, # write at 0x84800
-			'single_byte_restriction_start': 0x89FFF, #required for SIMK41 only.
-			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'calibration_size_bytes_flash': 0x7F00, #already rounded to 254!
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
@@ -104,8 +100,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'memory_offset': -0x8000,
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7800,
-			'single_byte_restriction_start': 0x89FFF,
-			'single_byte_restriction_stop': 0x9000F,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'calibration_size_bytes_flash': 0x5F40, #rounded upto nearest 254 was 0x5F00
 			'program_section_offset': 0x98000,

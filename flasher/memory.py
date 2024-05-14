@@ -30,10 +30,8 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 	address = address_start
 
 	payload = [0xFF]*(address_stop-address_start)
-	og_at_a_time = at_a_time
 
 	while True:
-		at_a_time = ecu.adjust_bytes_at_a_time(address, at_a_time, og_at_a_time)
 		if ( (address_stop-address) < at_a_time ):
 			at_a_time = (address_stop-address)
 
