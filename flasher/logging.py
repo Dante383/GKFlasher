@@ -189,7 +189,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: hex(a)
+				'conversion': lambda a: a
 			},
 			{
 				'name': 'CVVT Actuation Status',
@@ -197,7 +197,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: hex(a)
+				'conversion': lambda a: a
 			},
 			{
 				'name': 'CVVT Duty Control Status',
@@ -205,47 +205,47 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: hex(a)
+				'conversion': lambda a: a
 			}
 		]
 	},
-	{
-		'payload': ReadDataByLocalIdentifier(0x02),
-		'parameters': [
-			{
-				'name': 'Cylinder 1 Injection Time',
-				'position': 45,
-				'size': 2,
-				'unit': 'ms',
-				'precision': 2,
-				'conversion': lambda a: a * 0.8192
-			},
-			{
-				'name': 'Cylinder 2 Injection Time',
-				'position': 47,
-				'size': 2,
-				'unit': 'ms',
-				'precision': 2,
-				'conversion': lambda a: a * 0.8192
-			},
-			{
-				'name': 'Cylinder 3 Injection Time',
-				'position': 49,
-				'size': 2,
-				'unit': 'ms',
-				'precision': 2,
-				'conversion': lambda a: a * 0.8192
-			},
-			{
-				'name': 'Cylinder 4 Injection Time',
-				'position': 51,
-				'size': 2,
-				'unit': 'ms',
-				'precision': 2,
-				'conversion': lambda a: a * 0.8192
-			}
-		]
-	}
+#	{
+#		'payload': ReadDataByLocalIdentifier(0x02),
+#		'parameters': [
+#			{
+#				'name': 'Cylinder 1 Injection Time',
+#				'position': 45,
+#				'size': 2,
+#				'unit': 'ms',
+#				'precision': 2,
+#				'conversion': lambda a: a * 0.8192
+#			},
+#			{
+#				'name': 'Cylinder 2 Injection Time',
+#				'position': 47,
+#				'size': 2,
+#				'unit': 'ms',
+#				'precision': 2,
+#				'conversion': lambda a: a * 0.8192
+#			},
+#			{
+#				'name': 'Cylinder 3 Injection Time',
+#				'position': 49,
+#				'size': 2,
+#				'unit': 'ms',
+#				'precision': 2,
+#				'conversion': lambda a: a * 0.8192
+#			},
+#			{
+#				'name': 'Cylinder 4 Injection Time',
+#				'position': 51,
+#				'size': 2,
+#				'unit': 'ms',
+#				'precision': 2,
+#				'conversion': lambda a: a * 0.8192
+#			}
+#		]
+#	}
 ]
 
 def grab (payload, parameter):
