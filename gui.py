@@ -16,6 +16,12 @@ from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from gkflasher import strip
 
+#
+# @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
+# Ideally, in gkflasher.py break up most of methods that are duplicated here so that 
+# they can be mostly reused. Intercept stdout for rest of them? 
+#
+
 # Set user friendly working directory variable
 home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
 
@@ -152,7 +158,10 @@ class Ui(QtWidgets.QMainWindow):
 			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
 
 	def get_interface_url (self):
-		return self.interfacesBox.currentData()
+		url = self.interfacesBox.currentData()
+		if not url:
+			raise IndexError
+		return url 
 
 	def progress_callback (self, value):
 		if (len(value) > 1):
@@ -161,11 +170,16 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
-	def initialize_ecu (self, interface_url: str, log_callback):
-		log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
+	def initialize_ecu (self, log_callback):
+		try:
+			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
+		except IndexError:
+			log_callback.emit('[*] Interface not found! If it\'s connected,  you probably forgot to replace it\'s drivers for libusb using Zadig.')
+			return False
+
 		config = yaml.safe_load(open(os.path.dirname(os.path.abspath(__file__)) + '/gkflasher.yml'))
 		del config['kline']['interface']
-		bus = gkbus.Bus('kline', interface=interface_url, **config['kline'])
+		bus = gkbus.Bus('kline', interface=self.get_interface_url(), **config['kline'])
 
 		try:
 			bus.execute(StopDiagnosticSession())
@@ -321,7 +335,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def read_calibration_zone (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -338,7 +352,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def read_program_zone (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -358,7 +372,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def full_read (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -380,12 +394,14 @@ class Ui(QtWidgets.QMainWindow):
 
 	def display_ecu_identification (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
 			return
+
+		log_callback.emit('[*] Querying additional parameters,  this might take few seconds..')
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
@@ -508,7 +524,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def flash_calibration (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -520,7 +536,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def flash_program (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -532,7 +548,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def flash_full (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
@@ -544,7 +560,7 @@ class Ui(QtWidgets.QMainWindow):
 
 	def clear_adaptive_values (self, progress_callback, log_callback):
 		try:
-			ecu = self.initialize_ecu(self.get_interface_url(), log_callback)
+			ecu = self.initialize_ecu(log_callback)
 		except gkbus.GKBusTimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
