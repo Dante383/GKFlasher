@@ -4,7 +4,6 @@ from datetime import datetime
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
-from pyftdi import ftdi, usbtools
 import gkbus, yaml, traceback
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
@@ -96,7 +95,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			self.detect_interfaces()
 		except ValueError:
-			print('[!] No backend found! This usually means that you forgot to use Zadig to replace drivers for your adapter with libusb.')
+			print('[!] No serial interfaces found!')
 			sys.exit(1)
 
 		self.load_ecus()
@@ -144,6 +143,8 @@ class Ui(QtWidgets.QMainWindow):
 
 	def detect_interfaces(self):
 		devices = KLineSerial.available_devices()
+		if (len(devices) == 0):
+			raise ValueError
 		for device in devices:
 			self.interfacesBox.addItem(device[0], device[1])
 
@@ -174,7 +175,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
 		except IndexError:
-			log_callback.emit('[*] Interface not found! If it\'s connected,  you probably forgot to replace it\'s drivers for libusb using Zadig.')
+			log_callback.emit('[*] Interface not found!')
 			return False
 
 		config = yaml.safe_load(open(os.path.dirname(os.path.abspath(__file__)) + '/gkflasher.yml'))
