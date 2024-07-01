@@ -188,8 +188,6 @@ def cli_identify_ecu (bus):
 	return ecu
 
 def main(bus, args):
-	
-
 	try:
 		bus.execute(kwp.commands.StopDiagnosticSession())
 		bus.execute(kwp.commands.StopCommunication())

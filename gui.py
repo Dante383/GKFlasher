@@ -9,6 +9,7 @@ import gkbus, yaml, traceback
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
+from gkbus.interface.kline.KLineSerial import KLineSerial
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
@@ -142,10 +143,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.logOutput.append(text)
 
 	def detect_interfaces(self):
-		ftdi_ins = ftdi.Ftdi()
-		devices = ftdi_ins.list_devices()
-		for device_str in usbtools.UsbTools.build_dev_strings('ftdi', ftdi_ins.VENDOR_IDS, ftdi_ins.PRODUCT_IDS, devices):
-			self.interfacesBox.addItem(' '.join(device_str), device_str[0])
+		devices = KLineSerial.available_devices()
+		for device in devices:
+			self.interfacesBox.addItem(device[0], device[1])
 
 	def load_ecus (self):
 		self.ecusBox.addItem('ECU (autodetect)', -1)
