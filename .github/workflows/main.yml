@@ -29,11 +29,24 @@ jobs:
         with:
           name: Windows_gui_exe
           path: dist/gui.exe
-          
+
+      - name: Install go-msi
+        run: choco install -y "go-msi"
+
       - name: Build Windows Installer MSI from exe file
         uses: AliceOh/CreateWindowsInstaller@1.0.0
         with:
           exefile: 'gui.exe'
+
+      - name: Upload MSI for Windows to release page
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "test"
+          prerelease: true
+          title: "Windows Development Build"
+          files: |
+            gui.exe.msi
 
 #
 #      - name: create release
