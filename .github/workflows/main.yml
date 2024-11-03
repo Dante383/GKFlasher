@@ -17,13 +17,16 @@ jobs:
       - name: Install requirements
         run: |
           pip install -r requirements.txt
+      - name: Install PyInstaller
+        run: |
+          pip install pyinstaller
       - name: Run PyInstaller
         run: |
           python -m PyInstaller gui.spec
       - uses: actions/upload-artifact@v4
         with:
-          name: Windows_qwiklabs
-          path: dist/qwiklab_badge_checker.exe
+          name: Windows_gui_exe
+          path: dist/test.exe
 
       - name: create release
         id: create_release
@@ -45,6 +48,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{steps.create_release.outputs.upload_url}}
-          asset_path: dist/qwiklab_badge_checker.exe
+          asset_path: dist/test.exe
           asset_name: Qwiklab-Badge-Checker-Windows-amd64.exe
           asset_content_type: application/zip
