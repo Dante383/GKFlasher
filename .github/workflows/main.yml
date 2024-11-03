@@ -19,7 +19,7 @@ jobs:
           pip install -r requirements.txt
       - name: Run PyInstaller
         run: |
-          python -m PyInstaller qwiklab_badge_checker.spec
+          python -m PyInstaller gui.spec
       - uses: actions/upload-artifact@v4
         with:
           name: Windows_qwiklabs
