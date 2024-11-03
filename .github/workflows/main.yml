@@ -29,10 +29,11 @@ jobs:
         with:
           name: Windows_gui_exe
           path: dist/gui.exe
-#      - name: Build Windows Installer MSI from exe file
-#      - uses: AliceOh/CreateWindowsInstaller@1.0.0
-#        with:
-#          exefile: 'gui.exe'
+          
+      - name: Build Windows Installer MSI from exe file
+        uses: AliceOh/CreateWindowsInstaller@1.0.0
+        with:
+          exefile: 'gui.exe'
 
 #
 #      - name: create release
