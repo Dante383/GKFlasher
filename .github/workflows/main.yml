@@ -17,9 +17,10 @@ jobs:
       - name: Install requirements
         run: |
           pip install -r requirements.txt
-      - name: Install PyInstaller
+      - name: Install Pre-reqs
         run: |
           pip install pyinstaller
+          pip install cryptography
       - name: Run PyInstaller
         run: |
           python -m PyInstaller gui.spec
@@ -49,5 +50,5 @@ jobs:
         with:
           upload_url: ${{steps.create_release.outputs.upload_url}}
           asset_path: dist/test.exe
-          asset_name: Qwiklab-Badge-Checker-Windows-amd64.exe
+          asset_name: GKFlasher-GUI-Windows-amd64.exe
           asset_content_type: application/zip
