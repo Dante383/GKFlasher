@@ -23,7 +23,15 @@ from gkflasher import strip
 #
 
 # Set user friendly working directory variable
-home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
+if os.name == 'nt':
+		import ctypes.wintypes
+		CSIDL_PERSONAL = 5       # My Documents
+		SHGFP_TYPE_CURRENT = 0   # Get current directory, not the default value.
+		winhome = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+		ctypes.windll.shell32.SHGetFolderPathW(None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, winhome)
+		home = os.sep.join([winhome.value,"GKFlasher Files"])
+else: #nix
+	home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
