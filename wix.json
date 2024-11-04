@@ -6,7 +6,7 @@
   "files": {
     "guid": "",
     "items": [
-      "bin/gui.exe"
+      "dist/*"
     ]
   },
   "env": {
