@@ -30,22 +30,17 @@ jobs:
           #name: Windows_gui_exe
           #path: dist/gui.exe
           path: dist/*
-          
-      - name: Install go-msi
-        run: choco install -y "go-msi"
-        
+
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v1.1
-        
+
       - name: Install WiX
         run: dotnet tool install --global wix
-        
-      - name: Run Go-MSI
-        env:
-          go-msi: "C:/Program Files/go-msi/go-msi.exe"
-        run: |
-          "C:/Program Files/go-msi/go-msi.exe set-guid"
-          "C:/Program Files/go-msi/go-msi.exe make --msi GKFlasher.msi --version 1.0.5"
+
+      - name: Build MSI Package
+        run: 
+           candle LicenseAgreementDlg_HK.wxs WixUI_HK.wxs product.wxs
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ..\GKFlasher.msi LicenseAgreementDlg_HK.wixobj WixUI_HK.wixobj product.wixobj
 
 #      - name: Build Windows Installer MSI from exe file
 #        uses: AliceOh/CreateWindowsInstaller@1.0.0
