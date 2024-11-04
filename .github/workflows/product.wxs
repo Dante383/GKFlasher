@@ -34,7 +34,7 @@
                
                <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                   
-                    <File Id="ApplicationFile0" Source="..\gui.py"/>
+                    <File Id="ApplicationFile0" Source="gui.py"/>
                   
                </Component>
                
