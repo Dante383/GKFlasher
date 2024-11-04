@@ -39,7 +39,7 @@ jobs:
 
       - name: Build MSI Package
         run: 
-           candle LicenseAgreementDlg_HK.wxs WixUI_HK.wxs product.wxs
+           candle .github/workflows/LicenseAgreementDlg_HK.wxs .github/workflows/WixUI_HK.wxs .github/workflows/product.wxs
            light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ..\GKFlasher.msi LicenseAgreementDlg_HK.wixobj WixUI_HK.wixobj product.wixobj
 
 #      - name: Build Windows Installer MSI from exe file
