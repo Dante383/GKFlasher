@@ -15,7 +15,7 @@ a = Analysis(
     ['gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('src', '.')],
+    datas=[('', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
