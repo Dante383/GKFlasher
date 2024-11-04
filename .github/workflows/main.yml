@@ -41,6 +41,8 @@ jobs:
         run: dotnet tool install --global wix
         
       - name: Run Go-MSI
+        env:
+          go-msi: "C:/Program Files/go-msi/go-msi.exe"
         run: |
           go-msi set-guid
           go-msi make --msi GKFlasher.msi --version 1.0.5
@@ -58,7 +60,7 @@ jobs:
           prerelease: true
           title: "Windows Development Build"
           files: |
-            dist/gui/gui.exe
+            GKFlasher.msi
 
 #
 #      - name: create release
