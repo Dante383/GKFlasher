@@ -33,11 +33,15 @@ jobs:
           
       - name: Install go-msi
         run: choco install -y "go-msi"
-             echo "C:\Program Files\go-msi" >> $GITHUB_PATH
-
+        
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v1.1
+        
+      - name: Install WiX
+        run: dotnet tool install --global wix
+        
       - name: Run Go-MSI
         run: |
-          echo $GITHUB_PATH
           go-msi set-guid
           go-msi make --msi GKFlasher.msi --version 1.0.5
 
