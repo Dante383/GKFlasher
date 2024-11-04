@@ -6,7 +6,7 @@
   "files": {
     "guid": "{652E355F-4E96-40FB-8B34-A9593CE42CE9}",
     "items": [
-      "/*"
+      "gui.py"
     ]
   },
   "env": {
