@@ -31,8 +31,16 @@ jobs:
           #path: dist/gui.exe
           path: dist/*
           
-#      - name: Install go-msi
-#        run: choco install -y "go-msi"
+      - name: Install go-msi
+        run: choco install -y "go-msi"
+
+      - name: Run Go-MSI
+        run: |
+          go-msi set-guid
+          go-msi make --msi GKFlasher.msi --version 1.0.5
+#      - uses: actions/upload-artifact@v4
+ #       with:
+ #         path: dist/*
 
 #      - name: Build Windows Installer MSI from exe file
 #        uses: AliceOh/CreateWindowsInstaller@1.0.0
