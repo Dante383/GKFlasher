@@ -35,9 +35,10 @@ jobs:
         run: choco install -y "go-msi"
 
       - name: Run Go-MSI
+        shell: pwsh
         run: |
-          'C:\Program Files\go-msi\go-msi.exe set-guid'
-          'C:\Program Files\go-msi\go-msi.exe make --msi GKFlasher.msi --version 1.0.5'
+          "C:\Program Files\go-msi\go-msi.exe" set-guid
+          "C:\Program Files\go-msi\go-msi.exe" make --msi GKFlasher.msi --version 1.0.5
 
 #      - name: Build Windows Installer MSI from exe file
 #        uses: AliceOh/CreateWindowsInstaller@1.0.0
