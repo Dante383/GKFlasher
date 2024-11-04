@@ -15,7 +15,7 @@ a = Analysis(
     ['gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('GKFlasher', '.')],
+    datas=[('D:\a\GKFlasher\GKFlasher', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
