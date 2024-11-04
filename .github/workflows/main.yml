@@ -35,8 +35,8 @@ jobs:
         run: choco install -y "go-msi"
 
       - name: Run Go-MSI
-        shell: pwsh
         run: |
+          refreshenv
           go-msi set-guid
           go-msi make --msi GKFlasher.msi --version 1.0.5
 
