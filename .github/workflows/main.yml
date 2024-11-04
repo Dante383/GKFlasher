@@ -25,14 +25,14 @@ jobs:
       - name: Run PyInstaller
         run: |
           python -m PyInstaller gui.spec
-      - uses: actions/upload-artifact@v4
-        with:
-          #name: Windows_gui_exe
-          #path: dist/gui.exe
-          path: dist/*
+#  for debug purposes, upload the build artifact as a zip.         
+#      - uses: actions/upload-artifact@v4
+#        with:
+#          ##name: Windows_gui_exe
+#          path: dist/*
 
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.1
+#      - name: Add msbuild to PATH
+#        uses: microsoft/setup-msbuild@v1.1
 
       - name: Install WiX
         run: dotnet tool install --global wix
