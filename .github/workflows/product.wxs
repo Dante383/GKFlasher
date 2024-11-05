@@ -79,12 +79,18 @@
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
-                                        <Component Id="ApplicationFiles5" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
-                                            <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
-                                            <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
-                                        </Component>
+                                        <Directory Id="PLATFORMDIR" Name="platforms">
+                                            <Component Id="ApplicationFiles5" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
+                                                <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                                            </Component>
+                                        </Directory>
+                                        <Directory Id="STYLESDIR" Name="styles">
+                                            <Component Id="ApplicationFiles6" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE3}">
+                                                <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                                            </Component>
+                                        </Directory>
                                     </Directory>
-                            </Directory>        
+                            </Directory>
                     </Directory>
                 </Directory>
             </Directory>
@@ -118,6 +124,7 @@
             <ComponentRef Id="ApplicationFiles3" />
             <ComponentRef Id="ApplicationFiles4" />
             <ComponentRef Id="ApplicationFiles5" />
+            <ComponentRef Id="ApplicationFiles6" />
             <ComponentRef Id="ApplicationShortcuts0" />
             <ComponentRef Id="ApplicationShortcuts1" />
 
