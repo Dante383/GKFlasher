@@ -114,7 +114,7 @@
                         >
 
          <Directory Id="DesktopFolder">
-               <Component Id="ApplicationShortcuts" Guid="305dc292-f9af-4961-9fd1-bf38f5ad08db">
+               <Component Id="ApplicationShortcuts2" Guid="305dc292-f9af-4961-9fd1-bf38f5ad08db">
                   <Shortcut Id="ApplicationShortcut1"
                         Name="GKFlasher"
                         Description="ECU Flashing tool for SIMK43/41-based vehicles."
