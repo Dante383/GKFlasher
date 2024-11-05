@@ -89,9 +89,10 @@
                         <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall" />
                     </Component>
                 </Directory>
-            <Directory Id="DesktopFolder">
+            <Directory Id="DesktopFolder" Name="Desktop">
                 <Component Id="ApplicationShortcuts1" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb2">
                     <Shortcut Id="ApplicationShortcut1" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR" />
+                    <RegistryValue Root="HKCU" Key="Software\OpenGK\GKFlasherDesktop" Name="installed0" Type="integer" Value="1" KeyPath="yes" />
                 </Component>
             </Directory>
         </Directory>
