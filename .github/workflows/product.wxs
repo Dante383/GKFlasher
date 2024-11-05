@@ -155,6 +155,8 @@
       </UI>
 
       <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+      <Property Id="FLASHERDIR" Value="FLASHERDIR" />
+      <Property Id="ASSETDIR" Value="ASSETSDIR" />
 
       <!-- this should help to propagate env var changes -->
       <CustomActionRef Id="WixBroadcastEnvironmentChange" />
