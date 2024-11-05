@@ -12,10 +12,10 @@ hiddenimports += collect_submodules('pyusb')
 #hiddenimports += collect_submodules('alive_progress')
 
 a = Analysis(
-    ['..\\gui.py'],
+    ['..\..\\gui.py'],
     pathex=[],
     binaries=[],
-    datas=[('..\\flasher', 'flasher'),('..\\assets', 'assets'),('..\\gkflasher.yml', '.')],
+    datas=[('..\..\\flasher', 'flasher'),('..\..\\assets', 'assets'),('..\..\\gkflasher.yml', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -42,7 +42,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['..\\assets\\Siemens_T_Logo.png'],
+    icon=['..\..\\assets\\Siemens_T_Logo.png'],
     contents_directory='.',
 )
 coll = COLLECT(
