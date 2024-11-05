@@ -57,7 +57,7 @@
                     <File Id="ApplicationFile20" Source="LICENSE"/>
                     <File Id="ApplicationFile21" Source="dist\gui\pyexpat.pyd"/>
                     <File Id="ApplicationFile22" Source="dist\gui\python3.dll"/>
-                    <File Id="ApplicationFile23" Source="dist\gui\python311.dll"/>
+                    <File Id="ApplicationFile23" Source="dist\gui\python312.dll"/>
                     <File Id="ApplicationFile24" Source="README.md"/>
                     <File Id="ApplicationFile25" Source="requirements.txt"/>
                     <File Id="ApplicationFile26" Source="dist\gui\select.pyd"/>
