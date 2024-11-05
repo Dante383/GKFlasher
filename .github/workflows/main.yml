@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.12.7'
           architecture: 'x64'
-      - name: Install requirements
+      - name: Install GKFlasher Requirements
         run: |
           pip install -r requirements.txt
       - name: Install Build Environment Prerequisites
@@ -22,20 +22,20 @@ jobs:
           pip install pyinstaller
           pip install cryptography
           pip install pillow
-      - name: Run PyInstaller
+      - name: Build EXE for GKFlasher GUI
         run: |
           python -m PyInstaller gui.spec
 #  for debug purposes, upload the build artifact as a zip.         
-      - uses: actions/upload-artifact@v4
-        with:
-          ##name: Windows_gui_exe
-          path: dist/*
+#      - uses: actions/upload-artifact@v4
+#        with:
+#          ##name: Upload PyInstaller "Output" Directory
+#          path: dist/*
 
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1.1
 
       - name: Install WiX
-        run: dotnet tool install --global wix
+        run: dotnet tool install --global wix -version 5.0.2
 
       - name: Build MSI Package
         run: |
@@ -47,7 +47,7 @@ jobs:
 #        with:
 #          exefile: 'gui.exe'
 
-      - name: Upload MSI for Windows to release page
+      - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
