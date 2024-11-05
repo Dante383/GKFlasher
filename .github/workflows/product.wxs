@@ -70,17 +70,16 @@
                     <File Id="ApplicationFile32" Source="flasher\logging.py"/>
                     <File Id="ApplicationFile33" Source="flasher\memory.py"/>
 
-                    <File Id="ApplicationFile34" Source="dist\gui\PyQt5\__init__.pyc"/>
-                    <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtCore.pyd"/>
-                    <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtGui.pyd"/>
-                    <File Id="ApplicationFile37" Source="dist\gui\PyQt5\QtWidgets.pyd"/>
-                    <File Id="ApplicationFile38" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd"/>
-                    <File Id="ApplicationFile39" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll"/>
-                    <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll"/>
-                    <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll"/>
+                    <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtCore.pyd"/>
+                    <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtGui.pyd"/>
+                    <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd"/>
+                    <File Id="ApplicationFile37" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd"/>
+                    <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll"/>
+                    <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll"/>
+                    <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll"/>
 
-                    <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll"/>
-                    <File Id="ApplicationFile43" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll"/>
+                    <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll"/>
+                    <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll"/>
                   
                </Component>
                
