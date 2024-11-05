@@ -89,6 +89,12 @@
                         <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall" />
                     </Component>
                 </Directory>
+            <Directory Id="DesktopFolder">
+                <Component Id="ApplicationShortcuts1" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb2">
+                    <Shortcut Id="ApplicationShortcut1" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR" />
+                </Component>
+            </Directory>
+        </Directory>
             </Directory>
         <InstallExecuteSequence>
             <RemoveExistingProducts After="InstallValidate" />
@@ -100,6 +106,7 @@
             <ComponentRef Id="ApplicationFiles2" />
             <ComponentRef Id="ApplicationFiles3" />
             <ComponentRef Id="ApplicationShortcuts0" />
+            <ComponentRef Id="ApplicationShortcuts1" />
 
         </Feature>
         <UI>
