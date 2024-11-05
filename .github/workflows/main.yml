@@ -24,7 +24,7 @@ jobs:
           pip install pillow
       - name: Build EXE Package
         run: |
-          python -m PyInstaller gui.spec
+          python -m PyInstaller .github/workflows/gui.spec
 #  for debug purposes, upload the build artifact as a zip.         
 #      - uses: actions/upload-artifact@v4
 #        with:
