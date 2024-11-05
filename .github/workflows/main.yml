@@ -22,7 +22,7 @@ jobs:
           pip install pyinstaller
           pip install cryptography
           pip install pillow
-      - name: Build EXE for GKFlasher GUI
+      - name: Build EXE Package
         run: |
           python -m PyInstaller gui.spec
 #  for debug purposes, upload the build artifact as a zip.         
