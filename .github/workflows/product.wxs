@@ -7,7 +7,7 @@
 <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
 <?endif?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product Id="*" UpgradeCode="5275a2a3-973c-4b7d-9f88-78af06829029" Name="GKFlasher" Version="1.0.5" Manufacturer="OpenGK" Language="1033">
+    <Product Id="*" UpgradeCode="5275a2a3-973c-4b7d-9f88-78af06829029" Name="GKFlasher" Version="1.0.5" Manufacturer="OpenGK.org" Language="1033">
         <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
         <Upgrade Id="5275a2a3-973c-4b7d-9f88-78af06829029">
