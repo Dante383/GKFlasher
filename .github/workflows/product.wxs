@@ -48,7 +48,6 @@
                         <File Id="ApplicationFile26" Source="dist\gui\select.pyd" />
                         <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd" />
                     </Component>
-
                     <Directory Id="FLASHERDIR" Name="flasher">
                         <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
                             <File Id="ApplicationFile28" Source="flasher\checksum.py" />
@@ -60,12 +59,12 @@
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
-                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
+                        <Component Id="ApplicationFiles2" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
                             <File Id="ApplicationFile43" Source="assets\Siemens_T_Logo.png" />
                         </Component>
                     </Directory>
                     <Directory Id="PYQT5DIR" Name="PyQt5">
-                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
+                        <Component Id="ApplicationFiles3" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
                             <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtCore.pyd" />
                             <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtGui.pyd" />
                             <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd" />
@@ -91,6 +90,11 @@
                     </Component>
                 </Directory>
             </Directory>
+            <Directory Id="DesktopFolder">
+                <Component Id="DesktopFolder" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb2">
+                    <Shortcut Id="ApplicationShortcut1" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR" />
+                </Component>
+            </Directory>
         </Directory>
         <InstallExecuteSequence>
             <RemoveExistingProducts After="InstallValidate" />
@@ -99,7 +103,10 @@
             <ComponentRef Id="ENVS" />
             <ComponentRef Id="ApplicationFiles0" />
             <ComponentRef Id="ApplicationFiles1" />
-            <ComponentRef Id="ApplicationShortcuts" />
+            <ComponentRef Id="ApplicationFiles2" />
+            <ComponentRef Id="ApplicationFiles3" />
+            <ComponentRef Id="ApplicationShortcuts0" />
+            <ComponentRef Id="ApplicationShortcuts1" />
         </Feature>
         <UI>
             <!-- Define the installer UI -->
