@@ -1,167 +1,112 @@
-<?xml version="1.0"?>
-
+<?xml version="1.0" encoding="utf-8"?>
 <?if $(sys.BUILDARCH)="x86"?>
-    <?define Program_Files="ProgramFilesFolder"?>
+<?define Program_Files="ProgramFilesFolder"?>
 <?elseif $(sys.BUILDARCH)="x64"?>
-    <?define Program_Files="ProgramFiles64Folder"?>
+<?define Program_Files="ProgramFiles64Folder"?>
 <?else?>
-    <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
+<?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
 <?endif?>
-
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" UpgradeCode="5275a2a3-973c-4b7d-9f88-78af06829029" Name="GKFlasher" Version="1.0.5" Manufacturer="OpenGK" Language="1033">
+        <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
+        <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
+        <Upgrade Id="5275a2a3-973c-4b7d-9f88-78af06829029">
+            <UpgradeVersion Minimum="1.0.5" OnlyDetect="yes" Property="NEWERVERSIONDETECTED" />
+            <UpgradeVersion Minimum="0.0.0" Maximum="1.0.5" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED" />
+        </Upgrade>
+        <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="$(var.Program_Files)">
+                <Directory Id="INSTALLDIR" Name="GKFlasher">
+                    <Component Id="ApplicationFiles0" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
+                        <File Id="ApplicationFile0" Source="dist\gui\_asyncio.pyd" />
+                        <File Id="ApplicationFile1" Source="dist\gui\_bz2.pyd" />
+                        <File Id="ApplicationFile2" Source="dist\gui\_ctypes.pyd" />
+                        <File Id="ApplicationFile3" Source="dist\gui\_decimal.pyd" />
+                        <File Id="ApplicationFile4" Source="dist\gui\_elementtree.pyd" />
+                        <File Id="ApplicationFile5" Source="dist\gui\_hashlib.pyd" />
+                        <File Id="ApplicationFile6" Source="dist\gui\_lzma.pyd" />
+                        <File Id="ApplicationFile7" Source="dist\gui\_multiprocessing.pyd" />
+                        <File Id="ApplicationFile8" Source="dist\gui\_overlapped.pyd" />
+                        <File Id="ApplicationFile9" Source="dist\gui\_queue.pyd" />
+                        <File Id="ApplicationFile10" Source="dist\gui\_socket.pyd" />
+                        <File Id="ApplicationFile11" Source="dist\gui\_ssl.pyd" />
+                        <File Id="ApplicationFile12" Source="dist\gui\_uuid.pyd" />
+                        <File Id="ApplicationFile13" Source="dist\gui\_wmi.pyd" />
+                        <File Id="ApplicationFile14" Source="dist\gui\base_library.zip" />
+                        <File Id="ApplicationFile15" Source="ecu_definitions.py" />
+                        <File Id="ApplicationFile16" Source="gkflasher.py" />
+                        <File Id="ApplicationFile17" Source="gkflasher.yml" />
+                        <File Id="ApplicationFile18" Source="dist\gui\gui.exe" />
+                        <File Id="ApplicationFile19" Source="dist\gui\libffi-8.dll" />
+                        <File Id="ApplicationFile20" Source="LICENSE" />
+                        <File Id="ApplicationFile21" Source="dist\gui\pyexpat.pyd" />
+                        <File Id="ApplicationFile22" Source="dist\gui\python3.dll" />
+                        <File Id="ApplicationFile23" Source="dist\gui\python312.dll" />
+                        <File Id="ApplicationFile24" Source="README.md" />
+                        <File Id="ApplicationFile25" Source="requirements.txt" />
+                        <File Id="ApplicationFile26" Source="dist\gui\select.pyd" />
+                        <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd" />
+                    </Component>
 
-   <Product Id="*" UpgradeCode="5275a2a3-973c-4b7d-9f88-78af06829029"
-            Name="GKFlasher"
-            Version="1.0.5"
-            Manufacturer="OpenGK"
-            Language="1033">
-
-      <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine"/>
-
-      <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
-
-      <Upgrade Id="5275a2a3-973c-4b7d-9f88-78af06829029">
-         <UpgradeVersion Minimum="1.0.5" OnlyDetect="yes" Property="NEWERVERSIONDETECTED"/>
-         <UpgradeVersion Minimum="0.0.0" Maximum="1.0.5" IncludeMinimum="yes" IncludeMaximum="no"
-                         Property="OLDERVERSIONBEINGUPGRADED"/>
-      </Upgrade>
-      <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
-
-      <Directory Id="TARGETDIR" Name="SourceDir">
-
-         <Directory Id="$(var.Program_Files)">
-            <Directory Id="INSTALLDIR" Name="GKFlasher">
-
-               <Component Id="ApplicationFiles0" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
-                  
-                    <File Id="ApplicationFile0" Source="dist\gui\_asyncio.pyd"/>
-                    <File Id="ApplicationFile1" Source="dist\gui\_bz2.pyd"/>
-                    <File Id="ApplicationFile2" Source="dist\gui\_ctypes.pyd"/>
-                    <File Id="ApplicationFile3" Source="dist\gui\_decimal.pyd"/>
-                    <File Id="ApplicationFile4" Source="dist\gui\_elementtree.pyd"/>
-                    <File Id="ApplicationFile5" Source="dist\gui\_hashlib.pyd"/>
-                    <File Id="ApplicationFile6" Source="dist\gui\_lzma.pyd"/>
-                    <File Id="ApplicationFile7" Source="dist\gui\_multiprocessing.pyd"/>
-                    <File Id="ApplicationFile8" Source="dist\gui\_overlapped.pyd"/>
-                    <File Id="ApplicationFile9" Source="dist\gui\_queue.pyd"/>
-                    <File Id="ApplicationFile10" Source="dist\gui\_socket.pyd"/>
-                    <File Id="ApplicationFile11" Source="dist\gui\_ssl.pyd"/>
-                    <File Id="ApplicationFile12" Source="dist\gui\_uuid.pyd"/>
-                    <File Id="ApplicationFile13" Source="dist\gui\_wmi.pyd"/>
-                    <File Id="ApplicationFile14" Source="dist\gui\base_library.zip"/>
-                    <File Id="ApplicationFile15" Source="ecu_definitions.py"/>
-                    <File Id="ApplicationFile16" Source="gkflasher.py"/>
-                    <File Id="ApplicationFile17" Source="gkflasher.yml"/>
-                    <File Id="ApplicationFile18" Source="dist\gui\gui.exe"/>
-                    <File Id="ApplicationFile19" Source="dist\gui\libffi-8.dll"/>
-                    <File Id="ApplicationFile20" Source="LICENSE"/>
-                    <File Id="ApplicationFile21" Source="dist\gui\pyexpat.pyd"/>
-                    <File Id="ApplicationFile22" Source="dist\gui\python3.dll"/>
-                    <File Id="ApplicationFile23" Source="dist\gui\python312.dll"/>
-                    <File Id="ApplicationFile24" Source="README.md"/>
-                    <File Id="ApplicationFile25" Source="requirements.txt"/>
-                    <File Id="ApplicationFile26" Source="dist\gui\select.pyd"/>
-                    <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd"/>
-
-               </Component>
                     <Directory Id="FLASHERDIR" Name="flasher">
-                       <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
-                          
-                            <File Id="ApplicationFile28" Source="flasher\checksum.py"/>
-                            <File Id="ApplicationFile29" Source="flasher\ecu.py"/>
-                            <File Id="ApplicationFile30" Source="flasher\gkflasher.ui"/>
-                            <File Id="ApplicationFile31" Source="flasher\immo.py"/>
-                            <File Id="ApplicationFile32" Source="flasher\logging.py"/>
-                            <File Id="ApplicationFile33" Source="flasher\memory.py"/>
-        
-                            <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtCore.pyd"/>
-                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtGui.pyd"/>
-                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd"/>
-                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd"/>
-                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll"/>
-                            <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll"/>
-                            <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll"/>
-        
-                            <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll"/>
-                            <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll"/>
-                          
-                       </Component>
-               
-               
+                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
+                            <File Id="ApplicationFile28" Source="flasher\checksum.py" />
+                            <File Id="ApplicationFile29" Source="flasher\ecu.py" />
+                            <File Id="ApplicationFile30" Source="flasher\gkflasher.ui" />
+                            <File Id="ApplicationFile31" Source="flasher\immo.py" />
+                            <File Id="ApplicationFile32" Source="flasher\logging.py" />
+                            <File Id="ApplicationFile33" Source="flasher\memory.py" />
+                        </Component>
+                    </Directory>
+                    <Directory Id="ASSETSDIR" Name="assets">
+                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
+                            <File Id="ApplicationFile43" Source="assets\Siemens_T_Logo.png" />
+                        </Component>
+                    </Directory>
+                    <Directory Id="PYQT5DIR" Name="PyQt5">
+                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
+                            <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtCore.pyd" />
+                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtGui.pyd" />
+                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd" />
+                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
+                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
+                            <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
+                            <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                            <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                            <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                        </Component>
+                    </Directory>
+                </Directory>
             </Directory>
-         </Directory>
-
-         
-         <Component Id="ENVS" Guid="34ca2644-718c-4ac0-b5a1-f0b4eed3fbf0">
-          
-          <Environment Id="ENV0"
-            Name="PATH"
-            Value="[INSTALLDIR]"
-            Permanent="no"
-            Part="last"
-            Action="set"
-            System="no" />
-          
-        </Component>
-        
-
-         
-         <Directory Id="ProgramMenuFolder">
-            <Directory Id="ProgramMenuSubfolder" Name="GKFlasher">
-               <Component Id="ApplicationShortcuts" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb3">
-               
-                  <Shortcut Id="ApplicationShortcut0"
-                        Name="GKFlasher"
-                        Description="ECU Flashing tool for SIMK43/41-based vehicles."
-                        Target="[INSTALLDIR]\gui.exe"
-                        WorkingDirectory="INSTALLDIR"
-                        >
-
-                  </Shortcut>
-                  <RegistryValue Root="HKCU"
-                    Key="Software\OpenGK\GKFlasher"
-                    Name="installed0"
-                    Type="integer" Value="1" KeyPath="yes"/>
-                
-                <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall"/>
-               </Component>
+            <Component Id="ENVS" Guid="34ca2644-718c-4ac0-b5a1-f0b4eed3fbf0">
+                <Environment Id="ENV0" Name="PATH" Value="[INSTALLDIR]" Permanent="no" Part="last" Action="set" System="no" />
+            </Component>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ProgramMenuSubfolder" Name="GKFlasher">
+                    <Component Id="ApplicationShortcuts" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb3">
+                        <Shortcut Id="ApplicationShortcut0" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR"></Shortcut>
+                        <RegistryValue Root="HKCU" Key="Software\OpenGK\GKFlasher" Name="installed0" Type="integer" Value="1" KeyPath="yes" />
+                        <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall" />
+                    </Component>
+                </Directory>
             </Directory>
-         </Directory>
-         
-
-      </Directory>
-
-      
-      
-      <InstallExecuteSequence>
-         <RemoveExistingProducts After="InstallValidate"/>
-         
-         
-      </InstallExecuteSequence>
-
-      <Feature Id="DefaultFeature" Level="1">
-         
-         <ComponentRef Id="ENVS"/>
-         
-         
-         <ComponentRef Id="ApplicationFiles0"/>
-         <ComponentRef Id="ApplicationFiles1"/>         
-         
-         <ComponentRef Id="ApplicationShortcuts"/>
-         
-         
-      </Feature>
-
-      <UI>
-         <!-- Define the installer UI -->
-         <UIRef Id="WixUI_HK" />
-      </UI>
-
-      <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
-
-      <!-- this should help to propagate env var changes -->
-      <CustomActionRef Id="WixBroadcastEnvironmentChange" />
-
-   </Product>
-
+        </Directory>
+        <InstallExecuteSequence>
+            <RemoveExistingProducts After="InstallValidate" />
+        </InstallExecuteSequence>
+        <Feature Id="DefaultFeature" Level="1">
+            <ComponentRef Id="ENVS" />
+            <ComponentRef Id="ApplicationFiles0" />
+            <ComponentRef Id="ApplicationFiles1" />
+            <ComponentRef Id="ApplicationShortcuts" />
+        </Feature>
+        <UI>
+            <!-- Define the installer UI -->
+            <UIRef Id="WixUI_HK" />
+        </UI>
+        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+        <!-- this should help to propagate env var changes -->
+        <CustomActionRef Id="WixBroadcastEnvironmentChange" />
+    </Product>
 </Wix>
