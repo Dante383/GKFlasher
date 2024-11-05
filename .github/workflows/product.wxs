@@ -82,7 +82,7 @@
                     <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll"/>
                   
                </Component>
-               <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
+               <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
                   
                     <File Id="ApplicationFile28" Source="flasher\checksum.py"/>
                     <File Id="ApplicationFile29" Source="flasher\ecu.py"/>
