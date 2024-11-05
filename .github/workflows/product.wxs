@@ -108,13 +108,21 @@
                <Component Id="ApplicationShortcuts" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb3">
                
                   <Shortcut Id="ApplicationShortcut0"
-                        Name="Your Product MSI"
-                        Description="MSI pakage for your product"
+                        Name="GKFlasher"
+                        Description="ECU Flashing tool for SIMK43/41-based vehicles."
                         Target="[INSTALLDIR]\gui.exe"
                         WorkingDirectory="INSTALLDIR"
-                        
                         >
-                        
+
+         <Directory Id="DesktopFolder">
+               <Component Id="ApplicationShortcuts" Guid="305dc292-f9af-4961-9fd1-bf38f5ad08db">
+                  <Shortcut Id="ApplicationShortcut1"
+                        Name="GKFlasher"
+                        Description="ECU Flashing tool for SIMK43/41-based vehicles."
+                        Target="[INSTALLDIR]\gui.exe"
+                        WorkingDirectory="INSTALLDIR"
+                        >
+
                   </Shortcut>
                   <RegistryValue Root="HKCU"
                     Key="Software\OpenGK\GKFlasher"
