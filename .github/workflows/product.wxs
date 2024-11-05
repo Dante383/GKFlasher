@@ -32,7 +32,7 @@
          <Directory Id="$(var.Program_Files)">
             <Directory Id="INSTALLDIR" Name="GKFlasher">
 
-               <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
+               <Component Id="ApplicationFiles0" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                   
                     <File Id="ApplicationFile0" Source="dist\gui\_asyncio.pyd"/>
                     <File Id="ApplicationFile1" Source="dist\gui\_bz2.pyd"/>
@@ -64,7 +64,7 @@
                     <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd"/>
 
                </Component>
-               <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
+               <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
                   
                     <File Id="ApplicationFile28" Source="flasher\checksum.py"/>
                     <File Id="ApplicationFile29" Source="flasher\ecu.py"/>
@@ -143,8 +143,8 @@
          <ComponentRef Id="ENVS"/>
          
          
-         <ComponentRef Id="ApplicationFiles"/>
-         
+         <ComponentRef Id="ApplicationFiles0"/>
+         <ComponentRef Id="ApplicationFiles1"/>         
          
          <ComponentRef Id="ApplicationShortcuts"/>
          
