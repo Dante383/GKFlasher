@@ -31,8 +31,7 @@
 
          <Directory Id="$(var.Program_Files)">
             <Directory Id="INSTALLDIR" Name="GKFlasher">
-            <Directory Id="FLASHERDIR" Name="flasher">
-            <Directory Id="ASSETSDIR" Name="assets">
+
                <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                   
                     <File Id="ApplicationFile0" Source="dist\gui\_asyncio.pyd"/>
