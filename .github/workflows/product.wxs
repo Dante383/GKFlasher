@@ -34,7 +34,7 @@
                
                <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                   
-                    <File Id="ApplicationFile0" Source="gui\_asyncio.pyd"/>
+                    <File Id="ApplicationFile0" Source="..\gui\_asyncio.pyd"/>
                     <File Id="ApplicationFile1" Source="gui\_bz2.pyd"/>
                     <File Id="ApplicationFile2" Source="gui\_ctypes.pyd"/>
                     <File Id="ApplicationFile3" Source="gui\_decimal.pyd"/>
