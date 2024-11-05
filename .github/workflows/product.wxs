@@ -70,21 +70,20 @@
                             <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd" />
                             <File Id="ApplicationFile37" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
                         </Component>
+                            <Directory Id="PYQT5BINDIR" Name="bin">
+                                <Component Id="ApplicationFiles4" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
+                                    <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
+                                    <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
+                                    <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                </Component>
+                            </Directory>
+                            <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
+                                <Component Id="ApplicationFiles5" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
+                                    <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                                    <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                                </Component>
+                            </Directory>
                     </Directory>
-                        <Directory Id="PYQT5BINDIR" Name="bin">
-                            <Component Id="ApplicationFiles4" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
-                                <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
-                                <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
-                                <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
-                            </Component>
-                        </Directory>
-                        <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
-                            <Component Id="ApplicationFiles5" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
-                                <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
-                                <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
-                            </Component>
-                        </Directory>
-
                 </Directory>
             </Directory>
             <Component Id="ENVS" Guid="34ca2644-718c-4ac0-b5a1-f0b4eed3fbf0">
