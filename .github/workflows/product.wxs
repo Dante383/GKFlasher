@@ -34,34 +34,34 @@
                
                <Component Id="ApplicationFiles" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                   
-                    <File Id="ApplicationFile0" Source="_asyncio.pyd"/>
-                    <File Id="ApplicationFile1" Source="_bz2.pyd"/>
-                    <File Id="ApplicationFile2" Source="_ctypes.pyd"/>
-                    <File Id="ApplicationFile3" Source="_decimal.pyd"/>
-                    <File Id="ApplicationFile4" Source="_elementtree.pyd"/>
-                    <File Id="ApplicationFile5" Source="_hashlib.pyd"/>
-                    <File Id="ApplicationFile6" Source="_lzma.pyd"/>
-                    <File Id="ApplicationFile7" Source="_multiprocessing.pyd"/>
-                    <File Id="ApplicationFile8" Source="_overlapped.pyd"/>
-                    <File Id="ApplicationFile9" Source="_queue.pyd"/>
-                    <File Id="ApplicationFile10" Source="_socket.pyd"/>
-                    <File Id="ApplicationFile11" Source="_ssl.pyd"/>
-                    <File Id="ApplicationFile12" Source="_uuid.pyd"/>
-                    <File Id="ApplicationFile13" Source="_wmi.pyd"/>
-                    <File Id="ApplicationFile14" Source="base_library.zip"/>
+                    <File Id="ApplicationFile0" Source="gui/_asyncio.pyd"/>
+                    <File Id="ApplicationFile1" Source="gui/_bz2.pyd"/>
+                    <File Id="ApplicationFile2" Source="gui/_ctypes.pyd"/>
+                    <File Id="ApplicationFile3" Source="gui/_decimal.pyd"/>
+                    <File Id="ApplicationFile4" Source="gui/_elementtree.pyd"/>
+                    <File Id="ApplicationFile5" Source="gui/_hashlib.pyd"/>
+                    <File Id="ApplicationFile6" Source="gui/_lzma.pyd"/>
+                    <File Id="ApplicationFile7" Source="gui/_multiprocessing.pyd"/>
+                    <File Id="ApplicationFile8" Source="gui/_overlapped.pyd"/>
+                    <File Id="ApplicationFile9" Source="gui/_queue.pyd"/>
+                    <File Id="ApplicationFile10" Source="gui/_socket.pyd"/>
+                    <File Id="ApplicationFile11" Source="gui/_ssl.pyd"/>
+                    <File Id="ApplicationFile12" Source="gui/_uuid.pyd"/>
+                    <File Id="ApplicationFile13" Source="gui/_wmi.pyd"/>
+                    <File Id="ApplicationFile14" Source="gui/base_library.zip"/>
                     <File Id="ApplicationFile15" Source="ecu_definitions.py"/>
                     <File Id="ApplicationFile16" Source="gkflasher.py"/>
                     <File Id="ApplicationFile17" Source="gkflasher.yml"/>
-                    <File Id="ApplicationFile18" Source="gui.exe"/>
-                    <File Id="ApplicationFile19" Source="libffi-8.dll"/>
+                    <File Id="ApplicationFile18" Source="gui/gui.exe"/>
+                    <File Id="ApplicationFile19" Source="gui/libffi-8.dll"/>
                     <File Id="ApplicationFile20" Source="LICENSE"/>
-                    <File Id="ApplicationFile21" Source="pyexpat.pyd"/>
-                    <File Id="ApplicationFile22" Source="python3.dll"/>
-                    <File Id="ApplicationFile23" Source="python312.dll"/>
+                    <File Id="ApplicationFile21" Source="gui/pyexpat.pyd"/>
+                    <File Id="ApplicationFile22" Source="gui/python3.dll"/>
+                    <File Id="ApplicationFile23" Source="gui/python311.dll"/>
                     <File Id="ApplicationFile24" Source="README.md"/>
                     <File Id="ApplicationFile25" Source="requirements.txt"/>
-                    <File Id="ApplicationFile26" Source="select.pyd"/>
-                    <File Id="ApplicationFile27" Source="unicodedata.pyd"/>
+                    <File Id="ApplicationFile26" Source="gui/select.pyd"/>
+                    <File Id="ApplicationFile27" Source="gui/unicodedata.pyd"/>
   
                     <File Id="ApplicationFile28" Source="flasher/checksum.py"/>
                     <File Id="ApplicationFile29" Source="flasher/ecu.py"/>
@@ -70,16 +70,16 @@
                     <File Id="ApplicationFile32" Source="flasher/logging.py"/>
                     <File Id="ApplicationFile33" Source="flasher/memory.py"/>
 
-                    <File Id="ApplicationFile34" Source="PyQt5/QtCore.pyd"/>
-                    <File Id="ApplicationFile35" Source="PyQt5/QtGui.pyd"/>
-                    <File Id="ApplicationFile36" Source="PyQt5/QtWidgets.pyd"/>
-                    <File Id="ApplicationFile37" Source="PyQt5/sip.cp312-win_amd64.pyd"/>
-                    <File Id="ApplicationFile38" Source="PyQt5/Qt5/bin/Qt5Core.dll"/>
-                    <File Id="ApplicationFile39" Source="PyQt5/Qt5/bin/Qt5Gui.dll"/>
-                    <File Id="ApplicationFile40" Source="PyQt5/Qt5/bin/Qt5Widgets.dll"/>
+                    <File Id="ApplicationFile34" Source="gui/PyQt5/QtCore.pyd"/>
+                    <File Id="ApplicationFile35" Source="gui/PyQt5/QtGui.pyd"/>
+                    <File Id="ApplicationFile36" Source="gui/PyQt5/QtWidgets.pyd"/>
+                    <File Id="ApplicationFile37" Source="gui/PyQt5/sip.cp312-win_amd64.pyd"/>
+                    <File Id="ApplicationFile38" Source="gui/PyQt5/Qt5/bin/Qt5Core.dll"/>
+                    <File Id="ApplicationFile39" Source="gui/PyQt5/Qt5/bin/Qt5Gui.dll"/>
+                    <File Id="ApplicationFile40" Source="gui/PyQt5/Qt5/bin/Qt5Widgets.dll"/>
 
-                    <File Id="ApplicationFile41" Source="PyQt5/Qt5/plugins/platforms/qwindows.dll"/>
-                    <File Id="ApplicationFile42" Source="PyQt5/Qt5/plugins/styles/qwindowsvistastyle.dll"/>
+                    <File Id="ApplicationFile41" Source="gui/PyQt5/Qt5/plugins/platforms/qwindows.dll"/>
+                    <File Id="ApplicationFile42" Source="gui/PyQt5/Qt5/plugins/styles/qwindowsvistastyle.dll"/>
                   
                </Component>
                
