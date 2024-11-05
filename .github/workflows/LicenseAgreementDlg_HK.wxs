@@ -19,7 +19,7 @@
             <Control Id="LicenseText" Type="ScrollableText" X="20" Y="60" Width="330" Height="140" Sunken="yes" TabSkip="no">
 
             
-            <Text SourceFile=".github/workflows/LICENSE.rtf" />
+            <Text SourceFile="LICENSE" />
             
 
             </Control>
