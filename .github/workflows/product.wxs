@@ -18,7 +18,7 @@
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="$(var.Program_Files)">
                 <Directory Id="INSTALLDIR" Name="GKFlasher">
-                    <Component Id="ApplicationFiles0" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
+                    <Component Id="ApplicationFilesA" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE9}">
                         <File Id="ApplicationFile0" Source="dist\gui\_asyncio.pyd" />
                         <File Id="ApplicationFile1" Source="dist\gui\_bz2.pyd" />
                         <File Id="ApplicationFile2" Source="dist\gui\_ctypes.pyd" />
@@ -49,7 +49,7 @@
                         <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd" />
                     </Component>
                     <Directory Id="FLASHERDIR" Name="flasher">
-                        <Component Id="ApplicationFiles1" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
+                        <Component Id="ApplicationFilesB" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
                             <File Id="ApplicationFile28" Source="flasher\checksum.py" />
                             <File Id="ApplicationFile29" Source="flasher\ecu.py" />
                             <File Id="ApplicationFile30" Source="flasher\gkflasher.ui" />
@@ -59,34 +59,34 @@
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
-                        <Component Id="ApplicationFiles2" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
-                            <File Id="ApplicationFile43" Source="assets\Siemens_T_Logo.png" />
+                        <Component Id="ApplicationFilesC" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
+                            <File Id="ApplicationFile34" Source="assets\Siemens_T_Logo.png" />
                         </Component>
                     </Directory>
                     <Directory Id="PYQT5DIR" Name="PyQt5">
-                        <Component Id="ApplicationFiles3" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
-                            <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtCore.pyd" />
-                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtGui.pyd" />
-                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtWidgets.pyd" />
-                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
+                        <Component Id="ApplicationFilesD" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
+                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtCore.pyd" />
+                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtGui.pyd" />
+                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\QtWidgets.pyd" />
+                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
                         </Component>
                             <Directory Id="QT5DIR" Name="Qt5">
                                     <Directory Id="PYQT5BINDIR" Name="bin">
-                                        <Component Id="ApplicationFiles4" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE5}">
-                                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
-                                            <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
-                                            <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                        <Component Id="ApplicationFilesE" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE5}">
+                                            <File Id="ApplicationFile39" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
+                                            <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
+                                            <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
                                         <Directory Id="PLATFORMDIR" Name="platforms">
-                                            <Component Id="ApplicationFiles5" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
-                                                <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                                            <Component Id="ApplicationFilesF" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
+                                                <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
                                             </Component>
                                         </Directory>
                                         <Directory Id="STYLESDIR" Name="styles">
-                                            <Component Id="ApplicationFiles6" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE3}">
-                                                <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                                            <Component Id="ApplicationFilesG" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE3}">
+                                                <File Id="ApplicationFile43" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
                                             </Component>
                                         </Directory>
                                     </Directory>
@@ -99,14 +99,14 @@
             </Component>
             <Directory Id="ProgramMenuFolder">
                 <Directory Id="ProgramMenuSubfolder" Name="GKFlasher">
-                    <Component Id="ApplicationShortcuts0" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb3">
+                    <Component Id="ApplicationShortcutsA" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb3">
                         <Shortcut Id="ApplicationShortcut0" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR"></Shortcut>
                         <RegistryValue Root="HKCU" Key="Software\OpenGK\GKFlasher" Name="installed0" Type="integer" Value="1" KeyPath="yes" />
                         <RemoveFolder Id="ProgramMenuSubfolder" On="uninstall" />
                     </Component>
                 </Directory>
             <Directory Id="DesktopFolder" Name="Desktop">
-                <Component Id="ApplicationShortcuts1" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb2">
+                <Component Id="ApplicationShortcutsB" Guid="1a3cb1fa-deeb-4874-a26a-ab5f4d953eb2">
                     <Shortcut Id="ApplicationShortcut1" Name="GKFlasher" Description="ECU Flashing tool for SIMK43/41-based vehicles." Target="[INSTALLDIR]\gui.exe" WorkingDirectory="INSTALLDIR" />
                     <RegistryValue Root="HKCU" Key="Software\OpenGK\GKFlasherDesktop" Name="installed0" Type="integer" Value="1" KeyPath="yes" />
                 </Component>
@@ -118,15 +118,15 @@
         </InstallExecuteSequence>
         <Feature Id="DefaultFeature" Level="1">
             <ComponentRef Id="ENVS" />
-            <ComponentRef Id="ApplicationFiles0" />
-            <ComponentRef Id="ApplicationFiles1" />
-            <ComponentRef Id="ApplicationFiles2" />
-            <ComponentRef Id="ApplicationFiles3" />
-            <ComponentRef Id="ApplicationFiles4" />
-            <ComponentRef Id="ApplicationFiles5" />
-            <ComponentRef Id="ApplicationFiles6" />
-            <ComponentRef Id="ApplicationShortcuts0" />
-            <ComponentRef Id="ApplicationShortcuts1" />
+            <ComponentRef Id="ApplicationFilesA" />
+            <ComponentRef Id="ApplicationFilesB" />
+            <ComponentRef Id="ApplicationFilesC" />
+            <ComponentRef Id="ApplicationFilesD" />
+            <ComponentRef Id="ApplicationFilesE" />
+            <ComponentRef Id="ApplicationFilesF" />
+            <ComponentRef Id="ApplicationFilesG" />
+            <ComponentRef Id="ApplicationShortcutsA" />
+            <ComponentRef Id="ApplicationShortcutsB" />
 
         </Feature>
         <UI>
