@@ -45,7 +45,7 @@ jobs:
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "test"
+          automatic_release_tag: "Windows Install Packages"
           prerelease: true
           title: "Windows Development Build"
           files: |
