@@ -134,8 +134,8 @@
             <UIRef Id="WixUI_HK" />
         </UI>
 
-        <WixVariable Id="WixUIBannerBmp" Value=".github\workflows\WixUIBanner.png"/>	
-        <WixVariable Id="WixUIDialogBmp" Value=".github\workflows\WixUIDialog.png"/>
+        <WixVariable Id="WixUIBannerBmp" Value=".github\workflows\uibanner.png"/>	
+        <WixVariable Id="WixUIDialogBmp" Value=".github\workflows\widialog.png"/>
 
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
         <!-- this should help to propagate env var changes -->
