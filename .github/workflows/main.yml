@@ -49,11 +49,11 @@ jobs:
         with:
           tag_name: 1.0.5 #${{ github.ref }}
           release_name: 1.0.5 #Windows Development Build #${{ github.ref }}
-          overwrite: true
+          #overwrite: true
           body: |
             This installation package contains a precompiled version of GKFlasher for Windows x64.
           draft: false
-          prerelease: true
+          prerelease: false
 
       - name: Upload Release Asset
         id: upload-release-asset
