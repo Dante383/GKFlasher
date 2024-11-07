@@ -17,11 +17,13 @@ jobs:
       - name: Install GKFlasher Requirements
         run: |
           pip install -r requirements.txt
+          
       - name: Install Build Environment Prerequisites
         run: |
-          pip install pyinstaller
-          pip install cryptography
-          pip install pillow
+          pip install pyinstaller==6.11.0
+          pip install cryptography==43.0.3
+          pip install pillow==11.0.0
+          
       - name: Build EXE Package
         run: |
           python -m PyInstaller .github/workflows/gui.spec
