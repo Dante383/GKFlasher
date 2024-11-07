@@ -59,10 +59,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: test_tag #${{ github.ref }}
-          release_name: test_release #${{ github.ref }}
+          release_name: Windows Development Build #${{ github.ref }}
           overwrite: true
           body: |
-            Test Release v1.0.5
+            This installation package contains a precompiled version of GKFlasher for Windows x64.
           draft: false
           prerelease: true
       - name: Upload Release Asset
@@ -73,5 +73,5 @@ jobs:
         with:
           upload_url: ${{steps.create_release.outputs.upload_url}}
           asset_path: ./GKFlasher.msi
-          asset_name: GKFlasher_v1.0.5.exe
+          asset_name: GKFlasher_v1.0.5.msi
           asset_content_type: application/zip
