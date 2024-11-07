@@ -58,8 +58,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: '1.0.5' #${{ github.ref }}
-          release_name: 'Windows Development Build' #${{ github.ref }}
+          tag_name: test #${{ github.ref }}
+          release_name: Windows Development Build #${{ github.ref }}
           overwrite: true
           body: |
             This installation package contains a precompiled version of GKFlasher for Windows x64.
