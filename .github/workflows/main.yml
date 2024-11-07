@@ -41,37 +41,37 @@ jobs:
            candle .github/workflows/license.wxs .github/workflows/ui.wxs .github/workflows/product.wxs
            light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher.msi ./license.wixobj ./ui.wixobj ./product.wixobj
 
-      - name: Upload MSI to Releases
-        uses: "marvinpinto/action-automatic-releases@latest"
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "test"
-          prerelease: true
-          title: "Windows Development Build"
-          files: |
-            GKFlasher.msi
+#      - name: Upload MSI to Releases
+#        uses: "marvinpinto/action-automatic-releases@latest"
+#        with:
+#          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+#          automatic_release_tag: "test"
+#          prerelease: true
+#          title: "Windows Development Build"
+#          files: |
+#            GKFlasher.msi
 
 #
-#      - name: create release
-#        id: create_release
-#        uses: actions/create-release@v1
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          tag_name: ${{ github.event.head_commit.message }}
-#          release_name: ${{ github.event.head_commit.message }}
-#          overwrite: true
-#          body: |
-#            Test Release v1.0.0
-#          draft: false
-#          prerelease: false
-#      - name: Upload Release Asset
-#        id: upload-release-asset
-#        uses: actions/upload-release-asset@v1
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#        with:
-#          upload_url: ${{steps.create_release.outputs.upload_url}}
-#          asset_path: dist/test.exe
-#          asset_name: GKFlasher-GUI-Windows-amd64.exe
-#          asset_content_type: application/zip
+      - name: create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.head_commit.message }}
+          release_name: ${{ github.event.head_commit.message }}
+          overwrite: true
+          body: |
+            Test Release v1.0.5
+          draft: false
+          prerelease: true
+      - name: Upload Release Asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{steps.create_release.outputs.upload_url}}
+          asset_path: ./GKFlasher.msi
+          asset_name: GKFlasher_v1.0.5.exe
+          asset_content_type: application/zip
