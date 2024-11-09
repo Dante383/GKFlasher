@@ -2,7 +2,8 @@ name: Build Workflow
 on:
   push:
 #    branches: master
-
+env:
+    version: "1.0.5"
 jobs:
   build-windows:
     runs-on: windows-2019
@@ -38,15 +39,15 @@ jobs:
 
       - name: Build MSI Package
         run: |
-           candle .github/workflows/license.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="1.0.5"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher.msi ./license.wixobj ./ui.wixobj ./product.wixobj
+           candle .github/workflows/license.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion=$version
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher_$version.msi ./license.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "1.0.5"
+          automatic_release_tag: $version
           prerelease: false
-          title: "1.0.5"
+          title: $version
           files: |
-            GKFlasher.msi
+            GKFlasher_$version.msi
