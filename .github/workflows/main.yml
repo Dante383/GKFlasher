@@ -21,7 +21,7 @@ jobs:
         id: increment
         with:
           name: 'version'
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
   
       - name: Install GKFlasher Requirements
         run: |
