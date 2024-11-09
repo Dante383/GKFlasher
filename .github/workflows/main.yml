@@ -15,6 +15,14 @@ jobs:
         with:
           python-version: '3.12.7'
           architecture: 'x64'
+  
+      - name: Increment Build Number
+        uses: action-pack/increment@v2
+        id: increment
+        with:
+          name: 'version'
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+  
       - name: Install GKFlasher Requirements
         run: |
           pip install -r requirements.txt
