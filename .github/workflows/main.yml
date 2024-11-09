@@ -48,6 +48,6 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: ${{env.version}}
           prerelease: false
-          title: $version
+          title: ${{env.version}}
           files: |
             GKFlasher_${{env.version}}.msi
