@@ -20,7 +20,7 @@ jobs:
         uses: action-pack/increment@v2
         id: increment
         with:
-          name: 'version'
+          name: 'build_version'
           token: ${{ secrets.GITHUB_TOKEN }}
   
       - name: Install GKFlasher Requirements
