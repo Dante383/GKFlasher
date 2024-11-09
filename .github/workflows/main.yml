@@ -38,7 +38,7 @@ jobs:
 
       - name: Build MSI Package
         run: |
-           candle .github/workflows/license.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -version=1.0.5
+           candle .github/workflows/license.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion=1.0.5
            light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher.msi ./license.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
