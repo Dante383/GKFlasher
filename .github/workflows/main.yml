@@ -17,8 +17,8 @@ jobs:
           python-version: '3.12.7'
           architecture: 'x64'
           
-      - name: Install Python
-      - uses: copapow/version-bump-package@v1
+      - name: Bump Version    
+        uses: copapow/version-bump-package@v1
         id: bump
         with:
               major_label: version-major # optional - default = major
