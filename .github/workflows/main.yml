@@ -16,20 +16,7 @@ jobs:
         with:
           python-version: '3.12.7'
           architecture: 'x64'
-          
-      - name: Bump Version    
-        uses: copapow/version-bump-package@v1
-        id: bump
-        with:
-              major_label: version-major # optional - default = major
-              minor_label: version-minor # optional - default = minor
-              patch_label: version-patch # optional - default = patch
-              default_branch: main       # optional = default = master
-              github_token: ${{ secrets.GITHUB_TOKEN }} # required
-      - run: |
-          echo "Previous version: ${{ steps.bump.outputs.previous_version }}"
-          echo "New Version: ${{ steps.bump.outputs.new_version }}"
-  
+
       - name: Install GKFlasher Requirements
         run: |
           pip install -r requirements.txt
