@@ -47,6 +47,6 @@ jobs:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "1.0.5"
           prerelease: false
-          title: "Windows Development Build"
+          title: "1.0.5"
           files: |
             GKFlasher.msi
