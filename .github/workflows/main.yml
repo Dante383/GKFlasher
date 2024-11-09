@@ -9,19 +9,26 @@ jobs:
     runs-on: windows-2019
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
+        
       - name: Install Python
         uses: actions/setup-python@v1
         with:
           python-version: '3.12.7'
           architecture: 'x64'
-  
-      - name: Increment Build Number
-        uses: action-pack/increment@v2
-        id: increment
+          
+      - name: Install Python
+      - uses: copapow/version-bump-package@v1
+        id: bump
         with:
-          name: 'build_version'
-          token: ${{ secrets.GITHUB_TOKEN }}
+              major_label: version-major # optional - default = major
+              minor_label: version-minor # optional - default = minor
+              patch_label: version-patch # optional - default = patch
+              default_branch: main       # optional = default = master
+              github_token: ${{ secrets.GITHUB_TOKEN }} # required
+      - run: |
+          echo "Previous version: ${{ steps.bump.outputs.previous_version }}"
+          echo "New Version: ${{ steps.bump.outputs.new_version }}"
   
       - name: Install GKFlasher Requirements
         run: |
