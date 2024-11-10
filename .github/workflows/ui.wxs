@@ -37,10 +37,11 @@
          Value="LicenseAgreementDlg_HK"
          
          >NOT Installed</Publish>
-         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>
 
          <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="OldVersionDlg">PREVIOUSVERSIONSINSTALLED</Publish>
          <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="SetupTypeDlg">NOT Installed AND NOT PREVIOUSVERSIONSINSTALLED</Publish>
+
+         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>
 
          <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
          <Publish Dialog="LicenseAgreementDlg_HK" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
