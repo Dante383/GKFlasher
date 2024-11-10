@@ -59,8 +59,3 @@ jobs:
           title: ${{env.version}}
           files: |
             GKFlasher_${{env.version}}.msi
-
-      - name: Update Build Version
-        shell: bash
-        run: echo "version=$(cat .github/workflows/build.version)"+1 >> .github/workflows/build.version
-     
