@@ -11,10 +11,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Set variables
-        run: |
-          VER=$(cat build.version)
-          echo "version=$VER" >> $GITHUB_ENV
+      - name: Get version
+        id: vars
+        run: echo "version=$(cat build.version)" >> $GITHUB_OUTPUT
 
       - name: Install Python
         uses: actions/setup-python@v1
