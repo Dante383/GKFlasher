@@ -16,7 +16,7 @@ jobs:
         run: | # echo "version=$(cat .github/workflows/build.version)" >> $GITHUB_ENV
             $buildversion = "1.0."+(5+$($Env:GITHUB_RUN_NUMBER))
             echo $buildversion
-            echo ${{GITHUB_RUN_NUMBER}}
+            echo ${{env.GITHUB_RUN_NUMBER}}
             echo "version=$buildversion" >> $GITHUB_ENV
   
       - name: Install Python
