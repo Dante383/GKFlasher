@@ -11,7 +11,7 @@
         <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
         <Upgrade Id="652E355F-4E96-40FB-8B34-A9593CE42CE9">
-            <UpgradeVersion Minimum="0.0.0" OnlyDetect="yes" Property="NEWERVERSIONDETECTED" />
+            <UpgradeVersion Minimum="$(var.version)" OnlyDetect="yes" Property="NEWERVERSIONDETECTED" />
             <UpgradeVersion Minimum="0.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED" />
         </Upgrade>
         <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
