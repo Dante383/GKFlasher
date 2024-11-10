@@ -40,7 +40,7 @@
 
          <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
          <Publish Dialog="LicenseAgreementDlg_HK" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1" AND NOT PREVIOUSVERSIONINSTALLED</Publish>
-         <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="OldVersionDlg">PREVIOUSVERSIONSINSTALLED</Publish>
+         <Publish Dialog="OldVersionDlg" Control="Back" Event="NewDialog" Value="OldVersionDlg">PREVIOUSVERSIONSINSTALLED</Publish>
 
          <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg_HK">1/Publish>
 
