@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Get Build Version
-        run: echo "version=$(cat .github/workflows/build.version)" >> $GITHUB_OUTPUT
+        run: echo "version=$(cat .github/workflows/build.version)" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v1
