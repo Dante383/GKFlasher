@@ -11,9 +11,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Get version
-        id: vars
-        run: echo "version=$(cat build.version)" >> $GITHUB_OUTPUT
+      - name: Get Build Version
+        run: echo "version=$(cat .github/workflows/build.version)" >> $GITHUB_OUTPUT
 
       - name: Install Python
         uses: actions/setup-python@v1
@@ -57,3 +56,7 @@ jobs:
           title: ${{env.version}}
           files: |
             GKFlasher_${{env.version}}.msi
+
+      - name: Update Build Version
+        run: echo "version=$(cat .github/workflows/build.version)"+1 >> .github/workflows/build.version
+     
