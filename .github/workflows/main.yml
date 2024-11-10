@@ -14,7 +14,7 @@ jobs:
       - name: Get Build Version
         #shell: bash
         run: | # echo "version=$(cat .github/workflows/build.version)" >> $GITHUB_ENV
-            $buildversion = "1.0."$Env:GITHUB_RUN_NUMBER
+            $buildversion = "1.0."${{Env:GITHUB_RUN_NUMBER}}
             echo "Build Number:$buildversion"
             echo "version=$buildversion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
 
