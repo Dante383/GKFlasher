@@ -15,6 +15,9 @@
             <UpgradeVersion Minimum="0.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED" />
         </Upgrade>
         <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
+
+        <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed. If you are sure you want to downgrade, remove the existing installation via Programs and Features." />
+
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="$(var.Program_Files)">
                 <Directory Id="INSTALLDIR" Name="GKFlasher">
