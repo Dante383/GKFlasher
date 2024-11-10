@@ -2,15 +2,20 @@ name: Build Workflow
 on:
   push:
 #    branches: master
-env:
-    version: "1.0.5"
+#env:
+#    version: "1.0.5"
 jobs:
   build-windows:
     runs-on: windows-2019
     steps:
       - name: Checkout
         uses: actions/checkout@v1
-        
+
+      - name: Set variables
+        run: |
+          VER=$(cat build.version)
+          echo "version=$VER" >> $GITHUB_ENV
+
       - name: Install Python
         uses: actions/setup-python@v1
         with:
