@@ -39,10 +39,10 @@
          <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>
 
          <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
-         <Publish Dialog="LicenseAgreementDlg_HK" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
+         <Publish Dialog="LicenseAgreementDlg_HK" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1" AND PREVIOUSVERSIONINSTALLED</Publish>
+         <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="OldVersionDlg">PREVIOUSVERSIONSINSTALLED</Publish>
 
-         <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg_HK">1 AND PREVIOUSVERSIONINSTALLED</Publish>
-         <Publish Dialog="SetupTypeDlg" Control="Back" Event="NewDialog" Value="OldVersionDlg">PREVIOUSVERSIONSINSTALLED</Publish>
+         <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg_HK">1</Publish>
 
          <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
          <Publish Dialog="InstallDirDlg" Control="Next" Event="DoAction" Value="WixUIValidatePath" Order="2">NOT WIXUI_DONTVALIDATEPATH</Publish>
