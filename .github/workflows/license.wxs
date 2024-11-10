@@ -3,6 +3,18 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
    <Fragment>
       <UI>
+       <Dialog Id="OldVersionDlg" Width="260" Height="85" Title="[ProductName] Setup" NoMinimize="yes">
+              <Control Id="No" Type="PushButton" X="132" Y="57" Width="56" Height="17"
+                Default="yes" Cancel="yes" Text="No">
+                <Publish Event="EndDialog" Value="Exit">1</Publish>
+              </Control>
+              <Control Id="Yes" Type="PushButton" X="72" Y="57" Width="56" Height="17" Text="Yes">
+                <Publish Event="EndDialog" Value="Return">1</Publish>
+              </Control>
+              <Control Id="Text" Type="Text" X="48" Y="15" Width="194" Height="30">
+                <Text>A previous version of [ProductName] is currently installed. By continuing the installation this version will be uninstalled. Do you want to continue?</Text>
+              </Control>
+      </Dialog>
          <Dialog Id="LicenseAgreementDlg_HK" Width="370" Height="270" Title="!(loc.LicenseAgreementDlg_Title)">
             <Control Id="LicenseAcceptedCheckBox" Type="CheckBox" X="20" Y="207" Width="330" Height="18" CheckBoxValue="1" Property="LicenseAccepted"
             Text="!(loc.LicenseAgreementDlgLicenseAcceptedCheckBox)" />
