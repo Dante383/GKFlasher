@@ -88,6 +88,11 @@
                                                 <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
                                             </Component>
                                         </Directory>
+                                        <Directory Id="IMAGEFORMATSDIR" Name="imageformats">
+                                            <Component Id="ApplicationFilesH" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE2}">
+                                                <File Id="ApplicationFile43" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qico.dll" />
+                                            </Component>
+                                        </Directory>
                                     </Directory>
                             </Directory>
                     </Directory>
@@ -124,6 +129,7 @@
             <ComponentRef Id="ApplicationFilesE" />
             <ComponentRef Id="ApplicationFilesF" />
             <ComponentRef Id="ApplicationFilesG" />
+            <ComponentRef Id="ApplicationFilesH" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
 
