@@ -15,7 +15,7 @@
                 <Text>A previous version of [ProductName] is currently installed. By continuing the installation this version will be uninstalled. Do you want to continue?</Text>
               </Control>
       </Dialog>
-         <Dialog Id="LicenseAgreementDlg" Width="370" Height="270" Title="!(loc.LicenseAgreementDlg_Title)">
+         <Dialog Id="LicenseAgreementDlg_GK" Width="370" Height="270" Title="!(loc.LicenseAgreementDlg_Title)">
             <Control Id="LicenseAcceptedCheckBox" Type="CheckBox" X="20" Y="207" Width="330" Height="18" CheckBoxValue="1" Property="LicenseAccepted"
             Text="!(loc.LicenseAgreementDlgLicenseAcceptedCheckBox)" />
             <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="!(loc.WixUIBack)" />
