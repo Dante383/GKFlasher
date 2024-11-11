@@ -12,6 +12,7 @@
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
         <Upgrade Id="685FAA79-B7F2-4951-BA4C-F0887B631FC5">
             <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
+            <UpgradeVersion Minimum="$(var.version)" OnlyDetect="yes" Property="NEWERVERSIONDETECTED" />
         </Upgrade>
         <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
         <Directory Id="TARGETDIR" Name="SourceDir">
