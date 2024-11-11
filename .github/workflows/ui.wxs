@@ -26,7 +26,7 @@
          <DialogRef Id="LicenseAgreementDlg_HK"/>
          <DialogRef Id="OldVersionDlg" />
 
-         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="OldVersionDlg">PREVIOUSFOUND Order="1"</Publish>
+         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="OldVersionDlg" Order="1">PREVIOUSFOUND</Publish>
 
          <Publish Dialog="BrowseDlg" Control="OK" Event="DoAction" Value="WixUIValidatePath" Order="4">1</Publish>
          <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="3"><![CDATA[WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
