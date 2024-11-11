@@ -15,7 +15,7 @@
   </property>
   <property name="windowIcon">
    <iconset>
-    <normaloff>../assets/Siemens_T_Logo.png</normaloff>../assets/Siemens_T_Logo.png</iconset>
+    <normaloff>../assets/Siemens_T_Logo.ico</normaloff>../assets/Siemens_T_Logo.ico</iconset>
   </property>
   <widget class="QTabWidget" name="tabWidget">
    <property name="geometry">
