@@ -139,8 +139,10 @@
         <!-- this should help to propagate env var changes -->
         <CustomActionRef Id="WixBroadcastEnvironmentChange" />
 
-        <Icon Id="Siemens_T_Logo.png" SourceFile="assets\Siemens_T_Logo.png"/>
+        <Icon Id="Siemens_T_Logo.ico" SourceFile="assets\Siemens_T_Logo.ico"/>
         <Property Id="ARPPRODUCTICON" Value="Siemens_T_Logo.png" />
+        <Property Id="ARPHELPLINK" Value="https://opengk.org" />
+        <Property Id='ARPNOMODIFY'>1</Property>
 
     </Product>
 </Wix>
