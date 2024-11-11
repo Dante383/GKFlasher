@@ -12,7 +12,7 @@
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
 
 
-        <Property Id="InstancesCount" Value="5"/>
+        <Property Id="InstancesCount" Value="6"/>
         <InstanceTransforms Property="INSTANCE_ID">
           <Instance Id="Instance_0" ProductCode="*" UpgradeCode="07F55F38-87FB-49FA-AA51-41D92E606197"/>
           <Instance Id="Instance_1" ProductCode="*" UpgradeCode="BF70ACBF-2ADB-4B9C-98BE-C33293F86635"/>
