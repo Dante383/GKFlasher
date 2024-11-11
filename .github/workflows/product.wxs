@@ -138,5 +138,9 @@
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
         <!-- this should help to propagate env var changes -->
         <CustomActionRef Id="WixBroadcastEnvironmentChange" />
+
+        <Icon Id="Siemens_T_Logo.png" SourceFile="assets\Siemens_T_Logo.png"/>
+        <Property Id="ARPPRODUCTICON" Value="Siemens_T_Logo.png" />
+
     </Product>
 </Wix>
