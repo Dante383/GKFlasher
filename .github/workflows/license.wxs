@@ -12,7 +12,7 @@
                 <Publish Event="EndDialog" Value="Return">1</Publish>
               </Control>
               <Control Id="Text" Type="Text" X="48" Y="15" Width="194" Height="30">
-                <Text>A previous version of [ProductName] is currently installed. By continuing the installation this version will be uninstalled. Do you want to continue?</Text>
+                <Text>A previous version of [ProductName] is currently installed. By continuing the installation the old version will be uninstalled. Do you want to continue?</Text>
               </Control>
       </Dialog>
          <Dialog Id="LicenseAgreementDlg_GK" Width="370" Height="270" Title="!(loc.LicenseAgreementDlg_Title)">
@@ -30,10 +30,8 @@
             <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no" Text="!(loc.LicenseAgreementDlgBannerBitmap)" />
             <Control Id="LicenseText" Type="ScrollableText" X="20" Y="60" Width="330" Height="140" Sunken="yes" TabSkip="no">
 
-            
             <Text SourceFile=".github/workflows/license.rtf" />
             
-
             </Control>
             <Control Id="Print" Type="PushButton" X="112" Y="243" Width="56" Height="17" Text="!(loc.WixUIPrint)">
                <Publish Event="DoAction" Value="WixUIPrintEula">1</Publish>
