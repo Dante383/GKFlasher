@@ -42,7 +42,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['..\\..\\assets\\Siemens_T_Logo.png'],
+    icon=['..\\..\\assets\\Siemens_T_Logo.ico'],
     contents_directory='.',
 )
 coll = COLLECT(
