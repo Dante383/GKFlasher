@@ -43,19 +43,17 @@
                         <File Id="ApplicationFile21" Source="dist\gui\pyexpat.pyd" />
                         <File Id="ApplicationFile22" Source="dist\gui\python3.dll" />
                         <File Id="ApplicationFile23" Source="dist\gui\python312.dll" />
-                        <File Id="ApplicationFile24" Source="README.md" />
-                        <File Id="ApplicationFile25" Source="requirements.txt" />
-                        <File Id="ApplicationFile26" Source="dist\gui\select.pyd" />
-                        <File Id="ApplicationFile27" Source="dist\gui\unicodedata.pyd" />
+                        <File Id="ApplicationFile24" Source="dist\gui\select.pyd" />
+                        <File Id="ApplicationFile25" Source="dist\gui\unicodedata.pyd" />
                     </Component>
                     <Directory Id="FLASHERDIR" Name="flasher">
                         <Component Id="ApplicationFilesB" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
-                            <File Id="ApplicationFile28" Source="flasher\checksum.py" />
-                            <File Id="ApplicationFile29" Source="flasher\ecu.py" />
-                            <File Id="ApplicationFile30" Source="flasher\gkflasher.ui" />
-                            <File Id="ApplicationFile31" Source="flasher\immo.py" />
-                            <File Id="ApplicationFile32" Source="flasher\logging.py" />
-                            <File Id="ApplicationFile33" Source="flasher\memory.py" />
+                            <File Id="ApplicationFile26" Source="flasher\checksum.py" />
+                            <File Id="ApplicationFile27" Source="flasher\ecu.py" />
+                            <File Id="ApplicationFile28" Source="flasher\gkflasher.ui" />
+                            <File Id="ApplicationFile29" Source="flasher\immo.py" />
+                            <File Id="ApplicationFile30" Source="flasher\logging.py" />
+                            <File Id="ApplicationFile31" Source="flasher\memory.py" />
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
@@ -65,28 +63,28 @@
                     </Directory>
                     <Directory Id="PYQT5DIR" Name="PyQt5">
                         <Component Id="ApplicationFilesD" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
-                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\QtCore.pyd" />
-                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\QtGui.pyd" />
-                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\QtWidgets.pyd" />
-                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
+                            <File Id="ApplicationFile32" Source="dist\gui\PyQt5\QtCore.pyd" />
+                            <File Id="ApplicationFile33" Source="dist\gui\PyQt5\QtGui.pyd" />
+                            <File Id="ApplicationFile34" Source="dist\gui\PyQt5\QtWidgets.pyd" />
+                            <File Id="ApplicationFile35" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
                         </Component>
                             <Directory Id="QT5DIR" Name="Qt5">
                                     <Directory Id="PYQT5BINDIR" Name="bin">
                                         <Component Id="ApplicationFilesE" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE5}">
-                                            <File Id="ApplicationFile39" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
-                                            <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
-                                            <File Id="ApplicationFile41" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                            <File Id="ApplicationFile36" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
+                                            <File Id="ApplicationFile37" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
+                                            <File Id="ApplicationFile38" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
                                         <Directory Id="PLATFORMDIR" Name="platforms">
                                             <Component Id="ApplicationFilesF" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
-                                                <File Id="ApplicationFile42" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                                                <File Id="ApplicationFile39" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
                                             </Component>
                                         </Directory>
                                         <Directory Id="STYLESDIR" Name="styles">
                                             <Component Id="ApplicationFilesG" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE3}">
-                                                <File Id="ApplicationFile43" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                                                <File Id="ApplicationFile40" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
                                             </Component>
                                         </Directory>
                                     </Directory>
