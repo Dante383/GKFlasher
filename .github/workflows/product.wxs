@@ -130,7 +130,7 @@
         </Feature>
         <UI>
             <!-- Define the installer UI -->
-            <UIRef Id="WixUI_HK" />
+            <UIRef Id="WixUI" />
         </UI>
 
         <WixVariable Id="WixUIBannerBmp" Value=".github\workflows\uibanner.png"/>	
