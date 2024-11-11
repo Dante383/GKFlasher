@@ -2,7 +2,7 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
    <Fragment>
 
-      <UI Id="WixUI_HK">
+      <UI Id="WixUI">
          <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
          <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
          <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
@@ -23,31 +23,28 @@
 
          <!--   Make sure to include custom dialogs in the installer database via a DialogRef command,
                especially if they are not included explicitly in the publish chain below -->
-         <DialogRef Id="LicenseAgreementDlg_HK"/>
+         <DialogRef Id="LicenseAgreementDlg"/>
          <DialogRef Id="OldVersionDlg" />
 
          <Publish Dialog="BrowseDlg" Control="OK" Event="DoAction" Value="WixUIValidatePath" Order="3">1</Publish>
-         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="OldVersionDlg" Order="4">PREVIOUSFOUND</Publish>
          <Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="4"><![CDATA[WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
 
          <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999">1</Publish>
 
-         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog"
-         
-         Value="LicenseAgreementDlg_HK"
-         
-         >NOT Installed</Publish>
+         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg">NOT Installed</Publish>
          <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg">Installed AND PATCH</Publish>
 
-         <Publish Dialog="LicenseAgreementDlg_HK" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
-         <Publish Dialog="LicenseAgreementDlg_HK" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
+         <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+         <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg">LicenseAccepted = "1"</Publish>
 
-         <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg_HK">1</Publish>
+         <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg">1</Publish>
 
          <Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
          <Publish Dialog="InstallDirDlg" Control="Next" Event="DoAction" Value="WixUIValidatePath" Order="2">NOT WIXUI_DONTVALIDATEPATH</Publish>
          <Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg" Order="3"><![CDATA[NOT WIXUI_DONTVALIDATEPATH AND WIXUI_INSTALLDIR_VALID<>"1"]]></Publish>
-         <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="5">WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"</Publish>
+         <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="4">WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID="1"</Publish>
+
+         <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="OldVersionDlg" Order="5">PREVIOUSFOUND</Publish>
 
          <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1">1</Publish>
          <Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2">1</Publish>
