@@ -46,7 +46,7 @@ jobs:
       - name: Build MSI Package
         run: |
            candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{env.version}}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher_${{env.version}}.msi ./license.wixobj ./ui.wixobj ./product.wixobj
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher_${{env.version}}.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
