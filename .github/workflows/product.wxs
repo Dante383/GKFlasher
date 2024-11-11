@@ -7,36 +7,10 @@
 <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
 <?endif?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product Id="*" UpgradeCode="BDD1EC38-EC00-4528-85D9-3913A90C72F7" Name="GKFlasher" Version="$(var.version)" Manufacturer="OpenGK" Language="1033">
+    <Product Id="*" UpgradeCode="685FAA79-B7F2-4951-BA4C-F0887B631FC5" Name="GKFlasher" Version="$(var.version)" Manufacturer="OpenGK" Language="1033">
         <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package" InstallScope="perMachine" />
         <Media Id="1" Cabinet="product.cab" EmbedCab="yes" />
-
-
-        <Property Id="InstancesCount" Value="6"/>
-        <InstanceTransforms Property="InstancesCount">
-          <Instance Id="Instance_0" ProductCode="*" UpgradeCode="07F55F38-87FB-49FA-AA51-41D92E606197"/>
-          <Instance Id="Instance_1" ProductCode="*" UpgradeCode="BF70ACBF-2ADB-4B9C-98BE-C33293F86635"/>
-          <Instance Id="Instance_2" ProductCode="*" UpgradeCode="49C024FB-85CB-479C-8E57-88ABFEC423B4"/>
-          <Instance Id="Instance_3" ProductCode="*" UpgradeCode="9C10E76D-F32A-42EB-A74A-CDD80D0DA3A8"/>
-          <Instance Id="Instance_4" ProductCode="*" UpgradeCode="652E355F-4E96-40FB-8B34-A9593CE42CE9"/>
-          <Instance Id="Instance_5" ProductCode="*" UpgradeCode="BDD1EC38-EC00-4528-85D9-3913A90C72F7"/>
-        </InstanceTransforms>
-        <Upgrade Id="652E355F-4E96-40FB-8B34-A9593CE42CE9">
-            <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
-        </Upgrade>
-        <Upgrade Id="07F55F38-87FB-49FA-AA51-41D92E606197">
-            <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
-        </Upgrade>
-        <Upgrade Id="BF70ACBF-2ADB-4B9C-98BE-C33293F86635">
-            <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
-        </Upgrade>
-        <Upgrade Id="49C024FB-85CB-479C-8E57-88ABFEC423B4">
-            <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
-        </Upgrade>
-        <Upgrade Id="9C10E76D-F32A-42EB-A74A-CDD80D0DA3A8">
-            <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
-        </Upgrade>
-        <Upgrade Id="BDD1EC38-EC00-4528-85D9-3913A90C72F7">
+        <Upgrade Id="685FAA79-B7F2-4951-BA4C-F0887B631FC5">
             <UpgradeVersion Minimum="1.0.0" Maximum="$(var.version)" IncludeMinimum="yes" IncludeMaximum="no" Property="PREVIOUSFOUND" OnlyDetect="no" />
         </Upgrade>
         <Condition Message="A newer version of this software is already installed.">NOT NEWERVERSIONDETECTED</Condition>
