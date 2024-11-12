@@ -2,7 +2,6 @@ name: Build Workflow
 on:
   push:
 #    branches: master
-#    bumping upto 1.0.3
 jobs:
   build-windows:
     runs-on: windows-2019
