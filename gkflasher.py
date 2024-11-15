@@ -102,9 +102,9 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 	ecu.bus.execute(kwp.commands.ECUReset(kwp.enums.ResetMode.POWER_ON_RESET)).get_data()
 	ecu.bus.shutdown()
 	
-def cli_clear_adaptive_values (ecu):
+def cli_clear_adaptive_values (ecu, desired_baudrate):
 	print('[*] Clearing adaptive values.. ', end='')
-	ecu.clear_adaptive_values()
+	ecu.clear_adaptive_values(desired_baudrate)
 	print('Done!')
 
 def load_config (config_filename):
@@ -196,12 +196,9 @@ def main(bus, args):
 
 	bus.init(kwp.commands.StartCommunication(), keepalive_payload=kwp.commands.TesterPresent(kwp.enums.ResponseType.REQUIRED), keepalive_timeout=1.5)
 
-	if (args.immo):
-		return cli_immo(bus)
-
 	if args.desired_baudrate:
 		try:
-			desired_baudrate = BAUDRATES[args.desired_baudrate]
+			desired_baudrate = args.desired_baudrate
 		except KeyError:
 			print('[!] Selected baudrate is invalid! Available baudrates:')
 			for key, baudrate in BAUDRATES.items():
@@ -214,7 +211,11 @@ def main(bus, args):
 	else:
 		print('[*] Trying to start diagnostic session')
 		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+		desired_baudrate = None
 	bus.set_timeout(12)
+
+	if (args.immo):
+		return cli_immo(bus, desired_baudrate)
 
 	print('[*] Set timing parameters to maximum')
 	try:
@@ -258,8 +259,9 @@ def main(bus, args):
 			print('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			print('            [HEX]: {}'.format(value_hex))
 			print('            [ASCII]: {}'.format(value_ascii))
+			print('')
 
-		cli_immo_info(bus)
+		cli_immo_info(bus, desired_baudrate)
 
 	if (args.read):
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
@@ -278,7 +280,7 @@ def main(bus, args):
 		cli_flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
 
 	if (args.clear_adaptive_values):
-		cli_clear_adaptive_values(ecu)
+		cli_clear_adaptive_values(ecu, desired_baudrate)
 
 	if (args.logger):
 		logger(ecu)
