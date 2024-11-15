@@ -421,7 +421,8 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('            [HEX]: {}'.format(value_hex))
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		desired_baudrate = self.baudratesBox.currentData()
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except (KWPNegativeResponseException):
