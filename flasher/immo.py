@@ -12,8 +12,11 @@ immo_status = {
 	6: 'Invalid key'
 }
 
-def cli_immo_info (bus):
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+def cli_immo_info (bus, immo_baudrate):
+	if immo_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, immo_baudrate))
 	try:
 		immo_data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 	except (kwp.KWPNegativeResponseException):
@@ -67,9 +70,9 @@ def cli_limp_home (bus):
 		if (data[1] == 1):
 			print('[*] limp home activated!')
 
-def cli_immo_reset (bus):
+def cli_immo_reset (bus, immo_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, immo_baudrate))
 
 	print('[*] starting routine 0x15')
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
