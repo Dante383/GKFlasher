@@ -420,9 +420,13 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
 			log_callback.emit('            [HEX]: {}'.format(value_hex))
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
+			log_callback.emit('')
 
-		desired_baudrate = self.baudratesBox.currentData()
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+		if self.baudratesBox.currentData() == -1:
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			desired_baudrate = self.baudratesBox.currentData()
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except (KWPNegativeResponseException):
