@@ -12,8 +12,11 @@ immo_status = {
 	6: 'Invalid key'
 }
 
-def cli_immo_info (bus):
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+def cli_immo_info (bus, desired_baudrate):
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
 		immo_data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 	except (kwp.KWPNegativeResponseException):
@@ -35,10 +38,12 @@ def cli_immo_info (bus):
 	if (len(immo_data) > 4):
 		print('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
 
-def cli_limp_home (bus):
+def cli_limp_home (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
-
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
 		data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
 	except (kwp.KWPNegativeResponseException):
@@ -67,9 +72,12 @@ def cli_limp_home (bus):
 		if (data[1] == 1):
 			print('[*] limp home activated!')
 
-def cli_immo_reset (bus):
+def cli_immo_reset (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x15')
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
@@ -94,9 +102,12 @@ def cli_immo_reset (bus):
 
 	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
 
-def cli_smartra_neutralize (bus):
+def cli_smartra_neutralize (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x25')
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
@@ -121,9 +132,12 @@ def cli_smartra_neutralize (bus):
 
 	print('[*] SMARTRA neutralized! Turn ignition off for 5 seconds for changes to take effect.')
 
-def cli_immo_teach_keys (bus):
+def cli_immo_teach_keys (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x14')
 	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
@@ -146,7 +160,7 @@ def cli_immo_teach_keys (bus):
 			break
 	print('[*] Done! Turn off ignition for 10 seconds for changes to take effect')
 
-def cli_read_vin (bus):
+def cli_read_vin (bus, desired_baudrate):
 	cmd = kwp.KWPCommand()
 	cmd.command = 0x09 # undocumented service
 	cmd.data = [0x02]
@@ -160,9 +174,13 @@ def cli_read_vin (bus):
 	print(' '.join([hex(x) for x in vin]))
 	print(''.join([chr(x) for x in vin]))
 
-def cli_write_vin (bus):
+def cli_write_vin (bus, desired_baudrate):
 	print('[*] starting flash reprogramming session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+
 	enable_security_access(bus)
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
@@ -174,9 +192,12 @@ def cli_write_vin (bus):
 		return
 	print('[*] VIN changed! Turn ignition off for 5 seconds for changes to take effect.')
 
-def cli_limp_home_teach (bus):
+def cli_limp_home_teach (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
-	bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	if desired_baudrate is None:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	status = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 	print('[*] Current ECU status: {}'.format(immo_status[status]))
@@ -211,7 +232,7 @@ immo_menus = [
 	['Write VIN', cli_write_vin]
 ]
 
-def cli_immo (bus):
+def cli_immo (bus, desired_baudrate):
 	for key, menu in enumerate(immo_menus):
 		print('    [{}] {}'.format(key, menu[0]))
 	menu = input('Select immo menu: ')
@@ -219,6 +240,6 @@ def cli_immo (bus):
 		handler = immo_menus[int(menu)][1]
 	except (KeyError, IndexError, ValueError):
 		print('[!] Invalid choice! Try again')
-		return cli_immo(bus)
-	handler(bus)
+		return cli_immo(bus, desired_baudrate)
+	handler(bus, desired_baudrate)
 	bus.shutdown()
