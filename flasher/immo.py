@@ -100,7 +100,7 @@ def cli_immo_reset (bus, desired_baudrate):
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
 		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
-	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
+	print('[*] ECU restarted! Turn ignition off for 10 seconds for changes to take effect')
 
 def cli_smartra_neutralize (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
@@ -147,7 +147,6 @@ def cli_immo_teach_keys (bus, desired_baudrate):
 	key_a = (key >> 16) & 0xFF
 	key_b = (key >> 8) & 0xFF
 	key_c = key & 0xFF
-
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
 	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
