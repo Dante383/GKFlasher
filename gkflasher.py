@@ -105,7 +105,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 def cli_clear_adaptive_values (ecu, desired_baudrate):
 	print('[*] Clearing adaptive values.. ', end='')
 	ecu.clear_adaptive_values(desired_baudrate)
-	print('Done!')
+	print('Done! Turn off ignition for 10 seconds to apply changes.')
 
 def load_config (config_filename):
 	return yaml.safe_load(open('gkflasher.yml'))
