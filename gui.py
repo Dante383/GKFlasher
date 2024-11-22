@@ -85,10 +85,27 @@ class Worker(QRunnable):
             self.signals.finished.emit()  # Done
 
 class Ui(QtWidgets.QMainWindow):
+	request_pin_signal1 = pyqtSignal(object, object)  # Signal to request PIN from the main thread. # Pass `log_callback` and `ecu`  
+	request_pin_signal2 = pyqtSignal(object, object)  # Signal to request PIN from the main thread. # Pass `log_callback` and `ecu`  
+	request_pin_signal3 = pyqtSignal(object, object)  # For requesting the current password
+	request_pin_signal4 = pyqtSignal(object, object)  # For requesting the PIN
+	request_pin_signal5 = pyqtSignal(object, object)  # For requesting the PIN
+	request_new_password_signal = pyqtSignal(object, object, str)  # For requesting the new password. Three arguments: log_callback, ecu, current_password
+	request_vin_signal = pyqtSignal(object, object)  # For requesting the VIN
+
 	def __init__(self):
 		super(Ui, self).__init__()
 		self.load_ui()
 		self.previous_baudrate = False
+
+		# Connect the signals
+		self.request_pin_signal1.connect(self.request_pin_from_user1)
+		self.request_pin_signal2.connect(self.request_pin_from_user2)
+		self.request_pin_signal3.connect(self.request_pin_from_user3)
+		self.request_pin_signal4.connect(self.request_pin_from_user4)
+		self.request_pin_signal5.connect(self.request_pin_from_user5)
+		self.request_new_password_signal.connect(self.request_new_password_from_user)
+		self.request_vin_signal.connect(self.request_vin_from_user)
 
 		# Change the working directory
 		if not os.path.exists(home):
@@ -127,6 +144,15 @@ class Ui(QtWidgets.QMainWindow):
 		self.readingFileBtn.clicked.connect(self.handler_select_file_reading)
 		self.flashingFileBtn.clicked.connect(self.handler_select_file_flashing)
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
+
+		self.immoInfoBtn.clicked.connect(lambda: self.click_handler(self.display_immo_information))
+		self.limpHomeModeBtn.clicked.connect(lambda: self.click_handler(self.limp_home))
+		self.limpHomePasswordChangeBtn.clicked.connect(lambda: self.click_handler(self.limp_home_teach))
+		self.immoResetBtn.clicked.connect(lambda: self.click_handler(self.immo_reset))
+		self.smartraNeturalizeBtn.clicked.connect(lambda: self.click_handler(self.smartra_neutralize))
+		self.teachKeysBtn.clicked.connect(lambda: self.click_handler(self.teach_keys))
+		self.readVinBtn.clicked.connect(lambda: self.click_handler(self.read_vin))
+		self.writeVinBtn.clicked.connect(lambda: self.click_handler(self.write_vin))
 
 	def click_handler (self, callback):
 		worker = Worker(callback)
@@ -411,7 +437,7 @@ class Ui(QtWidgets.QMainWindow):
 		if (ecu == False):
 			return
 
-		log_callback.emit('[*] Querying additional parameters,  this might take few seconds..')
+		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
 			value_hex = ' '.join([hex(x) for x in parameter['value']])
@@ -584,8 +610,527 @@ class Ui(QtWidgets.QMainWindow):
 
 		log_callback.emit('[*] Clearing adaptive values.. ')
 		ecu.clear_adaptive_values(self.desired_baudrate)
-		log_callback.emit('Done!')
+		log_callback.emit('Done! Turn off ignition for 10 seconds to apply changes.')
 		self.disconnect_ecu(ecu)
+
+	def display_immo_information (self, progress_callback, log_callback):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if (ecu == False):
+			return
+		
+		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
+
+		if self.baudratesBox.currentData() == -1:
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			desired_baudrate = self.baudratesBox.currentData()
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+		try:
+			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
+		except (KWPNegativeResponseException):
+			log_callback.emit('[*] Immo seems to be disabled')
+			return self.disconnect_ecu(ecu)
+
+		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
+		ecu_status = immo_status[immo_data[2]]
+		key_status = immo_status[immo_data[3]]
+	
+		log_callback.emit('[*] Immo ECU status: {}'.format(ecu_status))
+		log_callback.emit('[*] Immo key status: {}'.format(key_status))
+		if (len(immo_data) > 4):
+			log_callback.emit('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
+		self.disconnect_ecu(ecu)
+
+
+	def immo_reset(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly.')
+			return
+		if ecu is False:
+			return
+
+		# Start the default diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		# Start the BEFORE_IMMO_RESET routine
+		log_callback.emit('[*] Checking Immobilizer status...')
+		try:
+			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
+			#log_callback.emit(f'[*] BEFORE_IMMO_RESET response: {" ".join(hex(x) for x in data)}')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Unable to validate immobilizer status. The immobilizer is either disabled or disconnected.')
+			return self.disconnect_ecu(ecu)
+
+		# Check if the system is locked
+		if len(data) > 1 and data[1] == 4:
+			log_callback.emit('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+			return self.disconnect_ecu(ecu)
+
+		# Request the PIN asynchronously
+		self.request_pin_signal1.emit(log_callback, ecu)
+
+	def request_pin_from_user1(self, log_callback, ecu):
+		# Open the PIN dialog on the main thread
+		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter PIN', 'Enter 6-digit immobilizer PIN:')
+		if ok and pin.isdigit() and len(pin) == 6:
+			self.continue_immo_reset(pin, log_callback, ecu)  # Continue with the reset process
+		else:
+			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
+			self.log('[!] Invalid PIN or operation cancelled.')
+		return self.disconnect_ecu(ecu)	
+
+	def continue_immo_reset(self, pin, log_callback, ecu):
+		pin = int('0x' + pin, 0)  # Treat the input as a hexadecimal string
+		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
+		
+		#log_callback.emit('[*] Sending PIN to the ECU...')
+		self.log('[*] Sending PIN to the ECU...')
+		try:
+			response = ecu.bus.execute(
+				StartRoutineByLocalIdentifier(
+					Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+				)
+			).get_data()
+			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
+			#self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
+		except KWPNegativeResponseException:
+			#log_callback.emit('[!] Invalid PIN. Immobilizer reset failed.')
+			self.log('[!] Invalid PIN. Immobilizer reset failed.')
+			return
+
+		# Confirm the immobilizer reset
+		if QMessageBox.question(self, 'Confirm Reset', 'Do you want to proceed with the immobilizer reset?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+			try:
+				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data()
+				#log_callback.emit(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
+				#log_callback.emit('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
+				#self.log(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
+				self.log('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
+			except KWPNegativeResponseException:
+				#log_callback.emit('[!] Immobilizer reset confirmation failed.')
+				self.log('[!] Immobilizer reset confirmation failed.')
+
+		else:
+			#log_callback.emit('[*] Immobilizer reset cancelled by user.')
+			self.log('[*] Immobilizer reset cancelled by user.')
+
+
+	def limp_home(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+		
+		# Start the diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		# Check the ECU status
+		try:
+			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
+			if len(data) > 1 and data[1] == 4:
+				log_callback.emit('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+				return self.disconnect_ecu(ecu)
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Error: Immo is inactive or limp home pin is not set.')
+			return self.disconnect_ecu(ecu)
+
+		# Save ECU context and proceed
+		self._ecu = ecu
+		self._log_callback = log_callback
+
+		# Request the password asynchronously
+		self.request_pin_signal4.emit(log_callback, ecu)
+
+	def request_pin_from_user4(self, log_callback, ecu):
+		# Open a dialog for the user to enter the PIN
+		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter Password', 'Enter 4-digit password:')
+		if ok and pin.isdigit() and len(pin) == 4:
+			self.continue_limp_home(pin, log_callback, ecu)  # Proceed to limp home process
+		else:
+			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
+			self.log('[!] Invalid PIN or operation cancelled.')
+		return self.disconnect_ecu(ecu)
+
+	def continue_limp_home(self, pin, log_callback, ecu):
+		# Parse and split the PIN
+		try:
+			pin = int('0x' + pin, 0)
+			pin_a = (pin >> 8)
+			pin_b = (pin & 0xFF)
+		except ValueError:
+			#log_callback.emit('[!] Invalid PIN format.')
+			self.log('[!] Invalid PIN format.')
+			return
+
+		try:
+			#log_callback.emit('[*] Activating limp home mode...')
+			self.log('[*] Activating limp home mode...')
+			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, pin_a, pin_b)).get_data()
+			#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
+			self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
+			
+			if len(response) > 1 and response[1] == 1:
+				#log_callback.emit('[*] Limp home mode activated successfully.')
+				self.log('[*] Limp home mode activated successfully.')
+			else:
+				#log_callback.emit('[!] Activation failed. Ensure the PIN is correct.')
+				self.log('[!] Activation failed. Ensure the PIN is correct.')
+		except KWPNegativeResponseException:
+			#log_callback.emit('[!] Invalid PIN. Activation failed.')
+			self.log('[!] Invalid PIN. Activation failed.')
+
+	def smartra_neutralize(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+		
+		# Start the diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		log_callback.emit('[*] Starting SMARTRA neutralization...')
+		# Check the ECU status with BEFORE_SMARTRA_NEUTRALIZE
+		try:
+			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
+			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in data)}')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine.')
+			return self.disconnect_ecu(ecu)
+
+		# Check if the system is locked
+		if len(data) > 1 and data[1] == 4:
+			log_callback.emit('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
+			return self.disconnect_ecu(ecu)
+
+		# Save ECU context and proceed
+		self._ecu = ecu
+		self._log_callback = log_callback
+
+		# Request the password asynchronously
+		self.request_pin_signal5.emit(log_callback, ecu)
+
+	def request_pin_from_user5(self, log_callback, ecu):
+		# Open a dialog for the user to enter the PIN
+		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter Password', 'Enter 6-digit SMARTRA password:')
+		if ok and pin.isdigit() and len(pin) == 6:
+			self.continue_smartra_neutralize(pin, log_callback, ecu)  # Proceed with SMARTRA neutralization
+		else:
+			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
+			self.log('[!] Invalid PIN or operation cancelled.')	
+		return self.disconnect_ecu(ecu)	
+
+	def continue_smartra_neutralize(self, pin, log_callback, ecu):
+		# Parse and split the PIN
+		try:
+			pin = int('0x' + pin, 0)
+			pin_a = (pin >> 16) & 0xFF
+			pin_b = (pin >> 8) & 0xFF
+			pin_c = (pin & 0xFF)
+		except ValueError:
+			#log_callback.emit('[!] Invalid PIN format.')
+			self.log('[!] Invalid PIN format.')
+			return
+
+		try:
+			# Send the PIN
+			#log_callback.emit('[*] Sending PIN to the ECU...')
+			self.log('[*] Sending PIN to the ECU...')
+			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
+			self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
+
+			# Perform SMARTRA neutralization
+			#log_callback.emit('[*] Neutralizing SMARTRA...')
+			self.log('[*] Neutralizing SMARTRA...')
+			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.NEUTRALIZE_SMARTRA.value, 0x01)).get_data()
+			#log_callback.emit(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in response)}')
+			self.log(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in response)}')
+
+			if len(response) > 1 and response[1] == 1:
+				#log_callback.emit('[*] SMARTRA neutralization completed successfully.')
+				self.log('[*] SMARTRA neutralization completed successfully.')
+			else:
+				#log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
+				self.log('[!] Neutralization failed. Ensure the PIN is correct.')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
+		self.disconnect_ecu(ecu)
+
+	def teach_keys(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+
+		# Start the default diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		log_callback.emit('[*] Teaching immobilizer keys...')
+		#log_callback.emit('[*] starting routine 0x14')
+		try:
+			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
+			#log_callback.emit(f'[*] BEFORE_IMMO_KEY_TEACHING response: {" ".join(hex(x) for x in data)}')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Error starting IMMO_KEY_TEACHING routine.')
+			return
+
+		# Request the PIN asynchronously
+		self.request_pin_signal2.emit(log_callback, ecu)
+
+	def request_pin_from_user2(self, log_callback, ecu):
+		# Open the PIN dialog on the main thread
+		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter PIN', 'Enter 6-digit immobilizer PIN:')
+		if ok and pin.isdigit() and len(pin) == 6:
+			self.continue_teach_keys(pin, log_callback, ecu)  # Continue with the reset process
+		else:
+			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
+			self.log('[!] Invalid PIN or operation cancelled.')
+		return self.disconnect_ecu(ecu)	
+
+	def continue_teach_keys(self, pin, log_callback, ecu):
+		if not pin or not pin.isdigit() or len(pin) != 6:
+			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
+			self.log('[!] Invalid PIN or operation cancelled.')
+			return
+
+		pin = int('0x' + pin, 0)  # Treat the input as a hexadecimal string
+		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
+
+		try:
+			#log_callback.emit('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+			#self.log('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+			for i in range(4):
+				if QMessageBox.question(self, f'Teach Key {i+1}', f'Teach immobilizer key {i+1}?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+					ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
+				else:
+					break
+			#log_callback.emit('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
+			self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
+		except KWPNegativeResponseException:
+			#log_callback.emit('[!] Key teaching failed. Ensure the PIN is correct.')
+			self.log('[!] Key teaching failed. Ensure the PIN is correct. If programming a 2nd key it needs to have a unique code.')
+			return
+
+	def limp_home_teach(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+
+		log_callback.emit('[*] Starting limp home password teaching...')
+		
+		# Start diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		# Check ECU status
+		try:
+			status = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
+			log_callback.emit(f'[*] Current ECU status: {immo_status.get(status, status)}')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Failed to check ECU status.')
+			return
+
+		# Store context for continuation
+		self._ecu = ecu
+		self._log_callback = log_callback
+
+		# Request the current password asynchronously if needed
+		if status == 1:  # Learnt
+			self.request_pin_signal3.emit(log_callback, ecu)
+		else:
+			self.request_new_password_signal.emit(log_callback, ecu, "")
+
+	def request_pin_from_user3(self, log_callback, ecu):
+		# Prompt user for the current password
+		password, ok = QtWidgets.QInputDialog.getText(self, 'Enter Current Password', 'Enter 4-digit current password:')
+		if ok and password.isdigit() and len(password) == 4:
+			self.request_new_password_signal.emit(log_callback, ecu, password)
+		else:
+			#log_callback.emit('[!] Invalid current password or operation cancelled.')
+			self.log('[!] Invalid current password or operation cancelled.')
+		return self.disconnect_ecu(ecu)	
+
+	def request_new_password_from_user(self, log_callback, ecu, current_password=""):
+		# Prompt user for the new password
+		password, ok = QtWidgets.QInputDialog.getText(self, 'Enter New Password', 'Enter 4-digit new password:')
+		if ok and password.isdigit() and len(password) == 4:
+			self.continue_limp_home_teach(current_password, password, log_callback, ecu)
+		else:
+			#log_callback.emit('[!] Invalid new password or operation cancelled.')
+			self.log('[!] Invalid new password or operation cancelled.')
+			return self.disconnect_ecu(ecu)
+
+	def continue_limp_home_teach(self, current_password, new_password, log_callback, ecu):
+		try:
+			# Validate and split passwords
+			if current_password:
+				current_password = int('0x' + current_password, 0)
+				current_password_a = (current_password >> 8)
+				current_password_b = (current_password & 0xFF)
+
+				# Send the current password
+				self.log('[*] Sending current password to the ECU...')
+				#log_callback.emit('[*] Sending current password to the ECU...')
+				ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, current_password_a, current_password_b))
+
+			new_password = int('0x' + new_password, 0)
+			new_password_a = (new_password >> 8)
+			new_password_b = (new_password & 0xFF)
+
+			# Send the new password
+			self.log('[*] Sending new password to the ECU...')
+			#log_callback.emit('[*] Sending new password to the ECU...')
+			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD.value, new_password_a, new_password_b)).get_data()
+			self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
+			#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
+
+			# Confirm the new password
+			if QMessageBox.question(self, 'Confirm Password', 'Are you sure you want to set this password?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
+				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data()
+				self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
+				#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
+				self.log('[*] Limp home password teaching completed successfully.')
+				#log_callback.emit('[*] Limp home password teaching completed successfully.')
+				return self.disconnect_ecu(ecu)
+			else:
+				self.log('[*] Limp home password teaching cancelled.')
+				#log_callback.emit('[*] Limp home password teaching cancelled.')
+				return self.disconnect_ecu(ecu)
+
+		except KWPNegativeResponseException:
+			#log_callback.emit('[!] Password teaching failed. Ensure the passwords are correct.')
+			self.log('[!] Password teaching failed. Ensure the passwords are correct.')
+		except ValueError:
+			#log_callback.emit('[!] Invalid password format.')
+			self.log('[!] Invalid password format.')
+		finally:
+			# Clean up temporary state
+			self._ecu = None
+			self._log_callback = None
+
+
+	def read_vin(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+
+		try:
+			cmd = KWPCommand()
+			cmd.command = 0x09  # Undocumented service
+			cmd.data = [0x02]
+			vin_data = ecu.bus.execute(cmd).get_data()
+			vin = ''.join(chr(x) for x in vin_data)
+			log_callback.emit(f'[*] Vehicle Identification Number (VIN): {vin}')
+		except KWPNegativeResponseException:
+			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU.')
+			return self.disconnect_ecu(ecu)
+
+	def write_vin(self, progress_callback=None, log_callback=None):
+		try:
+			ecu = self.initialize_ecu(log_callback)
+		except gkbus.GKBusTimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		if ecu is False:
+			return
+		
+		# Start diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		log_callback.emit('[*] Starting VIN writing process...')
+
+		# Save ECU context and proceed
+		self._ecu = ecu
+		self._log_callback = log_callback
+
+		# Request the VIN asynchronously
+		self.request_vin_signal.emit(log_callback, ecu)
+
+	def request_vin_from_user(self, log_callback, ecu):
+		# Open a dialog for the user to enter the VIN
+		vin, ok = QtWidgets.QInputDialog.getText(self, 'Enter VIN', 'Enter the VIN (up to 17 characters):')
+		if ok and len(vin.strip()) > 0 and len(vin) <= 17:
+			self.continue_write_vin(vin, log_callback, ecu)  # Proceed with VIN writing
+		else:
+			#log_callback.emit('[!] Invalid VIN or operation cancelled.')
+			self.log('[!] Invalid VIN or operation cancelled.')
+			return self.disconnect_ecu(ecu)
+
+	def continue_write_vin(self, vin, log_callback, ecu):
+		if not vin or len(vin) > 17 or len(vin.strip()) == 0:
+			#log_callback.emit('[!] Invalid VIN. It must be up to 17 characters long and cannot be empty.')
+			self.log('[!] Invalid VIN. It must be up to 17 characters long and cannot be empty.')
+			return self.disconnect_ecu(ecu)
+		# Pad VIN to 17 characters if necessary
+		vin_padded = vin.ljust(17)
+		try:
+			#log_callback.emit(f'[*] Writing VIN: {vin_padded}')
+			self.log(f'[*] Writing VIN: {vin_padded}')
+			ecu.bus.execute(WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin_padded]))
+			#log_callback.emit('[*] VIN written successfully.')
+			self.log('[*] VIN written successfully.')
+			return self.disconnect_ecu(ecu)
+		except KWPNegativeResponseException:
+			#log_callback.emit('[!] Writing VIN failed. Ensure the ECU is writable.')
+			self.log('[!] Writing VIN failed. Ensure the ECU is writable.')
+			return self.disconnect_ecu(ecu)
+		except Exception as e:
+			#log_callback.emit(f'[!] Unexpected error while writing VIN: {e}')
+			self.log(f'[!] Unexpected error while writing VIN: {e}')
+			return self.disconnect_ecu(ecu)
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
