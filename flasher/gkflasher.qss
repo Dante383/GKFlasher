@@ -1,0 +1,168 @@
+/* General Styling */
+QMainWindow {
+    background-color: #2c3e50;  /* Dark gray background */
+    color: #ecf0f1;            /* Light text */
+}
+
+/* Buttons */
+QPushButton {
+    background-color: #206999; /* Blue button */
+    color: #ecf0f1;           /* White text */
+    border-radius: 8px;       /* Rounded corners */
+    padding: 1px 1px;
+    border: none;
+    font-family: "Lato";
+    font-size: 11px;
+}
+QPushButton:hover {
+    background-color: #2d81ba; /* Lighter blue on hover */
+}
+
+/* General styling for QComboBox (drop down menu - not selected) */
+QComboBox {
+    background-color: #34495e; /* Dark background */
+    color: #ecf0f1;           /* Light text color */
+    padding: 4px;
+}
+
+/* Styling for all dropdown menus */
+QComboBox QAbstractItemView {
+    background-color: #425b75; /* Slightly darker dropdown background */
+    color: #ecf0f1;           /* Light text color */
+    border: 1px solid #34495e;
+    selection-background-color: #3498db; /* Highlighted item */
+    selection-color: #ffffff; /* Text color for highlighted item */
+}
+
+/* Styling for interfacesBox when not clicked */
+#interfacesBox {
+    background-color: #4c6b8a;
+    border: 1px solid #658396;
+    font-family: "Lato";
+    font-size: 11px;
+}
+
+/* Styling for ecusBox when not clicked */
+#ecusBox {
+    background-color: #4c6b8a;
+    border: 1px solid #658396;
+    font-family: "Lato";
+    font-size: 11px;
+}
+
+/* Styling for baudratesBox when not clicked */
+#baudratesBox {
+    background-color: #4c6b8a;
+    border: 1px solid #658396;
+    font-family: "Lato";
+    font-size: 11px;
+}
+
+/* Text boxes */
+QLineEdit {
+    border: 1px solid #2980b9;
+    border-radius: 5px;
+    padding: 1px;
+    color: #2c3e50;
+    background-color: #ecf0f1;
+}
+
+/* Labels (Popup Message Boxes) */
+QLabel {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+/* Progress Bar */
+QProgressBar {
+    border: 1px solid #34495e;
+    border-radius: 5px;
+    text-align: center;
+    color: #ecf0f1;
+    background-color: #34495e;
+}
+QProgressBar::chunk {
+    background-color: #2ecc71; /* Green progress bar */
+    border-radius: 5px;
+}
+
+/* logOutput Styling */
+#logOutput {
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    font-family: "Consolas";
+    font-size: 12px;
+    border-radius: 5px;
+    border: 1px solid #34495e;
+}
+
+/* About Box - Note: Font set in gkflasher.ui HTML */
+QTextBrowser {
+    background-color: rgba(44, 62, 80, 0.8); /* Dark transparent background (80% opacity) */
+    background-image: url("assets/Siemens_T_Logo.ico");
+    background-repeat: no-repeat;
+    background-position: right;
+    color: #ecf0f1;
+    border: none;
+}
+
+/* QTabWidget Styling (bottom box)*/
+QTabWidget::pane {
+    background-color: #2c3e50;
+    border: 1px solid #34495e;
+    border-radius: 5px;
+}
+
+QTabBar::tab {
+    background: #34495e;
+    color: #ecf0f1;
+    padding: 6px 12px;
+    border: 1px solid #2c3e50;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    font-family: "Lato";
+    font-size: 11px;
+}
+
+QTabBar::tab:hover {
+    background: #3b5998; /* Slightly lighter background on hover */
+}
+
+QTabBar::tab:selected {
+    background-color: #2ecc71;  /* green buttons */
+    color: #0f3d0f;  /* dark green text */
+}
+
+QTabBar::tab:disabled {
+    background: #7f8c8d;
+    color: #bdc3c7;
+}
+
+/* QMessageBox Styling */
+QMessageBox {
+    background-color: #2c3e50; /* Dark background */
+}
+
+/* QMessageBox Buttons */
+QMessageBox QPushButton {
+    background-color: #2980b9; /* Blue button background */
+    color: #ffffff;           /* White button text */
+    border-radius: 5px;       /* Rounded corners */
+    padding: 6px 12px;        /* Padding inside buttons */
+    border: 1px solid #1f618d;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #3498db; /* Lighter blue on hover */
+}
+
+QMessageBox QPushButton:pressed {
+    background-color: #1f618d; /* Darker blue when pressed */
+}
+
+QMessageBox QLabel {
+    color: #ecf0f1; /* Ensures the message text inherits the correct color */
+}
+QMessageBox QPushButton {
+    background-color: #2980b9;
+}
