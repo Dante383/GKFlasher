@@ -1134,5 +1134,11 @@ class Ui(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
+	stylesheet_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flasher', 'gkflasher.qss')
+	if os.path.exists(stylesheet_path):
+		with open(stylesheet_path, "r") as stylesheet:
+			app.setStyleSheet(stylesheet.read())
+	else:
+		print(f"Stylesheet not found at {stylesheet_path}")
 	window = Ui()
 	sys.exit(app.exec_())
