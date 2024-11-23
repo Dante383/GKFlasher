@@ -374,17 +374,23 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>775</width>
+       <width>781</width>
        <height>138</height>
       </rect>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
      </property>
      <property name="html">
       <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'MS Shell Dlg 2'; font-size:8.25pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt;&quot;&gt;https://opengk.org&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; font-family:'System Font'; font-size:10pt;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;https://opengk.com&lt;/p&gt;
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt;&quot;&gt;Created by:&lt;/span&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt; font-weight:696;&quot;&gt;dante383&lt;/span&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt;&quot;&gt; https://github.com/dante383&lt;/span&gt;&lt;/p&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt; font-weight:696;&quot;&gt;dmg210&lt;/span&gt;&lt;span style=&quot; font-family:'System Font'; font-size:10pt;&quot;&gt; https://github.com/dmg210&lt;/span&gt;&lt;/p&gt;
@@ -416,7 +422,7 @@ p, li { white-space: pre-wrap; }
     <rect>
      <x>10</x>
      <y>220</y>
-     <width>791</width>
+     <width>781</width>
      <height>23</height>
     </rect>
    </property>
@@ -437,9 +443,9 @@ p, li { white-space: pre-wrap; }
   <widget class="QComboBox" name="ecusBox">
    <property name="geometry">
     <rect>
-     <x>490</x>
+     <x>530</x>
      <y>10</y>
-     <width>301</width>
+     <width>261</width>
      <height>23</height>
     </rect>
    </property>
@@ -453,9 +459,9 @@ p, li { white-space: pre-wrap; }
   <widget class="QComboBox" name="baudratesBox">
    <property name="geometry">
     <rect>
-     <x>490</x>
+     <x>530</x>
      <y>40</y>
-     <width>301</width>
+     <width>261</width>
      <height>23</height>
     </rect>
    </property>
