@@ -56,4 +56,4 @@ jobs:
           prerelease: false
           title: ${{env.version}}
           files: |
-            GKFlasher-${{env.version}}.msi
+            GKFlasher-${{env.version}}-amd64.msi
