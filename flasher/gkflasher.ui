@@ -414,7 +414,7 @@ p, li { white-space: pre-wrap; }
     <bool>true</bool>
    </property>
    <property name="currentText">
-    <string>No serial interfaces found!</string>
+    <string>[!] No serial interfaces found!</string>
    </property>
   </widget>
   <widget class="QProgressBar" name="progressBar">
