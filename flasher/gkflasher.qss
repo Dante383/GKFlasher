@@ -166,3 +166,46 @@ QMessageBox QLabel {
 QMessageBox QPushButton {
     background-color: #2980b9;
 }
+
+/* General QInputDialog Styling, e.g. Enter pin number boxes. This is different to yes/no prompts */
+QInputDialog {
+    background-color: #2c3e50; /* Dark background */
+    border: 1px solid #34495e; /* Subtle border */
+    border-radius: 8px; /* Rounded corners */
+    color: #ecf0f1; /* Light text color */
+}
+
+/* QLabel Styling (for dialog text) */
+QInputDialog QLabel {
+    color: #ecf0f1; /* Ensure label text is readable */
+    font-family: "Lato";
+    font-size: 14px;
+}
+
+/* QLineEdit Styling (for input field) */
+QInputDialog QLineEdit {
+    background-color: #34495e; /* Slightly lighter background */
+    color: #ffffff; /* Input text color */
+    border: 1px solid #2ecc71; /* Green border */
+    border-radius: 5px; /* Rounded corners */
+    padding: 4px;
+    font-family: "Courier New", monospace; /* Monospace font for PIN input */
+    font-size: 15px; /* Slightly larger font size */
+}
+
+/* QPushButton Styling (for OK/Cancel buttons) */
+QInputDialog QPushButton {
+    background-color: #2980b9; /* Blue buttons */
+    color: #ffffff; /* White button text */
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+
+QInputDialog QPushButton:hover {
+    background-color: #3498db; /* Lighter blue on hover */
+}
+
+QInputDialog QPushButton:pressed {
+    background-color: #1f618d; /* Darker blue on press */
+}
