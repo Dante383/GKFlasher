@@ -121,7 +121,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.detect_interfaces()
 		except ValueError:
 			print('[!] No serial interfaces found!')
-			sys.exit(1)
+			return
 
 		self.load_ecus()
 		self.load_baudrates()
