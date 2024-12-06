@@ -932,20 +932,51 @@ class Ui(QtWidgets.QMainWindow):
 		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
 
 		try:
-			#log_callback.emit('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-			#self.log('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+			# Start the routine
+			ecu.bus.execute(StartRoutineByLocalIdentifier(
+				Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 
+				0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+
+			all_keys_successful = True  # Flag to track if all keys were successfully taught
+
 			for i in range(4):
 				if QMessageBox.question(self, f'Teach Key {i+1}', f'Teach immobilizer key {i+1}?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-					ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
+					try:
+						# Attempt to execute the teaching routine
+						ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
+					except KWPNegativeResponseException as e:
+						# Handle known exception for this specific teaching routine
+						self.log(f'[!] Failed to teach Key {i+1}: {str(e)}')
+						QMessageBox.warning(self, 'Key Teaching Error', f'Failed to teach Key {i+1}. Reason: {str(e)}')
+						all_keys_successful = False
+						break  # Stop on failure
+					except Exception as e:
+						# Handle unexpected exceptions
+						self.log(f'[!] Unexpected error during Key {i+1} teaching: {str(e)}')
+						QMessageBox.critical(self, 'Critical Error', f'Unexpected error occurred while teaching Key {i+1}. Reason: {str(e)}')
+						all_keys_successful = False
+						break  # Stop on failure
 				else:
+					if i == 0:  # Cancelation at the first key
+						self.log('[!] Key teaching cancelled.')
+						QMessageBox.information(self, 'Cancelled', 'Teach keying process has been cancelled.')
+						all_keys_successful = False
 					break
-			#log_callback.emit('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
-			self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
-		except KWPNegativeResponseException:
-			#log_callback.emit('[!] Key teaching failed. Ensure the PIN is correct.')
-			self.log('[!] Key teaching failed. Ensure the PIN is correct. If programming a 2nd key it needs to have a unique code.')
-			return
+
+			# Show completion message only if all keys were successfully taught
+			if all_keys_successful:
+				self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
+				QMessageBox.information(self, 'Success', 'Key teaching completed successfully. Turn off ignition for 10 seconds to apply changes.')
+
+		except KWPNegativeResponseException as e:
+			# Handle known exception for the overall routine
+			self.log(f'[!] Key teaching failed: {str(e)}')
+			QMessageBox.critical(self, 'Routine Error', f'Key teaching initialization failed. Reason: {str(e)}')
+
+		except Exception as e:
+			# Handle unexpected exceptions for the overall routine
+			self.log(f'[!] Unexpected error during key teaching: {str(e)}')
+			QMessageBox.critical(self, 'Critical Error', f'Unexpected error during key teaching. Reason: {str(e)}')
 
 	def limp_home_teach(self, progress_callback=None, log_callback=None):
 		try:
