@@ -4,7 +4,7 @@ from datetime import datetime
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
-import gkbus, yaml, traceback
+import gkbus, yaml, traceback, bsl
 from gkbus.kwp.commands import *
 from gkbus.kwp.enums import *
 from gkbus.kwp import KWPNegativeResponseException
@@ -51,6 +51,7 @@ class WorkerSignals(QObject):
     result = pyqtSignal(object)
     progress = pyqtSignal(tuple)
     log = pyqtSignal(str)
+    log2 = pyqtSignal(str)
 
 class Worker(QRunnable):
     def __init__(self, fn, *args, **kwargs):
@@ -65,13 +66,12 @@ class Worker(QRunnable):
         # Add the callback to our kwargs
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['log_callback'] = self.signals.log
+        # Add log_callback2 only if the function supports it (bsl only)
+        if 'log_callback2' in fn.__code__.co_varnames:
+            self.kwargs['log_callback2'] = self.signals.log2
 
     @pyqtSlot()
     def run(self):
-        '''
-        Initialise the runner function with passed args, kwargs.
-        '''
-
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
@@ -92,11 +92,16 @@ class Ui(QtWidgets.QMainWindow):
 	request_pin_signal5 = pyqtSignal(object, object)  # For requesting the PIN
 	request_new_password_signal = pyqtSignal(object, object, str)  # For requesting the new password. Three arguments: log_callback, ecu, current_password
 	request_vin_signal = pyqtSignal(object, object)  # For requesting the VIN
+	log_signal = pyqtSignal(str)  # Define a signal for logging
 
 	def __init__(self):
 		super(Ui, self).__init__()
 		self.load_ui()
 		self.previous_baudrate = False
+		self.log_signal.connect(self.log)  # Connect the signal to the `log` method
+
+		# Configure bsl logging for GUI
+		bsl.set_gui_log_handler(self.log) # Pass the `self.log` method from the GUI class
 
 		# Connect the signals
 		self.request_pin_signal1.connect(self.request_pin_from_user1)
@@ -144,6 +149,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.readingFileBtn.clicked.connect(self.handler_select_file_reading)
 		self.flashingFileBtn.clicked.connect(self.handler_select_file_flashing)
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
+		self.bslFileBtn.clicked.connect(self.handler_select_bsl_file)
 
 		self.immoInfoBtn.clicked.connect(lambda: self.click_handler(self.display_immo_information))
 		self.limpHomeModeBtn.clicked.connect(lambda: self.click_handler(self.limp_home))
@@ -154,9 +160,15 @@ class Ui(QtWidgets.QMainWindow):
 		self.readVinBtn.clicked.connect(lambda: self.click_handler(self.read_vin))
 		self.writeVinBtn.clicked.connect(lambda: self.click_handler(self.write_vin))
 
+		self.bslHwInfoBtn.clicked.connect(lambda: self.click_handler(self.bslHwInfo))
+		self.bslReadIntRomBtn.clicked.connect(lambda: self.click_handler(self.bslReadIntRom))
+		self.bslReadExtFlashBtn.clicked.connect(lambda: self.click_handler(self.bslReadExtFlash))
+		self.bslWriteExtFlashBtn.clicked.connect(lambda: self.click_handler(self.bslWriteExtFlash))
+
 	def click_handler (self, callback):
 		worker = Worker(callback)
 		worker.signals.log.connect(self.log)
+		worker.signals.log2.connect(self.log2)
 		worker.signals.progress.connect(self.progress_callback)
 		self.thread_manager.start(worker)
 
@@ -172,8 +184,17 @@ class Ui(QtWidgets.QMainWindow):
 		filename = QFileDialog().getOpenFileName()[0]
 		self.checksumFileInput.setText(filename)
 
+	def handler_select_bsl_file (self):
+		filename = QFileDialog().getOpenFileName()[0]
+		self.bslFileInput.setText(filename)
+
 	def log (self, text):
 		self.logOutput.append(text)
+		self.logOutput.setReadOnly(True)
+
+	def log2 (self, text):
+		self.bslOutput.setPlainText(text)
+		self.bslOutput.setReadOnly(True)
 
 	def detect_interfaces(self):
 		devices = KLineSerial.available_devices()
@@ -932,20 +953,49 @@ class Ui(QtWidgets.QMainWindow):
 		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
 
 		try:
-			#log_callback.emit('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-			#self.log('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
+			# Start the routine
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+
+			all_keys_successful = True  # Flag to track if all keys were successfully taught
+
 			for i in range(4):
 				if QMessageBox.question(self, f'Teach Key {i+1}', f'Teach immobilizer key {i+1}?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-					ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
+					try:
+						# Attempt to execute the teaching routine
+						ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
+					except KWPNegativeResponseException as e:
+						# Handle known exception for this specific teaching routine
+						self.log(f'[!] Failed to teach Key {i+1}: {str(e)}')
+						QMessageBox.warning(self, 'Key Teaching Error', f'Failed to teach Key {i+1}. Reason: {str(e)}')
+						all_keys_successful = False
+						break  # Stop on failure
+					except Exception as e:
+						# Handle unexpected exceptions
+						self.log(f'[!] Unexpected error during Key {i+1} teaching: {str(e)}')
+						QMessageBox.critical(self, 'Critical Error', f'Unexpected error occurred while teaching Key {i+1}. Reason: {str(e)}')
+						all_keys_successful = False
+						break  # Stop on failure
 				else:
+					if i == 0:  # Cancelation at the first key
+						self.log('[!] Key teaching cancelled.')
+						QMessageBox.information(self, 'Cancelled', 'Teach keying process has been cancelled.')
+						all_keys_successful = False
 					break
-			#log_callback.emit('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
-			self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
-		except KWPNegativeResponseException:
-			#log_callback.emit('[!] Key teaching failed. Ensure the PIN is correct.')
-			self.log('[!] Key teaching failed. Ensure the PIN is correct. If programming a 2nd key it needs to have a unique code.')
-			return
+
+			# Show completion message only if all keys were successfully taught
+			if all_keys_successful:
+				self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
+				QMessageBox.information(self, 'Success', 'Key teaching completed successfully. Turn off ignition for 10 seconds to apply changes.')
+
+		except KWPNegativeResponseException as e:
+			# Handle known exception for the overall routine
+			self.log(f'[!] Key teaching failed: {str(e)}')
+			QMessageBox.critical(self, 'Routine Error', f'Key teaching initialization failed. Reason: {str(e)}')
+
+		except Exception as e:
+			# Handle unexpected exceptions for the overall routine
+			self.log(f'[!] Unexpected error during key teaching: {str(e)}')
+			QMessageBox.critical(self, 'Critical Error', f'Unexpected error during key teaching. Reason: {str(e)}')
 
 	def limp_home_teach(self, progress_callback=None, log_callback=None):
 		try:
@@ -1131,6 +1181,105 @@ class Ui(QtWidgets.QMainWindow):
 			#log_callback.emit(f'[!] Unexpected error while writing VIN: {e}')
 			self.log(f'[!] Unexpected error while writing VIN: {e}')
 			return self.disconnect_ecu(ecu)
+
+	def get_or_generate_file_path(self) -> str:
+		# Retrieve the file path from the QLineEdit
+		user_file_path = self.bslFileInput.text().strip()
+
+		if not user_file_path:
+			# Placeholder parameters for file naming
+			calibration = "calibration"  # Replace with actual logic
+			description = "description"  # Replace with actual logic
+			hw_rev_c = "revC"            # Replace with actual logic
+			hw_rev_d = "revD"            # Replace with actual logic
+
+			# Generate the default file name using parameters and current date/time
+			output_filename = "{}_{}_{}_{}_{}.bin".format(
+				description, calibration, hw_rev_c, hw_rev_d,
+				datetime.now().strftime('%Y-%m-%d_%H%M')
+			)
+
+			# Construct the full file path based on the platform
+			if os.name == 'nt':
+				user_file_path = os.path.join(home, output_filename)
+			else:  # For non-Windows platforms
+				user_file_path = os.path.join(home, output_filename)
+
+			# Update the QLineEdit for user visibility, looks janky in the gui, missing chars prob due to signalling.
+			#self.bslFileInput.setText(user_file_path)
+
+		return user_file_path
+
+	def bslHwInfo(self, progress_callback=None, log_callback=None, log_callback2=None):
+		try:		
+			# BSL arguments
+			args = [
+				"57600",      # Baud rate
+				"-hwinfo"
+			]
+			# Pass the Progress object
+			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
+
+		except Exception as e:
+			log_callback.emit(f"An error occurred: {str(e)}")
+
+	def bslReadIntRom(self, progress_callback=None, log_callback=None, log_callback2=None):
+		try:
+			# Retrieve the file path from the QLineEdit
+			user_file_path = self.get_or_generate_file_path()
+			
+			# BSL arguments
+			args = [
+				"57600",      # Baud rate
+				"-readint",   # Command
+				"0x8000",     # Size in hex
+				#user_file_path  # Use the dynamically retrieved/generated file path
+			]
+
+			#log_callback.emit(f"Calling BSL with arguments: {args}")
+			
+			# Pass the Progress object
+			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
+
+		except Exception as e:
+			log_callback.emit(f"An error occurred: {str(e)}")
+
+	def bslReadExtFlash(self, progress_callback=None, log_callback=None, log_callback2=None):
+		try:
+			# Retrieve the file path from the QLineEdit
+			user_file_path = self.get_or_generate_file_path()
+			
+			# BSL arguments
+			args = [
+				"57600",     # Baud rate
+				"-readextflash",  # Command
+				"0x80000",    # Size in hex
+				#user_file_path  # Use the dynamically retrieved/generated file path
+			]
+			
+			# Pass the Progress object
+			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
+
+		except Exception as e:
+			log_callback.emit(f"An error occurred: {str(e)}")
+
+	def bslWriteExtFlash(self, progress_callback=None, log_callback=None, log_callback2=None):
+		try:
+			# Retrieve the file path from the QLineEdit
+			user_file_path = self.get_or_generate_file_path()
+			
+			# BSL arguments
+			args = [
+				"57600",     # Baud rate
+				"-writeextflash",  # Command
+				user_file_path  # Use the dynamically retrieved/generated file path
+			]
+			
+			# Pass the Progress object
+			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
+
+		except Exception as e:
+			log_callback.emit(f"An error occurred: {str(e)}")
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)

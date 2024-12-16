@@ -365,6 +365,102 @@
      </property>
     </widget>
    </widget>
+   <widget class="QWidget" name="tab_bsl">
+    <attribute name="title">
+     <string>BSL</string>
+    </attribute>
+    <widget class="QPushButton" name="bslHwInfoBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>40</y>
+       <width>191</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Display HW Info</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="bslReadIntRomBtn">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>40</y>
+       <width>191</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Read IROM / IFLASH</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="bslReadExtFlashBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>70</y>
+       <width>191</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Read External Flash</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="bslWriteExtFlashBtn">
+     <property name="geometry">
+      <rect>
+       <x>210</x>
+       <y>70</y>
+       <width>191</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Write External Flash</string>
+     </property>
+    </widget>
+    <widget class="QTextEdit" name="bslOutput">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>100</y>
+       <width>751</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="bslFileInput">
+     <property name="geometry">
+      <rect>
+       <x>100</x>
+       <y>10</y>
+       <width>661</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>Leave empty to autogenerate name</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="bslFileBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>80</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Select file.. </string>
+     </property>
+    </widget>
+   </widget>
    <widget class="QWidget" name="about">
     <attribute name="title">
      <string>About</string>
