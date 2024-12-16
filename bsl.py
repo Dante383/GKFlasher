@@ -131,10 +131,6 @@ variantByteC167Old      = 0xA5
 variantByteC167         = 0xC5
 variantByteC167WithID   = 0xD5
 
-# ST10 variants
-variantByteST10 = 0x55
-
-
 def SendCommand(ser, data):
     SendCharwEcho(ser, data)
     echo = ser.read(1)
@@ -387,23 +383,23 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
     BlockLength = 0x200
 
 ## Upload Kernel
-    SendDatawEcho(ser,[0])  #say hello
+    SendDatawEcho(ser,[0])  #say hello, how ya doin'?
     byte = ser.read(1)
     if(len(byte) != 1):
         logger.info(f"No response from ECU, set device into bootmode: {byte}")
         return -1
     if(byte[0] != 0xaa):
         
-        logger.info(f"Got CPU version: {hex(byte[0])}")
-
-        if(byte[0] == variantByteC167Old):
-            logger.info("variantByteC167Old")
-        elif(byte[0] == variantByteC167):
-            logger.info("variantByteC167")
-        elif(byte[0] == variantByteC167WithID):
-            logger.info("variantByteC167WithID Or ST10 smoking crack?")
+        if byte[0] == variantByteC167Old:
+            variant_info = "variantByteC167Old, tell dmg what cpu you have?"
+        elif byte[0] == variantByteC167:
+            variant_info = "variantByteC167, tell dmg what cpu you have?"
+        elif byte[0] == variantByteC167WithID:
+            variant_info = "SAK-C167CS-LM"
         else:
-            logger.info("no C16x Variant, ST10 selected")
+            variant_info = "no C16x Variant detected, tell dmg what cpu you have?"
+
+        logger.info(f"\nGot CPU Version: {variant_info} (ID: {hex(byte[0])})")
 
         logger.info("Sending SIMK4x Bootstrap")
 
@@ -922,7 +918,7 @@ def run_bsl_loop(progress_callback=None, log_callback2=None):
                             state = 10
                             ports = []
                     if usbpresent == 1:
-                        logger.info(f"Using {ports[comcounter].device}")
+                        logger.info(f"Using {ports[comcounter].device}, baudrate {baud}")
                         ser = serial.Serial(ports[comcounter].device, baud, timeout=3)
                         ser.reset_input_buffer()
                         state = 20
