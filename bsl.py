@@ -999,7 +999,6 @@ def execute_bsl(args, progress_callback=None, log_callback2=None):
             eetype = "T_29FX00B_SIMK4X_I4" if eetype_str and "simk4x_i4" in eetype_str else (
             "T_29FX00B_SIMK4X_V6" if eetype_str and "simk4x_v6" in eetype_str else None
             )
-            print(f"Determined eetype: {eetype}")
             file = open(filename, 'rb')
             job = jobWriteExtFlash
             state = 10
