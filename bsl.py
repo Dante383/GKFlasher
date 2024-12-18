@@ -11,8 +11,8 @@ import logging
 logger = logging.getLogger("bsl")
 logger.setLevel(logging.DEBUG)
 
-# GUI log handler for directing logs to the GUI
 class GuiLogHandler(logging.Handler):
+    """Log handler for directing logs to the GUI"""
     def __init__(self, gui_callback):
         super().__init__()
         self.gui_callback = gui_callback
@@ -21,13 +21,12 @@ class GuiLogHandler(logging.Handler):
         message = self.format(record)
         self.gui_callback(message)
 
-# Function to add the GUI log handler dynamically
 def set_gui_log_handler(gui_callback):
+    """ Add the GUI log handler dynamically"""
     gui_handler = GuiLogHandler(gui_callback)
     gui_handler.setLevel(logging.DEBUG)
     gui_handler.setFormatter(logging.Formatter("%(message)s"))
     logger.addHandler(gui_handler)
-
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -313,9 +312,8 @@ def CallAtAddress(ser, addr, register):     # 8 register words on r8-r15
 def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4, pinnum, progress_callback=None, log_callback2=None):
     ResetAdapter(ser)
     SetAdapterKKL(ser)
-    
+
     ser.reset_input_buffer()
-    char = b''
 
     SYSCON_Addr         = 0x00ff12
     SYSCON_Data_ext     = 0xe204        # from 15 -0: 3b stksz, 1b ROMS1, 1b SGTDIS, 1b ROMEN, 1b BYTDIS, 1b CLKEN, 1b WRCFG, 1b CSCFG, 1b reserved, 
@@ -904,7 +902,7 @@ def run_bsl_loop(progress_callback=None, log_callback2=None):
                         while comcounter < len(ports):
                             logger.info(f"num: {comcounter} : {ports[comcounter]}")
                             comcounter += 1
-                        num = input("Type COM to use (pos number): ")
+                        num = input("Select COM Port (position number): ")
                         try:
                             comcounter = int(num)
                             if comcounter >= len(ports) or comcounter < 0:
