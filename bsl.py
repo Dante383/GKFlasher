@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger("bsl")
 logger.setLevel(logging.DEBUG)
 
-class GuiLogHandler(logging.Handler):
+class GuiLogHandler(logging.Handler, logging.Formatter):
     """Log handler for directing logs to the GUI"""
     def __init__(self, gui_callback):
         super().__init__()
@@ -20,6 +20,17 @@ class GuiLogHandler(logging.Handler):
     def emit(self, record):
         message = self.format(record)
         self.gui_callback(message)
+
+    def format(self, record):
+        if not getattr(record, "suppress_format", False):
+            if record.levelno == logging.INFO:
+                record.msg = f"[*] {record.msg}"
+            elif record.levelno == logging.WARNING:
+                record.msg = f"[!] {record.msg}"
+            elif record.levelno == logging.ERROR:
+                record.msg = f"[!] {record.msg}"            
+        return super().format(record)
+
 
 def set_gui_log_handler(gui_callback):
     """ Add the GUI log handler dynamically"""
@@ -56,10 +67,10 @@ def SendCharwEcho(ser, data):
     echo = ser.read(1)
     if(len(echo) != 0):
         if(echo[0] != data[0]):
-            logger.info(f"Echo error sent: {hex(data[0])}, received: {hex(echo[0])}")
+            logger.error(f"Echo error sent: {hex(data[0])}, received: {hex(echo[0])}")
             ret = False
     else:
-        logger.info("got no echo")
+        logger.error("got no echo")
     return ret
 
 def SendDatawEcho(ser, data):
@@ -70,13 +81,13 @@ def SendDatawEcho(ser, data):
     echo = ser.read(len(data))
 
     if(len(echo) != len(data)):
-        logger.info("got wrong echo length")
+        logger.error("got wrong echo length")
         return False
 
     counter = 0
     while counter < len(data):
         if(data[counter] != echo[counter]):
-            logger.info(f"Echo error sent: {hex(data[counter])}, received: {hex(echo[counter])}, at data pos: {hex(counter)}")
+            logger.error(f"Echo error sent: {hex(data[counter])}, received: {hex(echo[counter])}, at data pos: {hex(counter)}")
             ret = False
         counter += 1
 
@@ -134,10 +145,10 @@ def SendCommand(ser, data):
     SendCharwEcho(ser, data)
     echo = ser.read(1)
     if(len(echo) != 1):
-        logger.info("got no command ackn")
+        logger.error("got no command ackn")
         return False
     if(echo[0] != A_ACK1):
-        logger.info(f"Got different response than ackn1: {hex(echo[0])}")
+        logger.error(f"Got different response than ackn1: {hex(echo[0])}")
         return False
     return True
 
@@ -145,10 +156,10 @@ def SendData(ser, data):
     SendDatawEcho(ser, data)
     echo = ser.read(1)
     if(len(echo) != 1):
-        logger.info("got no send data ackn")
+        logger.error("got no send data ackn")
         return False
     if(echo[0] != A_ACK2):
-        logger.info("got different response than ackn2: ", hex(echo[0]))
+        logger.error("got different response than ackn2: ", hex(echo[0]))
         return False
     return True
 
@@ -156,10 +167,10 @@ def GetData(ser, data):
     SendDatawEcho(ser, data)
     echo = ser.read(3)
     if(len(echo) != 3):
-        logger.info("got no get data ackn")
+        logger.error("got no get data ackn")
         return False, []
     if(echo[2] != A_ACK2):
-        logger.info(f"Got different response than ackn2: {hex(echo[0])}")
+        logger.error(f"Got different response than ackn2: {hex(echo[0])}")
         return False, []
     return True, [echo[0] | echo[1]<<8]
 
@@ -169,10 +180,12 @@ def TestComm(ser):
 
     data = ser.read(2)
     if(len(data) != 2):
-        logger.info("\n no response from ecu after test comm")
+        logger.info("", extra={"suppress_format": True}) #blank line
+        logger.error("no response from ecu after test comm")
         return -1
     if(data[0] != A_ACK1) | (data[1] != A_ACK2):
-        logger.info(f"\nWrong response from ECU after sending test comm: {hex(data[0])}, {hex(data[1])}")
+        logger.info("", extra={"suppress_format": True}) #blank line
+        logger.error(f"Wrong response from ECU after sending test comm: {hex(data[0])}, {hex(data[1])}")
         return -1
 
     logger.info(f"Got kernel acknowledgment: {hex(A_ACK1)}, {hex(A_ACK2)}")
@@ -183,10 +196,10 @@ def SetWordAtAddress(ser, addr, data):
     ret &= SendCommand(ser, [C_READ_WORD])
     ret , readData = GetData(ser, GetAddressAsLittleEndian(addr))
     if(ret == False):
-        logger.info("Failed to set control registers!")
+        logger.error("Failed to set control registers!")
         return False
     if(readData[0] != data):
-        logger.info(f"Registers not successfully set: {data}, readback: {readData[0]}")
+        logger.error(f"Registers not successfully set: {data}, readback: {readData[0]}")
         return False
     logger.info(f"Set control register at: {hex(addr)} success: {ret}")
     return True
@@ -232,10 +245,10 @@ def GetBlockChecksum(ser):
     SendCharwEcho(ser, [C_GETCHECKSUM])
     echo = ser.read(3)
     if(len(echo) != 3):
-        logger.info("got no command ackn")
+        logger.error("got no command ackn")
         return False,[]
     if(echo[2] != A_ACK2):
-        logger.info("got different response than ackn2: ", hex(echo[2]))
+        logger.error("got different response than ackn2: ", hex(echo[2]))
         return False,[]
     return True,[echo[1]]
 
@@ -266,19 +279,19 @@ def GetBlockAtAddress(ser, addr, size):
     SendDatawEcho(ser,  GetAddressAsLittleEndian(addr)+GetWordAsLittleEndian(size))
     echo = ser.read(size+1)
     if(len(echo) != size+1):
-        logger.info(f"GetBlockAtAddress got no acknowledgment: {echo}")
+        logger.error(f"GetBlockAtAddress got no acknowledgment: {echo}")
         return False, []
     if(echo[size] != A_ACK2):
-        logger.info(f"GetBlockAtAddress got different response than ackn2: {hex(echo[size])}")
+        logger.error(f"GetBlockAtAddress got different response than ackn2: {hex(echo[size])}")
         return False, []
 
     ret , checksum = GetBlockChecksum(ser)
     calcChecksum = CalcBlockChecksum(echo[:size])
     if(ret == False):
-        logger.info("Get Block not successful, got no checksum ")
+        logger.error("Get Block not successful, got no checksum ")
         return False,[]
     if(calcChecksum != checksum[0]):
-        logger.info(f"Get block at: {hex(addr)} Wrong Checksum: {ret}, got checksum: {hex(checksum[0])}, calculated checksum: {hex(calcChecksum)}")
+        logger.error(f"Get block at: {hex(addr)} Wrong Checksum: {ret}, got checksum: {hex(checksum[0])}, calculated checksum: {hex(calcChecksum)}")
         return False,[]
     return True, echo[:size]
 
@@ -291,14 +304,14 @@ def CallAtAddress(ser, addr, register):     # 8 register words on r8-r15
     SendDatawEcho(ser, GetAddressAsLittleEndian(addr)+regdata)
     echo = ser.read(17)
     if(len(echo) != 17):
-        logger.info(f"CallAtAddress got no acknowledgment: {echo}")
+        logger.error(f"CallAtAddress got no acknowledgment: {echo}")
         logger.info("Debug Registers")
         for r in regdata:
             logger.info(hex(r))
-        logger.info("") #blank line
+        logger.info("", extra={"suppress_format": True}) #blank line
         return False, []
     if(echo[16] != A_ACK2):
-        logger.info(f"CallAtAddress got different response than ackn2: {hex(echo[16])}")
+        logger.error(f"CallAtAddress got different response than ackn2: {hex(echo[16])}")
         return False, []
 
     retreg = [echo[0] | echo[1]<<8, echo[2] | echo[3]<<8, echo[4] | echo[5]<<8, echo[6] | echo[7]<<8,
@@ -384,20 +397,21 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
     SendDatawEcho(ser,[0])  #say hello, how ya doin'?
     byte = ser.read(1)
     if(len(byte) != 1):
-        logger.info(f"No response from ECU, set device into bootmode: {byte}")
+        logger.error(f"No response from ECU, set device into bootmode: {byte}")
         return -1
     if(byte[0] != 0xaa):
         
         if byte[0] == variantByteC167Old:
             variant_info = "variantByteC167Old, tell dmg what cpu you have?"
         elif byte[0] == variantByteC167:
-            variant_info = "variantByteC167, tell dmg what cpu you have?"
+            variant_info = "SAK-C167CR-LM"
         elif byte[0] == variantByteC167WithID:
             variant_info = "SAK-C167CS-LM"
         else:
             variant_info = "no C16x Variant detected, tell dmg what cpu you have?"
 
-        logger.info(f"\nGot CPU Version: {variant_info} (ID: {hex(byte[0])})")
+        logger.info("", extra={"suppress_format": True}) #blank line
+        logger.info(f"Got CPU Version: {variant_info} (ID: {hex(byte[0])})")
 
         logger.info("Sending SIMK4x Bootstrap")
 
@@ -410,10 +424,11 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
         SendDatawEcho(ser,loader)
         byte = ser.read(1)
         if(len(byte) != 1):
-            logger.info("\n no response from ecu after sending loader")
+            logger.info("", extra={"suppress_format": True}) #blank line
+            logger.error("no response from ecu after sending loader")
             return -1
         if(byte[0] != I_LOADER_STARTED):
-            logger.info(f"Wrong response from ECU after sending loader, got: {hex(byte[0])} instead of 0x01")
+            logger.error(f"Wrong response from ECU after sending loader, got: {hex(byte[0])} instead of 0x01")
             return -1
 
         logger.info(f"Got loader acknowledgment: {I_LOADER_STARTED}")
@@ -429,10 +444,11 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
         SendDatawEcho(ser,kernel)
         byte = ser.read(1)
         if(len(byte) != 1):
-            logger.info("\n no response from ecu after sending loader")
+            logger.info("", extra={"suppress_format": True}) #blank line
+            logger.error("no response from ecu after sending loader")
             return -1
         if(byte[0] != I_APPLICATION_STARTED):
-            logger.info(f"Wrong response from ECU after sending loader, got: {hex(byte[0])} instead of 0x01")
+            logger.error(f"Wrong response from ECU after sending loader, got: {hex(byte[0])} instead of 0x01")
             return -1
 
         logger.info(f"Got kernel acknowledgment: {I_APPLICATION_STARTED}")
@@ -443,7 +459,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
     TestComm(ser)
 
     if(job == jobReadIntRom):
-        logger.info("\n *************  start read IntRom  *************\n ")
+        logger.info("\n*************  start read IntRom  *************\n", extra={"suppress_format": True})
 
         SetWordAtAddress(ser, SYSCON_Addr, SYSCON_Data_int)
 
@@ -459,7 +475,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
                 if(success == True):
                     file.write(bytes(blockData))
                 else:
-                    logger.info(" read IntRom not successful!!")
+                    logger.error("read IntRom not successful!!")
                     return 1
 
                 offset += readsize
@@ -482,8 +498,9 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             logger.error(f"An error occurred during read: {str(e)}")
             raise
         finally:
-            logger.info(f"\nFile has been saved to: {filename}")
-            logger.info("\n *************  finish read IntRom  *************\n ")
+            logger.info("", extra={"suppress_format": True}) #blank line
+            logger.info(f"File has been saved to: {filename}")
+            logger.info("\n*************  finish read IntRom  *************\n", extra={"suppress_format": True})
 
 
 
@@ -536,7 +553,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             register = [FC_GETSTATE, 0x0000, writeAddressHigh, readAddressHigh, 0x000, 0x000, FC_GETSTATE_ADDR_MANUFID, 0x0001]
             success, retRegister = CallAtAddress(ser, FlashDriverEntryPoint, register)
             if not success or len(retRegister) < 2:
-                logger.info("Failed to retrieve Manufacturer ID.")
+                logger.warning("Failed to retrieve Manufacturer ID.")
                 return None, None
             manId = GetBackCrossedWord(retRegister[1]) if apply_reverse else retRegister[1]
 
@@ -544,7 +561,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             register = [FC_GETSTATE, 0x0000, writeAddressHigh, readAddressHigh, 0x000, 0x000, FC_GETSTATE_ADDR_DEVICEID, 0x0001]
             success, retRegister = CallAtAddress(ser, FlashDriverEntryPoint, register)
             if not success or len(retRegister) < 2:
-                logger.info("Failed to retrieve Device ID.")
+                logger.warning("Failed to retrieve Device ID.")
                 return None, None
             devId = GetBackCrossedWord(retRegister[1]) & 0xFF if apply_reverse else retRegister[1] & 0xFF
 
@@ -566,7 +583,8 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             driver_type = "V6"
 
             # Try V6 driver first
-            logger.info("\nTrying V6 driver...")
+            logger.info("", extra={"suppress_format": True}) #blank line
+            logger.info("Trying V6 driver...")
             with open(driver_path, 'rb') as driverFile:
                 eepromDriver = list(driverFile.read())
             SetBlockAtAddress(ser, driverAddress, eepromDriver)
@@ -574,13 +592,13 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
 
             # Switch to 2.0L driver if Manufacturer ID is not for V6
             if manId != 0x01 and manId != 0x20:
-                logger.info(f"Unexpected Manufacturer ID: {hex(manId)}. Switching to 2.0L driver.")
+                logger.warning(f"Unexpected Manufacturer ID: {hex(manId)}. Switching to 2.0L driver.\n")
                 driver_path = resource_path("assets/simk4x_driver_i4_a29fx00bx.bin")
                 apply_reverse = True
                 driver_type = "2.0L"
 
         # Send the selected driver once
-        logger.info(f"\nSending {driver_type} driver...")
+        logger.info(f"Sending {driver_type} driver...")
         with open(driver_path, 'rb') as driverFile:
             eepromDriver = list(driverFile.read())
         SetBlockAtAddress(ser, driverAddress, eepromDriver)
@@ -599,7 +617,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
         # Determine chip type
         chipType, flashSize, bootSectorType = chipDetails.get(devId, ("Unknown Chip", 0, "Unknown"))
         if chipType == "Unknown Chip":
-            logger.info(f"Unknown Device ID: {hex(devId)}.")
+            logger.error(f"Unknown Device ID: {hex(devId)}.")
 
         logger.info(f"Detected Chip: {chipType}, Size: {hex(flashSize)}, Boot Sector: {bootSectorType}")
 
@@ -610,7 +628,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
 
 
     if(job == jobHwInfo):
-        logger.info("\n *************  start hwinfo  *************\n")
+        logger.info("\n*************  start hwinfo  *************\n", extra={"suppress_format": True})
 
         # Detect ECU type and configure
         chipType, flashSize, bootSectorType = detect_ecu_type_and_configure(ser)
@@ -621,16 +639,16 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
                 progress_callback(percentage)
                 time.sleep(0.1)  # Simulate processing delay
 
-        logger.info("\n *************  end hwinfo  *************\n")
+        logger.info("\n*************  end hwinfo  *************\n", extra={"suppress_format": True})
 
         return 1
 
 
 
     if(job == jobWriteExtFlash):    
-        logger.info("\n *************  start write extFlash  *************\n ")
+        logger.info("\n*************  start write extFlash  *************\n", extra={"suppress_format": True})
 
-##        logger.info("\n *************  write reset to read (f0)  *************\n ")
+##        logger.info("\n *************  write reset to read (f0)  *************\n", extra={"suppress_format": True})
 ##        SetWordAtAddress(ser, 0x400000, 0xf0)
 
 ##        GetFlashManufacturerID(ser)
@@ -689,7 +707,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
 
             success , retRegister = CallAtAddress(ser, FlashDriverEntryPoint,register)
             if(success == False):   # | (retRegister[7] != 0x0): prevent list index out of range, when running this on 2.0L python .\bsl.py 57600 -writeextflash .\blank_with_1234.bin simk4x_v6
-                logger.info(" Call FC_ERASE failed\n")
+                logger.error("Call FC_ERASE failed\n")
                 return -1
             
             #logger.info(f"Call FC_ERASE Sector {sector} successful: {retRegister[7] == 0x0}, return sector address: {hex(retRegister[5])}, timeout counter: {hex(retRegister[6])}")
@@ -713,7 +731,8 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             offset += sectorSize
             sector += 1
 
-        logger.info("\nSuccessfully Erased %s Sectors: %s", sector-1, retRegister[7] == 0x0)
+        logger.info("", extra={"suppress_format": True}) #blank line
+        logger.info("Successfully Erased %s Sectors: %s", sector-1, retRegister[7] == 0x0)
 
 #************* Write*********
         offset = 0x0
@@ -732,7 +751,7 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
                 success = SetBlockAtAddress(ser, DriverCopyAddress, list(writeData[offset:(offset+writesize)]))
 
                 if(success != True):
-                    logger.info("Write not successful!!")
+                    logger.error("Write not successful!!")
                     return -1
 
                 writeAddress = writeAddressBase + offset
@@ -745,14 +764,14 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
 
     ##            for i in register:
     ##                logger.info(hex(i))
-    ##            logger.info("") #blank line
+    ##            logger.info("", extra={"suppress_format": True}) #blank line
                 success , retRegister = CallAtAddress(ser, FlashDriverEntryPoint,register)
                 if(success == False) | (retRegister[7] != 0x0):
-                    logger.info("Call FC_PROGRAM failed")
+                    logger.error("Call FC_PROGRAM failed")
                     logger.info("Debug Registers")
                     for r in retRegister:
                         logger.info(hex(r))
-                    logger.info("") #blank line
+                    logger.info("", extra={"suppress_format": True}) #blank line
                     return -1
                 
                 offset += writesize
@@ -787,11 +806,11 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
 
         logger.info("Successfully Programmed %s :%s",hex(offset),retRegister[7] == 0x0)
 
-        logger.info(" \n********** write extFlash successful!! ***********\n")
+        logger.info("\n********** write extFlash successful!! ***********\n", extra={"suppress_format": True})
         return 1
 
     if job == jobReadExtFlash:
-        logger.info("\n *************  start read extFlash  *************\n")
+        logger.info("\n*************  start read extFlash  *************\n", extra={"suppress_format": True})
 
         # Detect ECU type and configure
         chipType, flashSize, bootSectorType = detect_ecu_type_and_configure(ser)
@@ -828,8 +847,9 @@ def RunFunc(exit, ser, file, job, size, eetype, portAddr4, directionPortAddress4
             else:
                 sys.stdout.write(f"\r  read at {hex(offset)} finished {percentage} % ")
 
-        logger.info(f"\nFile has been saved to: {filename}")
-        logger.info("\n *************  finish read extFlash  *************\n")
+        logger.info("", extra={"suppress_format": True}) #blank line
+        logger.info(f"File has been saved to: {filename}")
+        logger.info("\n*************  finish read extFlash  *************\n", extra={"suppress_format": True})
         return 1
     return 1   # != 0 ... exit
 
@@ -860,7 +880,7 @@ def PrintUsage():
           
           "\n-------------------- Baudrate ------------------------------------------\n"+
           " standard rates: 9600, 19200, 28800, 38400 (default: 57600)\n"
-          "------------------------------------------------------------------------\n")
+          "------------------------------------------------------------------------\n", extra={"suppress_format": True})
 
 
 # Global Variables
@@ -884,7 +904,7 @@ def run_bsl_loop(progress_callback=None, log_callback2=None):
                     raise RuntimeError("Unexpected state 0 in run_bsl_loop.")
                 elif state == 10:
                     if printwait == 0:
-                        logger.info("\nBootstrap Loader for Siemens SIMK4x ECU's \n********************************************\n")
+                        logger.info("\nBootstrap Loader for Siemens SIMK4x ECU's \n********************************************\n", extra={"suppress_format": True})
                         logger.info("Waiting for K+Can or KKL Adapter (plug in USB if not done!!)")
                         printwait = 1
                     while usbpresent == 0:
@@ -906,12 +926,12 @@ def run_bsl_loop(progress_callback=None, log_callback2=None):
                         try:
                             comcounter = int(num)
                             if comcounter >= len(ports) or comcounter < 0:
-                                logger.info("Invalid input")
+                                logger.warning("Invalid input")
                                 usbpresent = 0
                                 state = 10
                                 ports = []
                         except ValueError:
-                            logger.info("Invalid input")
+                            logger.warning("Invalid input")
                             usbpresent = 0
                             state = 10
                             ports = []
@@ -927,17 +947,17 @@ def run_bsl_loop(progress_callback=None, log_callback2=None):
                     except Exception as e:
                         exit = -1
                         traceback.print_exc()
-                        logger.info(f"Job execution failed: {e}")
+                        logger.error(f"Job execution failed: {e}")
             except Exception as e:
                 exit = 1
                 traceback.print_exc()
-                logger.info(f"Exception in loop: {e}")
+                logger.error(f"Exception in loop: {e}")
     finally:
         try:
             if file:
                 file.close()
         except Exception as cleanup_error:
-            logger.info(f"Error during cleanup: {cleanup_error}")
+            logger.error(f"Error during cleanup: {cleanup_error}")
 
 
 # Main callable function
@@ -1005,22 +1025,33 @@ def execute_bsl(args, progress_callback=None, log_callback2=None):
         run_bsl_loop(progress_callback=progress_callback, log_callback2=log_callback2)
 
     except Exception as e:
-        logger.info(f"Error occurred in execute_bsl: {e}")
+        logger.error(f"Error occurred in execute_bsl: {e}")
         raise
 
 # Run when the script is executed directly
 if __name__ == "__main__":
-    
+
+    # Custom formatting logic for the console handler
+    class ConsoleFormatter(logging.Formatter):
+        def format(self, record):
+            if not getattr(record, "suppress_format", False):
+                if record.levelno == logging.INFO:
+                    record.msg = f"[*] {record.msg}"
+                elif record.levelno == logging.WARNING:
+                    record.msg = f"[!] {record.msg}"
+                elif record.levelno == logging.ERROR:
+                    record.msg = f"[!] {record.msg}"
+            return super().format(record)
+        
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.DEBUG)
-    console_handler.setFormatter(logging.Formatter("%(message)s"))
-    #console_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+    console_handler.setFormatter(ConsoleFormatter("%(message)s"))
     logger.addHandler(console_handler)
 
     if len(sys.argv) > 1:
         try:
             execute_bsl(sys.argv[1:])
         except Exception as e:
-            logger.info(f"An error occurred: {e}")
+            logger.error(f"An error occurred: {e}")
     else:
         PrintUsage()
