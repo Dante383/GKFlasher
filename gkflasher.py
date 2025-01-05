@@ -9,8 +9,8 @@ from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_secu
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from flasher.logging import logger
-from flasher.checksum import correct_checksum
 from flasher.immo import cli_immo, cli_immo_info
+from flasher.lineswap import generate_sie, generate_bin
 
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
@@ -124,6 +124,8 @@ def load_arguments ():
 	parser.add_argument('--read-program', action='store_true')
 	parser.add_argument('--id', action='store_true')
 	parser.add_argument('--correct-checksum')
+	parser.add_argument('--bin-to-sie')
+	parser.add_argument('--sie-to-bin')	
 	parser.add_argument('--clear-adaptive-values', action='store_true')
 	parser.add_argument('-l', '--logger', action='store_true')
 	parser.add_argument('-o', '--output', help='Filename to save the EEPROM dump')
@@ -297,6 +299,14 @@ if __name__ == '__main__':
 	if (args.correct_checksum):
 		correct_checksum(filename=args.correct_checksum)
 
+	if (args.bin_to_sie):
+		generate_sie(filename=args.bin_to_sie)
+		sys.exit()
+
+	if (args.sie_to_bin):
+		generate_bin(filename=args.sie_to_bin)
+		sys.exit()
+		
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 
