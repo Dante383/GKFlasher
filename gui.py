@@ -15,6 +15,7 @@ from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from gkflasher import strip
+from flasher.lineswap import generate_sie, generate_bin
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -140,7 +141,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.displayECUID.clicked.connect(lambda: self.click_handler(self.display_ecu_identification))
 
 		self.checksumCorrectBtn.clicked.connect(self.correct_checksum)
-		
+		self.binToSieBtn.clicked.connect(self.bin_to_sie_conversion)
+		self.sieToBinBtn.clicked.connect(self.sie_to_bin_conversion)
+
 		self.flashingCalibrationBtn.clicked.connect(lambda: self.click_handler(self.flash_calibration))
 		self.flashingProgramBtn.clicked.connect(lambda: self.click_handler(self.flash_program))
 		self.flashingFullBtn.clicked.connect(lambda: self.click_handler(self.flash_full))
@@ -1280,6 +1283,16 @@ class Ui(QtWidgets.QMainWindow):
 
 		except Exception as e:
 			log_callback.emit(f"An error occurred: {str(e)}")
+
+
+	def bin_to_sie_conversion (self):
+		filename = self.checksumFileInput.text()
+		generate_sie(filename=filename)
+
+	def sie_to_bin_conversion(self):
+		filename = self.checksumFileInput.text()
+		generate_bin(filename=filename)
+
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
