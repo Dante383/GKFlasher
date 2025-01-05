@@ -1,6 +1,10 @@
 # GKFlasher
 
-CLI flashing tool for SIMK41/43-based vehicles. This project is a result of research gathered by black-box reverse engineering
+CLI flashing tool for SIMK41/43-based vehicles. This project is a result of research gathered by black-box reverse engineering.
+
+It can read & write ecu calibration data / program code, correct EEPROM checksums, clear adaptive values and program the immobilizer. It also provides BSL support from your ECU.
+
+This project is open source and supported by OpenGK
 
 ![GUI interface](assets/gkflasher_gui.png)
 ![Reading over CANbus](assets/gkflasher_canbus_read.png)
@@ -105,3 +109,14 @@ This behaviour is followed by default by GKFlasher's --read command.
 `-s --address_start {offset}` - Offset to start reading/flashing from 
 
 `-e --address_stop {offset}` - Offset to stop reading/flashing at
+
+`--bin-to-sie {input filename}` - Convert BIN to SIE for (Chip-off) Flashing
+
+`--sie-to-bin {input filename}` - Convert SIE to BIN after (Chip-off) Flashing
+
+`--immo` - Immobilizer functions
+
+`-v --verbose` - Enable debug logging
+
+`-l --logger` - Start KWP2000 Datalogger 
+
