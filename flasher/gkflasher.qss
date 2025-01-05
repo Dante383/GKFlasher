@@ -235,3 +235,19 @@ QInputDialog QPushButton:pressed {
     border: none;
     qproperty-alignment: 'AlignCenter';
 }
+
+/* VIN-to-Pin Frame on Immo Tab */
+#vinToPinFrame {
+    color: #ecf0f1;
+    border-radius: 5px;
+    border: 1px solid #34495e;
+}
+
+/* Vin-to-Pin Converter Label on Immo Tab */
+#vinToPinLabel {
+    color: #ecf0f1;
+    font-family: "Consolas";
+    font-size: 12px;
+    border: none;
+    qproperty-alignment: 'AlignCenter';
+}
