@@ -4,7 +4,7 @@ CLI flashing tool for SIMK41/43-based vehicles. This project is a result of rese
 
 It can read & write ecu calibration data / program code, correct EEPROM checksums, clear adaptive values and program the immobilizer. It also provides BSL support from your ECU.
 
-This project is open source and supported by OpenGK
+This project is supported by [OpenGK.org](https://opengk.org/)
 
 ![GUI interface](assets/gkflasher_gui.png)
 ![Reading over CANbus](assets/gkflasher_canbus_read.png)
