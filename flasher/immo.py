@@ -1,6 +1,7 @@
 from gkbus import kwp
 from ecu_definitions import Routine
 from flasher.ecu import enable_security_access
+from flasher.smartra import calculate_smartra_pin
 
 immo_status = {
 	0: 'Not learnt',
@@ -100,7 +101,7 @@ def cli_immo_reset (bus, desired_baudrate):
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
 		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
-	print('[*] ECU restarted! Turn ignition off for 10 seconds for changes to take effect')
+	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
 
 def cli_smartra_neutralize (bus, desired_baudrate):
 	print('[*] starting default diagnostic session')
@@ -147,6 +148,7 @@ def cli_immo_teach_keys (bus, desired_baudrate):
 	key_a = (key >> 16) & 0xFF
 	key_b = (key >> 8) & 0xFF
 	key_c = key & 0xFF
+
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
 	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
@@ -220,6 +222,26 @@ def cli_limp_home_teach (bus, desired_baudrate):
 	if (input('[?] Are you sure? [y/n]: ') == 'y'):
 		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data())
 
+def get_last_6_digits (text_input: str) -> int:
+	try:
+		return int(text_input[-6:])
+	except (ValueError, IndexError):
+		raise ValueError
+
+def cli_vin_to_pin (last_6_digits, calculated_pin):
+	print('[*] SMARTRA VIN to PIN calculator')
+	print('[*] This calculator should apply for all Hyundai and KIA models equipped with SMARTRA2')
+	print('[*] From 2007 or so, some models started using SMARTRA3 and a different algorithm - beware.')
+
+	while True:
+		try:
+			last_6_digits = get_last_6_digits(input('[*] Enter your VIN (or just the last 6 digits): '))
+			calculated_pin = calculate_smartra_pin(last_6_digits)
+			print('[*] All good! Your immo pin should be: {}'.format(calculated_pin))
+			break
+		except ValueError:
+			print('[!] Something went wrong. Try again')
+	
 immo_menus = [
 	['Information', cli_immo_info],
 	['Limp home mode', cli_limp_home],
@@ -228,7 +250,8 @@ immo_menus = [
 	['Teach keys', cli_immo_teach_keys],
 	['Limp home password teaching/changing', cli_limp_home_teach],
 	['Read VIN', cli_read_vin],
-	['Write VIN', cli_write_vin]
+	['Write VIN', cli_write_vin],
+	['Smartra VIN to PIN Calculator', cli_vin_to_pin]
 ]
 
 def cli_immo (bus, desired_baudrate):

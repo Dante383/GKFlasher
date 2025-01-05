@@ -2,8 +2,8 @@ from enum import Enum
 
 ECU_IDENTIFICATION_TABLE = [
 	{
-		'offset': 0x3FE0, # BL workaround
-		'expected': [[53, 50, 52, 50]], #5242
+		'offset': 0x82014, # RSW zone
+		'expected': [[54, 54, 50, 49]], #6621
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)

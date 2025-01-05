@@ -237,6 +237,67 @@
       <string>Correct checksum</string>
      </property>
     </widget>
+    <widget class="QFrame" name="lineSwapFrame">
+     <property name="geometry">
+      <rect>
+       <x>540</x>
+       <y>40</y>
+       <width>221</width>
+       <height>81</height>
+      </rect>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="lineWidth">
+      <number>10</number>
+     </property>
+     <property name="midLineWidth">
+      <number>0</number>
+     </property>
+     <widget class="QPushButton" name="binToSieBtn">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>20</y>
+        <width>161</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>BIN &gt; SIE Converter</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="lineSwapLabel">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>1</y>
+        <width>181</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Chip-off (Line Swap)</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="sieToBinBtn">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>50</y>
+        <width>161</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>SIE &gt; BIN Converter</string>
+      </property>
+     </widget>
+    </widget>
    </widget>
    <widget class="QWidget" name="tab_id">
     <attribute name="title">
@@ -363,6 +424,54 @@
      <property name="text">
       <string>Write VIN</string>
      </property>
+    </widget>
+    <widget class="QFrame" name="vinToPinFrame">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>10</y>
+       <width>251</width>
+       <height>71</height>
+      </rect>
+     </property>
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="lineWidth">
+      <number>10</number>
+     </property>
+     <property name="midLineWidth">
+      <number>0</number>
+     </property>
+     <widget class="QPushButton" name="vinToPinBtn">
+      <property name="geometry">
+       <rect>
+        <x>30</x>
+        <y>30</y>
+        <width>191</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enter VIN Number</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="vinToPinLabel">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>1</y>
+        <width>211</width>
+        <height>20</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Smartra VIN to PIN Calculator</string>
+      </property>
+     </widget>
     </widget>
    </widget>
    <widget class="QWidget" name="tab_bsl">

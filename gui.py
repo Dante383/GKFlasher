@@ -15,6 +15,8 @@ from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from gkflasher import strip
+from flasher.lineswap import generate_sie, generate_bin
+from flasher.smartra import calculate_smartra_pin
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -91,7 +93,8 @@ class Ui(QtWidgets.QMainWindow):
 	request_pin_signal4 = pyqtSignal(object, object)  # For requesting the PIN
 	request_pin_signal5 = pyqtSignal(object, object)  # For requesting the PIN
 	request_new_password_signal = pyqtSignal(object, object, str)  # For requesting the new password. Three arguments: log_callback, ecu, current_password
-	request_vin_signal = pyqtSignal(object, object)  # For requesting the VIN
+	request_vin_signal = pyqtSignal(object, object)  # For requesting the Write VIN Input
+	request_vin_to_pin_signal = pyqtSignal(object)  # For requesting the VIN to PIN Input
 	log_signal = pyqtSignal(str)  # Define a signal for logging
 
 	def __init__(self):
@@ -111,6 +114,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.request_pin_signal5.connect(self.request_pin_from_user5)
 		self.request_new_password_signal.connect(self.request_new_password_from_user)
 		self.request_vin_signal.connect(self.request_vin_from_user)
+		self.request_vin_to_pin_signal.connect(self.request_vin_to_pin_from_user)
 
 		# Change the working directory
 		if not os.path.exists(home):
@@ -140,7 +144,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.displayECUID.clicked.connect(lambda: self.click_handler(self.display_ecu_identification))
 
 		self.checksumCorrectBtn.clicked.connect(self.correct_checksum)
-		
+		self.binToSieBtn.clicked.connect(self.bin_to_sie_conversion)
+		self.sieToBinBtn.clicked.connect(self.sie_to_bin_conversion)
+
 		self.flashingCalibrationBtn.clicked.connect(lambda: self.click_handler(self.flash_calibration))
 		self.flashingProgramBtn.clicked.connect(lambda: self.click_handler(self.flash_program))
 		self.flashingFullBtn.clicked.connect(lambda: self.click_handler(self.flash_full))
@@ -159,6 +165,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.teachKeysBtn.clicked.connect(lambda: self.click_handler(self.teach_keys))
 		self.readVinBtn.clicked.connect(lambda: self.click_handler(self.read_vin))
 		self.writeVinBtn.clicked.connect(lambda: self.click_handler(self.write_vin))
+		self.vinToPinBtn.clicked.connect(lambda: self.click_handler(self.vin_to_pin))
 
 		self.bslHwInfoBtn.clicked.connect(lambda: self.click_handler(self.bslHwInfo))
 		self.bslReadIntRomBtn.clicked.connect(lambda: self.click_handler(self.bslReadIntRom))
@@ -1182,6 +1189,45 @@ class Ui(QtWidgets.QMainWindow):
 			self.log(f'[!] Unexpected error while writing VIN: {e}')
 			return self.disconnect_ecu(ecu)
 
+	def vin_to_pin(self, progress_callback=None, log_callback=None):
+
+		log_callback.emit('[*] SMARTRA VIN to PIN calculator')
+		log_callback.emit('[*] This calculator should apply for all Hyundai and KIA models equipped with SMARTRA2')
+		log_callback.emit('[*] From 2007 or so, some models started using SMARTRA3 and a different algorithm - beware.')
+
+		# Save ECU context and proceed
+		self._log_callback = log_callback
+
+		# Request the VIN asynchronously
+		self.request_vin_to_pin_signal.emit(log_callback)
+
+	def request_vin_to_pin_from_user(self, log_callback):
+		# Open a dialog for the user to enter the VIN
+		vin, ok = QtWidgets.QInputDialog.getText(self, 'Enter VIN', 'Enter your VIN (or last 6 digits):')
+		if ok and len(vin.strip()) >= 6 and len(vin) <= 17:
+			vin = vin.strip()
+
+			# Extract the last 6 digits
+			try:
+				last_6_digits = int(vin[-6:])  # Extract the last 6 digits
+				self.continue_vin_to_pin(last_6_digits, log_callback)  # Proceed with the last 6 digits
+			except ValueError:
+				self.log('[!] Error: The last 6 characters of the VIN must be numeric.')
+				return
+		else:
+			self.log('[!] Invalid VIN or operation cancelled.')
+			return
+
+	def continue_vin_to_pin(self, last_6_digits, log_callback):
+		while True:
+			try:
+				calculated_pin = calculate_smartra_pin(last_6_digits)
+				self.log(f'[*] All good! Your immo pin is: {calculated_pin}')
+				break
+			except ValueError:
+				print('[!] Something went wrong. Try again')
+
+
 	def get_or_generate_file_path(self) -> str:
 		# Retrieve the file path from the QLineEdit
 		user_file_path = self.bslFileInput.text().strip()
@@ -1280,6 +1326,16 @@ class Ui(QtWidgets.QMainWindow):
 
 		except Exception as e:
 			log_callback.emit(f"An error occurred: {str(e)}")
+
+
+	def bin_to_sie_conversion (self):
+		filename = self.checksumFileInput.text()
+		generate_sie(filename=filename)
+
+	def sie_to_bin_conversion(self):
+		filename = self.checksumFileInput.text()
+		generate_bin(filename=filename)
+
 
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)

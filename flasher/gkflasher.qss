@@ -219,3 +219,35 @@ QInputDialog QPushButton:hover {
 QInputDialog QPushButton:pressed {
     background-color: #1f618d; /* Darker blue on press */
 }
+
+/* Line-Swap Frame on Checksum Tab */
+#lineSwapFrame {
+    color: #ecf0f1;
+    border-radius: 5px;
+    border: 1px solid #34495e;
+}
+
+/* Line-Swap Converter Label on Checksum Tab */
+#lineSwapLabel {
+    color: #ecf0f1;
+    font-family: "Consolas";
+    font-size: 12px;
+    border: none;
+    qproperty-alignment: 'AlignCenter';
+}
+
+/* VIN-to-Pin Frame on Immo Tab */
+#vinToPinFrame {
+    color: #ecf0f1;
+    border-radius: 5px;
+    border: 1px solid #34495e;
+}
+
+/* Vin-to-Pin Converter Label on Immo Tab */
+#vinToPinLabel {
+    color: #ecf0f1;
+    font-family: "Consolas";
+    font-size: 12px;
+    border: none;
+    qproperty-alignment: 'AlignCenter';
+}

@@ -8,7 +8,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 			{
 	        	'name': 'Boot',
 		        'flag_address': 0xDEFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EF4,
 		        'bin_offset': 0
 		    },
@@ -35,7 +35,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 			{
 	        	'name': 'Boot',
 		        'flag_address': 0x017EFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EEC, # 663057/58
 		        'bin_offset': 0
 		    },
@@ -62,7 +62,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 			{
 	        	'name': 'Boot',
 		        'flag_address': 0x017EFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EF4,
 		        'bin_offset': 0
 		    },
@@ -89,7 +89,7 @@ cks_types = [ # todo: incorporate into ECU definitions
         	{
 	        	'name': 'Boot',
 		        'flag_address': 0xDEFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EF4,
 		        'bin_offset': 0
 		    },	
@@ -116,7 +116,7 @@ cks_types = [ # todo: incorporate into ECU definitions
         	{
 	        	'name': 'Boot',
 		        'flag_address': 0xEEFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EF4,
 		        'bin_offset': 0
 		    },	
@@ -143,7 +143,7 @@ cks_types = [ # todo: incorporate into ECU definitions
 			{
 	        	'name': 'Boot',
 		        'flag_address': 0x97EFE,
-		        'init_address': 0x3F25,
+		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EEC,
 		        'bin_offset': 0
 		    },
