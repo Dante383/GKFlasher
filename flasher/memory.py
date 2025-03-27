@@ -1,8 +1,9 @@
 import logging
-from gkbus.kwp.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
-from gkbus.kwp.enums import CompressionType, EncryptionType
-from gkbus.kwp import KWPNegativeResponseException
-from gkbus import GKBusTimeoutException
+from gkbus.protocol import kwp2000
+from gkbus.protocol.kwp2000.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
+from gkbus.protocol.kwp2000.enums import CompressionType, EncryptionType
+from gkbus.hardware import TimeoutException
+from .ecu import ECU
 from math import ceil
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ page_size_b = 16384
 # This function rounds upto the nearest multiple. 
 # KWP frames are 256 bytes and the FTDI buffer 512 bytes.
 # This prevents an overflow situation when writing different sized binaries.
-def round_to_multiple(number, multiple):  
+def round_to_multiple(number: int, multiple: int) -> int:  
         return multiple * ceil(number / multiple)
 
 def dynamic_find_end (payload):
@@ -24,12 +25,12 @@ def dynamic_find_end (payload):
 			break
 	return end_offset
 
-def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
+def read_page_16kib(ecu: ECU, offset: int, at_a_time: int = 254, progress_callback=False) -> bytearray:
 	address_start = offset
 	address_stop = offset+page_size_b
 	address = address_start
 
-	payload = [0xFF]*(address_stop-address_start)
+	payload = bytearray([0xFF]*(address_stop-address_start))
 
 	while True:
 		if ( (address_stop-address) < at_a_time ):
@@ -37,10 +38,10 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 
 		try:
 			fetched = ecu.read_memory_by_address(offset=address, size=at_a_time)
-		except KWPNegativeResponseException as e:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
-			fetched = []
-		except GKBusTimeoutException:
+			fetched = bytes()
+		except TimeoutException:
 			logger.warning('Timeout at Offset %s! Trying again...', hex(address))
 			continue
 
@@ -63,10 +64,10 @@ def read_page_16kib(ecu, offset, at_a_time=254, progress_callback=False):
 # it doesn't pad the read with 0xFFs or anything. If you request to read, for example,
 # the calibration zone, from 0x090000 to 0x094000 (16364 bytes) - then you'll only
 # get 16364 bytes back. 
-def read_memory(ecu, address_start, address_stop, progress_callback=False):#, progress_callback):
+def read_memory(ecu: ECU, address_start: int, address_stop: int, progress_callback=False) -> bytearray:#, progress_callback):
 	requested_size = address_stop-address_start
 	pages = int(requested_size/page_size_b) # 16kib per page 
-	buffer = [0xFF]*requested_size
+	buffer = bytearray([0xFF]*requested_size)
 	address = address_start
 
 	try:
@@ -93,7 +94,7 @@ def read_memory(ecu, address_start, address_stop, progress_callback=False):#, pr
 
 	return buffer
 
-def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False):
+def write_memory(ecu: ECU, payload: bytes, flash_start: int, flash_size: int, progress_callback=False) -> None:
 	ecu.bus.execute(RequestDownload(offset=flash_start, size=flash_size, compression_type=CompressionType.UNCOMPRESSED, encryption_type=EncryptionType.UNENCRYPTED))
 
 	packets_to_write = int(flash_size/254)
@@ -111,9 +112,9 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 
 				while True:
 					try:
-						ecu.bus.execute(TransferData(list(payload_packet)))
+						ecu.bus.execute(TransferData(payload_packet))
 						break
-					except (GKBusTimeoutException):
+					except TimeoutException:
 						logger.warning('Timeout at Block %s! Trying again...', packets_written)
 						continue
 			
@@ -132,9 +133,9 @@ def write_memory(ecu, payload, flash_start, flash_size, progress_callback=False)
 
 				while True:
 					try:
-						ecu.bus.execute(TransferData(list(payload_packet)))
+						ecu.bus.execute(TransferData(payload_packet))
 						break
-					except (GKBusTimeoutException):
+					except TimeoutException:
 						logger.warning('Timeout at Block %s! Trying again...', packets_written)
 						continue
 

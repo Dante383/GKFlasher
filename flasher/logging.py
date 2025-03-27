@@ -1,6 +1,7 @@
-from gkbus.kwp.commands import *
-from gkbus.kwp.enums import *
 import csv, time
+from gkbus.protocol.kwp2000.commands import *
+from gkbus.protocol.kwp2000.enums import *
+from .ecu import ECU
 
 # this is not the way to do it, @TODO load data dynamically from GDS definitions
 data_sources = [
@@ -251,17 +252,17 @@ data_sources = [
 def grab (payload, parameter):
 	return round(parameter['conversion'](int.from_bytes(payload[parameter['position']:parameter['position']+parameter['size']], "little")), parameter['precision'])
 
-def poll (ecu):
+def poll (ecu: ECU) -> list[int]:
 	data = []
 	for source in data_sources:
-		raw_data = bytes(ecu.bus.execute(source['payload']).get_data())
+		raw_data = ecu.bus.execute(source['payload']).get_data()
 		for parameter in source['parameters']:
 			value = grab(raw_data, parameter)
 			data.append(value)
 			print('{}: {}{}'.format(parameter['name'], value, parameter['unit']))
 	return data
 
-def logger(ecu):
+def logger(ecu: ECU) -> None:
 	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
 
 	print('[*] Building parameter header')
@@ -274,7 +275,7 @@ def logger(ecu):
 	
 	try:
 		while True:
-			data.append([int(time.time())] + poll(ecu))
+			data.append([int(time.time()*1000)] + poll(ecu))
 	except (KeyboardInterrupt, AttributeError):
 		with open('log.csv', 'w') as csvfile:
 			logwriter = csv.writer(csvfile)

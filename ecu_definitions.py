@@ -3,7 +3,7 @@ from enum import Enum
 ECU_IDENTIFICATION_TABLE = [
 	{
 		'offset': 0x82014, # RSW zone
-		'expected': [[54, 54, 50, 49]], #6621
+		'expected': [b'\x36\x36\x32\x31'], #[[54, 54, 50, 49]], #6621
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
@@ -21,7 +21,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x90040,
-		'expected': [[99, 97, 54, 54]], #CA66
+		'expected': [b'\x63\x61\x36\x36'], #[[99, 97, 54, 54]], #CA66
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -39,7 +39,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [[99, 97, 54, 53, 52, 48, 49]], #CA65401 (5WY17)
+		'expected': [b'\x63\x61\x36\x35\x34\x30\x31'], #[[99, 97, 54, 53, 52, 48, 49]], #CA65401 (5WY17)
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY17)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -57,7 +57,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 		{
 		'offset': 0x88040,
-		'expected': [[99, 97, 54, 53, 52], [99, 97, 54, 53, 53]], #CA654, CA655 (5WY18+)
+		'expected': [[b'\x63\x61\x36\x35\x34'], [b'\x63\x61\x36\x35\x35']], #[[99, 97, 54, 53, 52], [99, 97, 54, 53, 53]], #CA654, CA655 (5WY18+)
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY18+)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -75,7 +75,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x48040,
-		'expected': [[99, 97, 54, 54, 48], [99, 97, 54, 53, 50], [99, 97, 54, 53, 48]], #CA660, CA652, CA650
+		'expected': [[b'\x63\x61\x36\x36\x30'], [b'\x63\x61\x36\x35\x32'], [b'\x63\x61\x36\x35\x30']], #[[99, 97, 54, 54, 48], [99, 97, 54, 53, 50], [99, 97, 54, 53, 48]], #CA660, CA652, CA650
 		'ecu': {
 			'name': 'SIMK41 / V6 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)
@@ -93,7 +93,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [[99, 97, 54, 54, 49]], #CA661 (Sonata)
+		'expected': [[b'\x63\x61\x36\x36\x31']], #[[99, 97, 54, 54, 49]], #CA661 (Sonata)
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit (Sonata)',
 			'eeprom_size_bytes': 524288, # (512 KiB)

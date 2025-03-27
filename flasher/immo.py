@@ -1,4 +1,4 @@
-from gkbus import kwp
+from gkbus.protocol import kwp2000
 from ecu_definitions import Routine
 from flasher.ecu import enable_security_access
 from flasher.smartra import calculate_smartra_pin
@@ -13,14 +13,14 @@ immo_status = {
 	6: 'Invalid key'
 }
 
-def cli_immo_info (bus, desired_baudrate):
+def cli_immo_info (bus, desired_baudrate) -> None:
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp.commands2000.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
-		immo_data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
-	except (kwp.KWPNegativeResponseException):
+		immo_data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
+	except (kwp2000.Kwp2000NegativeResponseException):
 		print('[*] Immo seems to be disabled')
 		return
 
@@ -39,16 +39,17 @@ def cli_immo_info (bus, desired_baudrate):
 	if (len(immo_data) > 4):
 		print('[*] Smartra status: {}'.format(immo_status[immo_data[4]]))
 
-def cli_limp_home (bus, desired_baudrate):
+def cli_limp_home (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
-		data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
-	except (kwp.KWPNegativeResponseException):
+		data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
+	except kwp2000.Kwp2000NegativeResponseException as e:
 		print('[!] Received an exception from the ECU! This usually means that immo is inactive or limp home pin wasn\'t set (common for Tiburon FL2)')
+		print('({})'.format(str(e.status)))
 		return
 
 	if (len(data) > 1):
@@ -63,26 +64,26 @@ def cli_limp_home (bus, desired_baudrate):
 
 	print('[*] starting routine 0x18 with password as parameter')
 	try:
-		data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b)).get_data()
-	except (kwp.KWPNegativeResponseException):
+		data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b)).get_data()
+	except (kwp2000.Kwp2000NegativeResponseException):
 		print('[!] Invalid password! Try the default one: 2345')
 
-	print(' '.join([hex(x) for x in data]))
+	print(' '.join([hex(x) for x in list(data)]))
 
 	if (len(data) > 1):
 		if (data[1] == 1):
 			print('[*] limp home activated!')
 
-def cli_immo_reset (bus, desired_baudrate):
+def cli_immo_reset (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x15')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
-	print(' '.join([hex(x) for x in data]))
+	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
+	print(' '.join([hex(x) for x in list(data)]))
 
 	if (len(data) > 1):
 		if (data[1] == 4):
@@ -96,23 +97,23 @@ def cli_immo_reset (bus, desired_baudrate):
 
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+	print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
+		print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
 	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
 
-def cli_smartra_neutralize (bus, desired_baudrate):
+def cli_smartra_neutralize (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x25')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
-	print(' '.join([hex(x) for x in data]))
+	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
+	print(' '.join([hex(x) for x in list(data)]))
 
 	if (len(data) > 1):
 		if (data[1] == 4):
@@ -126,23 +127,23 @@ def cli_smartra_neutralize (bus, desired_baudrate):
 
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+	print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.SMARTRA_NEUTRALIZE.value, 0x01)).get_data())
+		print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.SMARTRA_NEUTRALIZE.value, 0x01)).get_data())
 
 	print('[*] SMARTRA neutralized! Turn ignition off for 5 seconds for changes to take effect.')
 
-def cli_immo_teach_keys (bus, desired_baudrate):
+def cli_immo_teach_keys (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x14')
-	data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
-	print(' '.join([hex(x) for x in data]))
+	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
+	print(' '.join([hex(x) for x in list(data)]))
 
 	key = int('0x' + input('Enter 6 digit immo pin: '), 0)
 	key_a = (key >> 16) & 0xFF
@@ -151,56 +152,63 @@ def cli_immo_teach_keys (bus, desired_baudrate):
 
 
 	print('[*] Starting routine 0x1A with key as parameter and some 0xFFs')
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
+	print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, key_a, key_b, key_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data())
 
 	for x in range(4):
 		if (input('[?] Teach immo key {}? [y/n]: '.format(x+1)) == 'y'):
-			data = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x, 0x01)).get_data()
+			data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(0x1B+x, 0x01)).get_data()
 		else:
 			# bus.execute(kwp.commands.StartRoutineByLocalIdentifier(0x1B+x+1, 0x02)) # cascade did this, but it throws 0x10. seems to be not needed?
 			break
 	print('[*] Done! Turn off ignition for 10 seconds for changes to take effect')
 
-def cli_read_vin (bus, desired_baudrate):
-	cmd = kwp.KWPCommand()
-	cmd.command = 0x09 # undocumented service
-	cmd.data = [0x02]
-	
+def cli_read_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
+	print('[*] reverting to default session')
+	if desired_baudrate is None:
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
+	else:
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+
+	cmd = kwp2000.Kwp2000Command()
+	cmd.set_service_identifier(0x09).set_data(bytes([0x02])) # undocumented service
+
 	try:
 		vin = bus.execute(cmd).get_data()
-	except (kwp.KWPNegativeResponseException):
-		print('[!] Not supported!')
+	except kwp2000.Kwp2000NegativeResponseException as e:
+		print('[!] Not supported! ({})'.format(str(e.status)))
 		return
+
+	vin = list(vin)
 		
 	print(' '.join([hex(x) for x in vin]))
 	print(''.join([chr(x) for x in vin]))
 
-def cli_write_vin (bus, desired_baudrate):
+def cli_write_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting flash reprogramming session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
 
 	enable_security_access(bus)
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
-	cmd = kwp.commands.WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin])
+	cmd = kwp2000.commands.WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin])
 	try:
 		bus.execute(cmd)
-	except kwp.KWPNegativeResponseException:
-		print('[!] Not supported! Maybe the VIN is already written?')
+	except kwp2000.Kwp2000NegativeResponseException as e:
+		print('[!] Not supported! Maybe the VIN is already written? ({})'.format(str(e.status)))
 		return
 	print('[*] VIN changed! Turn ignition off for 5 seconds for changes to take effect.')
 
-def cli_limp_home_teach (bus, desired_baudrate):
+def cli_limp_home_teach (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
 	if desired_baudrate is None:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
-	status = bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
+	status = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 	print('[*] Current ECU status: {}'.format(immo_status[status]))
 
 	if (status == 1): # learnt 
@@ -208,19 +216,19 @@ def cli_limp_home_teach (bus, desired_baudrate):
 		password_a = (password >> 8)
 		password_b = (password & 0xFF)
 		try:
-			bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b))
-		except (kwp.KWPNegativeResponseException):
-			print('[!] Invalid password!')
+			bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, password_a, password_b))
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			print('[!] Invalid password! ({})'.format(str(e.status)))
 			return 
 
 	password = int('0x' + input('[*] Enter new 4 digit password: '), 0)
 	password_a = (password >> 8)
 	password_b = (password & 0xFF)
 
-	print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD.value, password_a, password_b)).get_data())
+	print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD.value, password_a, password_b)).get_data())
 
-	if (input('[?] Are you sure? [y/n]: ') == 'y'):
-		print(bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data())
+	if (input('[?] Are you sure? [y/n]: ').lower() == 'y'):
+		print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data())
 
 def get_last_6_digits (text_input: str) -> int:
 	try:
@@ -228,7 +236,7 @@ def get_last_6_digits (text_input: str) -> int:
 	except (ValueError, IndexError):
 		raise ValueError
 
-def cli_vin_to_pin (last_6_digits, calculated_pin):
+def cli_vin_to_pin (last_6_digits: int, calculated_pin: int) -> None:
 	print('[*] SMARTRA VIN to PIN calculator')
 	print('[*] This calculator should apply for all Hyundai and KIA models equipped with SMARTRA2')
 	print('[*] From 2007 or so, some models started using SMARTRA3 and a different algorithm - beware.')
@@ -254,7 +262,7 @@ immo_menus = [
 	['Smartra VIN to PIN Calculator', cli_vin_to_pin]
 ]
 
-def cli_immo (bus, desired_baudrate):
+def cli_immo (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	for key, menu in enumerate(immo_menus):
 		print('    [{}] {}'.format(key, menu[0]))
 	menu = input('Select immo menu: ')
@@ -264,4 +272,4 @@ def cli_immo (bus, desired_baudrate):
 		print('[!] Invalid choice! Try again')
 		return cli_immo(bus, desired_baudrate)
 	handler(bus, desired_baudrate)
-	bus.shutdown()
+	bus.close()

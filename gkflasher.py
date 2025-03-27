@@ -1,9 +1,9 @@
-import os
-import argparse, time, yaml, logging, sys
+import argparse, time, yaml, logging, sys, os, traceback
 from datetime import datetime
 from alive_progress import alive_bar
-import gkbus
-from gkbus import kwp
+from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
+from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
+from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
@@ -15,7 +15,7 @@ from flasher.lineswap import generate_sie, generate_bin
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
 
-def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, output_filename=None):
+def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, address_stop: int = None, output_filename: str = None):
 	if (address_start == None):
 		address_start = abs(ecu.bin_offset)
 	if (address_stop == None):
@@ -24,7 +24,7 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 	print('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
 	requested_size = address_stop-address_start
-	eeprom = [0xFF]*eeprom_size
+	eeprom = bytearray([0xFF]*eeprom_size)
 
 	with alive_bar(requested_size, unit='B') as bar:
 		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=bar)
@@ -37,8 +37,8 @@ def cli_read_eeprom (ecu, eeprom_size, address_start=None, address_stop=None, ou
 		try:
 			calibration = ecu.get_calibration()
 			description = ecu.get_calibration_description()
-			hw_rev_c = strip(''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data()[1:]]))
-			hw_rev_d = strip(''.join([chr(x) for x in ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data()[1:]]))
+			hw_rev_c = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data())[1:]]))
+			hw_rev_d = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data())[1:]]))
 			output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.now().strftime('%Y-%m-%d_%H%M'))
 		except: # dirty
 			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
@@ -150,11 +150,18 @@ def load_arguments ():
 
 	return GKFlasher_config, args
 
-def initialize_bus (protocol, protocol_config):
-	interface = protocol_config['interface']
-	del protocol_config['interface']
+def initialize_bus (protocol: str, protocol_config: dict) -> kwp2000.Kwp2000Protocol:
+	if protocol == 'canbus':
+		hardware = CanHardware(protocol_config['interface'])
+		transport = Kwp2000OverCanTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
+	elif protocol == 'kline':
+		hardware = KLineHardware(protocol_config['interface'])
+		transport = Kwp2000OverKLineTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
 
-	return gkbus.Bus(protocol, interface=interface, **protocol_config)
+	bus = kwp2000.Kwp2000Protocol(transport)
+	bus.open()
+
+	return bus
 
 def cli_choose_ecu ():
 	print('[!] Failed to identify your ECU!')
@@ -177,7 +184,7 @@ def cli_choose_ecu ():
 
 	return ECU_IDENTIFICATION_TABLE[choice]
 
-def cli_identify_ecu (bus):
+def cli_identify_ecu (bus: kwp2000.Kwp2000Protocol):
 	print('[*] Trying to identify ECU automatically.. ')
 	
 	try:
@@ -189,14 +196,8 @@ def cli_identify_ecu (bus):
 	print('[*] Found! {}'.format(ecu.get_name()))
 	return ecu
 
-def main(bus, args):
-	try:
-		bus.execute(kwp.commands.StopDiagnosticSession())
-		bus.execute(kwp.commands.StopCommunication())
-	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException):
-		pass
-
-	bus.init(kwp.commands.StartCommunication(), keepalive_payload=kwp.commands.TesterPresent(kwp.enums.ResponseType.REQUIRED), keepalive_timeout=1.5)
+def main(bus: kwp2000.Kwp2000Protocol, args):
+	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
 
 	if args.desired_baudrate:
 		try:
@@ -208,13 +209,20 @@ def main(bus, args):
 			sys.exit(1)
 
 		print('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[args.desired_baudrate]))
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
-		bus.socket.socket.baudrate = BAUDRATES[args.desired_baudrate]
+		try:
+			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
+			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
+		except TimeoutException:
+			# it's possible that the bus is already running at the desired baudrate - let's check
+			bus.transport.hardware.socket.flushInput() # @todo: expose this in public gkbus api
+			bus.transport.hardware.socket.flushOutput()
+			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
+			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
 	else:
 		print('[*] Trying to start diagnostic session')
-		bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 		desired_baudrate = None
-	bus.set_timeout(12)
+	bus.transport.hardware.set_timeout(12)
 
 	if (args.immo):
 		return cli_immo(bus, desired_baudrate)
@@ -222,18 +230,15 @@ def main(bus, args):
 	print('[*] Set timing parameters to maximum')
 	try:
 		available_timing = bus.execute(
-			kwp.commands.AccessTimingParameters(
-				kwp.enums.TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS
-			)
+			kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
 		).get_data()
 
 		bus.execute(
-			kwp.commands.AccessTimingParameters(
-				kwp.enums.TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES, 
+			kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(
 				*available_timing[1:]
 			)
 		)
-	except kwp.KWPNegativeResponseException:
+	except Kwp2000NegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
 	print('[*] Security Access')
@@ -247,15 +252,18 @@ def main(bus, args):
 	try:
 		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
 		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
-	except kwp.KWPNegativeResponseException:
+	except kwp2000.Kwp2000NegativeResponseException:
 		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
 			sys.exit(1)
 
 	if (args.id):
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
+
 		print('[*] Reading ECU Identification..',end='')
 		for parameter_key, parameter in fetch_ecu_identification(bus).items():
-			value_hex = ' '.join([hex(x) for x in parameter['value']])
-			value_ascii = strip(''.join([chr(x) for x in parameter['value']]))
+			value_dec = list(parameter['value'])
+			value_hex = ' '.join([hex(x) for x in value_dec])
+			value_ascii = strip(''.join([chr(x) for x in value_dec]))
 
 			print('')
 			print('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
@@ -287,11 +295,7 @@ def main(bus, args):
 	if (args.logger):
 		logger(ecu)
 
-	try:
-		bus.execute(kwp.commands.StopCommunication())
-	except (kwp.KWPNegativeResponseException, gkbus.GKBusTimeoutException, AttributeError):
-		pass
-	bus.shutdown()
+	bus.close()
 
 if __name__ == '__main__':
 	GKFlasher_config, args = load_arguments()
@@ -313,5 +317,8 @@ if __name__ == '__main__':
 	try:
 		main(bus, args)
 	except KeyboardInterrupt:
-		bus.shutdown()
-		sys.exit()
+		bus.close()
+	except Exception:
+		print('[!] Exception in main thread! Shutting down')
+		print(traceback.format_exc())
+		bus.close()

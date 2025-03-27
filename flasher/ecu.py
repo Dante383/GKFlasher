@@ -1,5 +1,6 @@
-from gkbus import kwp
 import logging
+from typing_extensions import Self
+from gkbus.protocol import kwp2000
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier
 logger = logging.getLogger(__name__)
 
@@ -29,8 +30,8 @@ def fetch_ecu_identification (bus):
 	values = {}
 	for parameter in kwp_ecu_identification_parameters:
 		try:
-			value = bus.execute(kwp.commands.ReadEcuIdentification(parameter['value'])).get_data()
-		except kwp.KWPNegativeResponseException:
+			value = bus.execute(kwp2000.commands.ReadEcuIdentification(parameter['value'])).get_data()
+		except kwp2000.Kwp2000NegativeResponseException:
 			continue
 		values[parameter['value']] = {'name': parameter['name'], 'value': value[1:]}
 	return values
@@ -43,16 +44,16 @@ def calculate_key (concat11_seed):
         
     return key & 0xFFFF
 
-def enable_security_access (bus):
-	seed = bus.execute(kwp.commands.SecurityAccess(kwp.enums.AccessType.PROGRAMMING_REQUEST_SEED)).get_data()[1:]
+def enable_security_access (bus: kwp2000.Kwp2000Protocol):
+	seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
 
-	if (seed == [0x0, 0x0]):
+	if (sum(seed) == 0):
+		logging.info('ECU returned seed=0x0. Either it\'s unlocked, or previous diagnostics session was still active')
 		return
 
-	seed_concat = (seed[0]<<8) | seed[1]
-	key = calculate_key(seed_concat)
+	key = calculate_key(int.from_bytes(seed, 'big'))
 
-	bus.execute(kwp.commands.SecurityAccess(kwp.enums.AccessType.PROGRAMMING_SEND_KEY, key))
+	bus.execute(kwp2000.commands.SecurityAccess().send_key(key))
 
 class ECU:
 	def __init__ (self, 
@@ -97,7 +98,7 @@ class ECU:
 	def get_program_section_flash_memory_offset (self) -> int:
 		return self.program_section_flash_memory_offset
 
-	def set_bus (self, bus):
+	def set_bus (self, bus: kwp2000.Kwp2000Protocol) -> Self:
 		self.bus = bus
 		return self
 
@@ -111,25 +112,25 @@ class ECU:
 		return (offset + self.memory_write_offset) << 4
 
 	def get_calibration (self) -> str:
-		calibration = self.bus.execute(kwp.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
-		return ''.join([chr(x) for x in calibration])
+		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
+		return ''.join([chr(x) for x in list(calibration)])
 
 	def get_calibration_description (self) -> str:
-		description = self.bus.execute(kwp.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
-		return ''.join([chr(x) for x in description])
+		description = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
+		return ''.join([chr(x) for x in list(description)])
 
-	def read_memory_by_address (self, offset: int, size: int):
-		data = []
+	def read_memory_by_address (self, offset: int, size: int) -> bytes:
+		data = bytes()
 		
 		try:
 			data = self.bus.execute(
-				kwp.commands.ReadMemoryByAddress(
+				kwp2000.commands.ReadMemoryByAddress(
 					offset=self.calculate_memory_offset(offset), 
 					size=size
 				)
 			).get_data()
-		except kwp.KWPNegativeResponseException as e:
-			if '0x52' in str(e): # TODO TODO! gkbus enum. can't upload from specific address
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			if e.status.identifier == kwp2000.Kwp2000NegativeStatusIdentifierEnum.CANT_UPLOAD_FROM_SPECIFIED_ADDRESS.value:
 				if size == 1:
 					raise
 				logger.warning('Can\'t upload from %s! This might be a restricted area or more commonly, offset where eeprom pages switch. I\'m gonna try reading 1 byte at a time for the next 16 bytes', hex(offset))
@@ -138,28 +139,28 @@ class ECU:
 					for x in range(one_at_a_time_amount):
 						data += self.read_memory_by_address(offset+x, size=1)
 					data += self.read_memory_by_address(offset+one_at_a_time_amount, size=size-one_at_a_time_amount)
-				except KWPNegativeResponseException as e:
-					raise
+				except kwp2000.Kwp2000NegativeResponseException as e:
+					raise e
 			else:
-				raise
+				raise e
 		return data
 
 	def clear_adaptive_values (self, desired_baudrate):
 		if desired_baudrate is None:
-			self.bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT))
-			self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
+			self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
+			self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 		else:
-			self.bus.execute(kwp.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
-			self.bus.execute(kwp.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
+			self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+			self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):
 	pass
 
-def identify_ecu (bus) -> ECU:
+def identify_ecu (bus: kwp2000.Kwp2000Protocol) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
-			result = bus.execute(kwp.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0]))).get_data()
-		except kwp.KWPNegativeResponseException:
+			result = bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0]))).get_data()
+		except kwp2000.Kwp2000NegativeResponseException:
 			continue
 
 		if result in ecu_identifier['expected']:

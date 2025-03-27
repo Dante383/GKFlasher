@@ -5,10 +5,11 @@ from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
 import gkbus, yaml, traceback, bsl
-from gkbus.kwp.commands import *
-from gkbus.kwp.enums import *
-from gkbus.kwp import KWPNegativeResponseException
-from gkbus.interface.kline.KLineSerial import KLineSerial
+from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
+from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
+from gkbus.protocol import kwp2000
+from gkbus.protocol.kwp2000.commands import *
+from gkbus.protocol.kwp2000.enums import *
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
@@ -204,11 +205,11 @@ class Ui(QtWidgets.QMainWindow):
 		self.bslOutput.setReadOnly(True)
 
 	def detect_interfaces(self):
-		devices = KLineSerial.available_devices()
+		devices = KLineHardware.available_ports()
 		if (len(devices) == 0):
 			raise ValueError
 		for device in devices:
-			self.interfacesBox.addItem(device[0], device[1])
+			self.interfacesBox.addItem(device.description(), device.port)
 
 	def load_ecus (self):
 		self.ecusBox.addItem('ECU (autodetect)', -1)
@@ -233,7 +234,7 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
-	def initialize_ecu (self, log_callback):
+	def initialize_ecu (self, log_callback) -> ECU:
 		try:
 			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
 		except IndexError:
@@ -242,18 +243,13 @@ class Ui(QtWidgets.QMainWindow):
 
 		config = yaml.safe_load(open(os.path.dirname(os.path.abspath(__file__)) + '/gkflasher.yml'))
 		del config['kline']['interface']
-		bus = gkbus.Bus('kline', interface=self.get_interface_url(), **config['kline'])
 
-		try:
-			bus.execute(StopDiagnosticSession())
-			bus.execute(StopCommunication())
-		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException):
-			pass
+		hardware = KLineHardware(self.get_interface_url())
+		transport = Kwp2000OverKLineTransport(hardware, tx_id=config['kline']['tx_id'], rx_id=config['kline']['rx_id'])
 
-		try:
-			bus.init(StartCommunication(), keepalive_payload=TesterPresent(ResponseType.REQUIRED), keepalive_timeout=2)
-		except gkbus.GKBusTimeoutException:
-			pass
+		bus = kwp2000.Kwp2000Protocol(transport)
+		bus.open()
+		bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
 
 		if self.baudratesBox.currentData() == -1:
 			log_callback.emit('[*] Trying to start diagnostic session')
@@ -264,28 +260,28 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[self.desired_baudrate]))
 			try:
 				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
-			except gkbus.GKBusTimeoutException:
-				bus.socket.socket.baudrate = BAUDRATES[self.desired_baudrate]
+				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
+			except TimeoutException:
+				# it's possible that the bus is already running at the desired baudrate - let's check
+				bus.transport.hardware.socket.flushInput() # @todo: expose this in public gkbus api
+				bus.transport.hardware.socket.flushOutput()
+				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
 				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
-			bus.socket.socket.baudrate = BAUDRATES[self.desired_baudrate]
 
-		bus.set_timeout(12)
+		bus.transport.hardware.set_timeout(12)
 
 		log_callback.emit('[*] Set timing parameters to maximum')
 		try:
 			available_timing = bus.execute(
-				AccessTimingParameters(
-					TimingParameterIdentifier.READ_LIMITS_OF_POSSIBLE_TIMING_PARAMETERS
-				)
+				kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
 			).get_data()
 
 			bus.execute(
-				AccessTimingParameters(
-					TimingParameterIdentifier.SET_TIMING_PARAMETERS_TO_GIVEN_VALUES, 
+				kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(
 					*available_timing[1:]
 				)
 			)
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException:
 			log_callback.emit('[!] Not supported on this ECU!')
 
 		log_callback.emit('[*] Security Access')
@@ -305,21 +301,21 @@ class Ui(QtWidgets.QMainWindow):
 		
 		return ecu
 
-	def disconnect_ecu (self, ecu):
+	def disconnect_ecu (self, ecu: ECU) -> None:
 		try:
 			ecu.bus.execute(StopCommunication())
-		except (KWPNegativeResponseException, gkbus.GKBusTimeoutException, AttributeError):
+		except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, AttributeError):
 			pass
-		ecu.bus.shutdown()
+		ecu.bus.close()
 
-	def gui_read_eeprom (self, ecu, eeprom_size, address_start=0x000000, address_stop=None, output_filename=None, log_callback=None, progress_callback=None):
+	def gui_read_eeprom (self, ecu: ECU, eeprom_size: int, address_start: int = 0x000000, address_stop: int = None, output_filename: str = None, log_callback=None, progress_callback=None):
 		if (address_stop == None):
 			address_stop = eeprom_size
 
 		log_callback.emit('[*] Reading from {} to {}'.format(hex(address_start), hex(address_stop)))
 
 		requested_size = address_stop-address_start
-		eeprom = [0xFF]*eeprom_size
+		eeprom = bytearray([0xFF]*eeprom_size)
 
 		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size))
 
@@ -331,8 +327,8 @@ class Ui(QtWidgets.QMainWindow):
 			try:
 				calibration = ecu.get_calibration()
 				description = ecu.get_calibration_description()
-				hw_rev_c = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8c)).get_data()[1:]]))
-				hw_rev_d = strip(''.join([chr(x) for x in ecu.bus.execute(ReadEcuIdentification(0x8d)).get_data()[1:]]))
+				hw_rev_c = strip(''.join([chr(x) for x in list(ecu.bus.execute(ReadEcuIdentification(0x8c)).get_data())[1:]]))
+				hw_rev_d = strip(''.join([chr(x) for x in list(ecu.bus.execute(ReadEcuIdentification(0x8d)).get_data())[1:]]))
 				output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.now().strftime('%Y-%m-%d_%H%M'))
 			except: # dirty
 				output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
@@ -349,7 +345,7 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Done!')
 		self.disconnect_ecu(ecu)
 
-	def gui_flash_eeprom (self, ecu, input_filename, flash_calibration=True, flash_program=True, log_callback=None, progress_callback=None):
+	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
 
 		with open(input_filename, 'rb') as file:
@@ -387,20 +383,20 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
-		ecu.bus.set_timeout(300)
+		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-		ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
-		ecu.bus.set_timeout(12)
+		ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
+		ecu.bus.transport.hardware.set_timeout(12)
 
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
-		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET)).get_data()
+		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
 		self.disconnect_ecu(ecu)
 
 	def read_calibration_zone (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -417,7 +413,7 @@ class Ui(QtWidgets.QMainWindow):
 	def read_program_zone (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -437,7 +433,7 @@ class Ui(QtWidgets.QMainWindow):
 	def full_read (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -459,7 +455,7 @@ class Ui(QtWidgets.QMainWindow):
 	def display_ecu_identification (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -468,8 +464,9 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
-			value_hex = ' '.join([hex(x) for x in parameter['value']])
-			value_ascii = strip(''.join([chr(x) for x in parameter['value']]))
+			value_dec = list(parameter['value'])
+			value_hex = ' '.join([hex(x) for x in value_dec])
+			value_ascii = strip(''.join([chr(x) for x in value_dec]))
 
 			log_callback.emit('')
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))
@@ -484,8 +481,8 @@ class Ui(QtWidgets.QMainWindow):
 			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
-		except (KWPNegativeResponseException):
-			log_callback.emit('[*] Immo seems to be disabled')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[*] Immo seems to be disabled ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
@@ -594,7 +591,7 @@ class Ui(QtWidgets.QMainWindow):
 	def flash_calibration (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -606,7 +603,7 @@ class Ui(QtWidgets.QMainWindow):
 	def flash_program (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -618,7 +615,7 @@ class Ui(QtWidgets.QMainWindow):
 	def flash_full (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -630,7 +627,7 @@ class Ui(QtWidgets.QMainWindow):
 	def clear_adaptive_values (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -644,7 +641,7 @@ class Ui(QtWidgets.QMainWindow):
 	def display_immo_information (self, progress_callback, log_callback):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if (ecu == False):
@@ -659,8 +656,8 @@ class Ui(QtWidgets.QMainWindow):
 			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
-		except (KWPNegativeResponseException):
-			log_callback.emit('[*] Immo seems to be disabled')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[*] Immo seems to be disabled ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
@@ -677,7 +674,7 @@ class Ui(QtWidgets.QMainWindow):
 	def immo_reset(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly.')
 			return
 		if ecu is False:
@@ -696,8 +693,9 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
 			#log_callback.emit(f'[*] BEFORE_IMMO_RESET response: {" ".join(hex(x) for x in data)}')
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			log_callback.emit('[!] Unable to validate immobilizer status. The immobilizer is either disabled or disconnected.')
+			log_callback.emit('({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		# Check if the system is locked
@@ -708,7 +706,7 @@ class Ui(QtWidgets.QMainWindow):
 		# Request the PIN asynchronously
 		self.request_pin_signal1.emit(log_callback, ecu)
 
-	def request_pin_from_user1(self, log_callback, ecu):
+	def request_pin_from_user1(self, log_callback, ecu: ECU):
 		# Open the PIN dialog on the main thread
 		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter PIN', 'Enter 6-digit immobilizer PIN:')
 		if ok and pin.isdigit() and len(pin) == 6:
@@ -718,23 +716,23 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)	
 
-	def continue_immo_reset(self, pin, log_callback, ecu):
+	def continue_immo_reset(self, pin: str, log_callback, ecu: ECU) -> None:
 		pin = int('0x' + pin, 0)  # Treat the input as a hexadecimal string
 		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
 		
 		#log_callback.emit('[*] Sending PIN to the ECU...')
 		self.log('[*] Sending PIN to the ECU...')
 		try:
-			response = ecu.bus.execute(
+			ecu.bus.execute(
 				StartRoutineByLocalIdentifier(
 					Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 				)
-			).get_data()
+			)
 			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
 			#self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			#log_callback.emit('[!] Invalid PIN. Immobilizer reset failed.')
-			self.log('[!] Invalid PIN. Immobilizer reset failed.')
+			self.log('[!] Invalid PIN. Immobilizer reset failed. ({})'.format(str(e.status)))
 			return
 
 		# Confirm the immobilizer reset
@@ -745,19 +743,19 @@ class Ui(QtWidgets.QMainWindow):
 				#log_callback.emit('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
 				#self.log(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
 				self.log('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
-			except KWPNegativeResponseException:
+			except kwp2000.Kwp2000NegativeResponseException as e:
 				#log_callback.emit('[!] Immobilizer reset confirmation failed.')
-				self.log('[!] Immobilizer reset confirmation failed.')
+				self.log('[!] Immobilizer reset confirmation failed. ({})'.format(str(e.status)))
 
 		else:
 			#log_callback.emit('[*] Immobilizer reset cancelled by user.')
 			self.log('[*] Immobilizer reset cancelled by user.')
 
 
-	def limp_home(self, progress_callback=None, log_callback=None):
+	def limp_home(self, progress_callback=None, log_callback=None) -> None:
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if ecu is False:
@@ -777,8 +775,8 @@ class Ui(QtWidgets.QMainWindow):
 			if len(data) > 1 and data[1] == 4:
 				log_callback.emit('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
 				return self.disconnect_ecu(ecu)
-		except KWPNegativeResponseException:
-			log_callback.emit('[!] Error: Immo is inactive or limp home pin is not set.')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[!] Error: Immo is inactive or limp home pin is not set. ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		# Save ECU context and proceed
@@ -788,7 +786,7 @@ class Ui(QtWidgets.QMainWindow):
 		# Request the password asynchronously
 		self.request_pin_signal4.emit(log_callback, ecu)
 
-	def request_pin_from_user4(self, log_callback, ecu):
+	def request_pin_from_user4(self, log_callback, ecu: ECU):
 		# Open a dialog for the user to enter the PIN
 		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter Password', 'Enter 4-digit password:')
 		if ok and pin.isdigit() and len(pin) == 4:
@@ -798,7 +796,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)
 
-	def continue_limp_home(self, pin, log_callback, ecu):
+	def continue_limp_home(self, pin: str, log_callback, ecu: ECU):
 		# Parse and split the PIN
 		try:
 			pin = int('0x' + pin, 0)
@@ -822,9 +820,9 @@ class Ui(QtWidgets.QMainWindow):
 			else:
 				#log_callback.emit('[!] Activation failed. Ensure the PIN is correct.')
 				self.log('[!] Activation failed. Ensure the PIN is correct.')
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			#log_callback.emit('[!] Invalid PIN. Activation failed.')
-			self.log('[!] Invalid PIN. Activation failed.')
+			self.log('[!] Invalid PIN. Activation failed. ({})'.format(str(e.status)))
 
 	def smartra_neutralize(self, progress_callback=None, log_callback=None):
 		try:
@@ -847,9 +845,9 @@ class Ui(QtWidgets.QMainWindow):
 		# Check the ECU status with BEFORE_SMARTRA_NEUTRALIZE
 		try:
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
-			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in data)}')
-		except KWPNegativeResponseException:
-			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine.')
+			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in list(data))}')
+		except Kwp2000Protocol.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine. ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		# Check if the system is locked
@@ -864,7 +862,7 @@ class Ui(QtWidgets.QMainWindow):
 		# Request the password asynchronously
 		self.request_pin_signal5.emit(log_callback, ecu)
 
-	def request_pin_from_user5(self, log_callback, ecu):
+	def request_pin_from_user5(self, log_callback, ecu: ECU):
 		# Open a dialog for the user to enter the PIN
 		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter Password', 'Enter 6-digit SMARTRA password:')
 		if ok and pin.isdigit() and len(pin) == 6:
@@ -874,7 +872,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN or operation cancelled.')	
 		return self.disconnect_ecu(ecu)	
 
-	def continue_smartra_neutralize(self, pin, log_callback, ecu):
+	def continue_smartra_neutralize(self, pin: str, log_callback, ecu: ECU):
 		# Parse and split the PIN
 		try:
 			pin = int('0x' + pin, 0)
@@ -892,14 +890,14 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[*] Sending PIN to the ECU...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
 			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
-			self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
+			self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in list(response))}')
 
 			# Perform SMARTRA neutralization
 			#log_callback.emit('[*] Neutralizing SMARTRA...')
 			self.log('[*] Neutralizing SMARTRA...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.NEUTRALIZE_SMARTRA.value, 0x01)).get_data()
 			#log_callback.emit(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in response)}')
-			self.log(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in response)}')
+			self.log(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in list(response))}')
 
 			if len(response) > 1 and response[1] == 1:
 				#log_callback.emit('[*] SMARTRA neutralization completed successfully.')
@@ -907,14 +905,14 @@ class Ui(QtWidgets.QMainWindow):
 			else:
 				#log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
 				self.log('[!] Neutralization failed. Ensure the PIN is correct.')
-		except KWPNegativeResponseException:
-			log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct. ({})'.format(str(e.status)))
 		self.disconnect_ecu(ecu)
 
 	def teach_keys(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if ecu is False:
@@ -933,14 +931,14 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
 			#log_callback.emit(f'[*] BEFORE_IMMO_KEY_TEACHING response: {" ".join(hex(x) for x in data)}')
-		except KWPNegativeResponseException:
-			log_callback.emit('[!] Error starting IMMO_KEY_TEACHING routine.')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[!] Error starting IMMO_KEY_TEACHING routine. ({})'.format(str(e.status)))
 			return
 
 		# Request the PIN asynchronously
 		self.request_pin_signal2.emit(log_callback, ecu)
 
-	def request_pin_from_user2(self, log_callback, ecu):
+	def request_pin_from_user2(self, log_callback, ecu: ECU):
 		# Open the PIN dialog on the main thread
 		pin, ok = QtWidgets.QInputDialog.getText(self, 'Enter PIN', 'Enter 6-digit immobilizer PIN:')
 		if ok and pin.isdigit() and len(pin) == 6:
@@ -950,7 +948,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)	
 
-	def continue_teach_keys(self, pin, log_callback, ecu):
+	def continue_teach_keys(self, pin: str, log_callback, ecu: ECU):
 		if not pin or not pin.isdigit() or len(pin) != 6:
 			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')
@@ -961,7 +959,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		try:
 			# Start the routine
-			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
+			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF))
 
 			all_keys_successful = True  # Flag to track if all keys were successfully taught
 
@@ -969,11 +967,11 @@ class Ui(QtWidgets.QMainWindow):
 				if QMessageBox.question(self, f'Teach Key {i+1}', f'Teach immobilizer key {i+1}?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
 					try:
 						# Attempt to execute the teaching routine
-						ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01)).get_data()
-					except KWPNegativeResponseException as e:
+						ecu.bus.execute(StartRoutineByLocalIdentifier(0x1B + i, 0x01))
+					except kwp2000.Kwp2000NegativeResponseException as e:
 						# Handle known exception for this specific teaching routine
-						self.log(f'[!] Failed to teach Key {i+1}: {str(e)}')
-						QMessageBox.warning(self, 'Key Teaching Error', f'Failed to teach Key {i+1}. Reason: {str(e)}')
+						self.log(f'[!] Failed to teach Key {i+1}: {str(e.status)}')
+						QMessageBox.warning(self, 'Key Teaching Error', f'Failed to teach Key {i+1}. Reason: {str(e.status)}')
 						all_keys_successful = False
 						break  # Stop on failure
 					except Exception as e:
@@ -994,10 +992,10 @@ class Ui(QtWidgets.QMainWindow):
 				self.log('[*] Key teaching completed. Turn off ignition for 10 seconds to apply changes.')
 				QMessageBox.information(self, 'Success', 'Key teaching completed successfully. Turn off ignition for 10 seconds to apply changes.')
 
-		except KWPNegativeResponseException as e:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			# Handle known exception for the overall routine
 			self.log(f'[!] Key teaching failed: {str(e)}')
-			QMessageBox.critical(self, 'Routine Error', f'Key teaching initialization failed. Reason: {str(e)}')
+			QMessageBox.critical(self, 'Routine Error', f'Key teaching initialization failed. Reason: {str(e.status)}')
 
 		except Exception as e:
 			# Handle unexpected exceptions for the overall routine
@@ -1007,7 +1005,7 @@ class Ui(QtWidgets.QMainWindow):
 	def limp_home_teach(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if ecu is False:
@@ -1027,7 +1025,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			status = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 			log_callback.emit(f'[*] Current ECU status: {immo_status.get(status, status)}')
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException:
 			log_callback.emit('[!] Failed to check ECU status.')
 			return
 
@@ -1041,7 +1039,7 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			self.request_new_password_signal.emit(log_callback, ecu, "")
 
-	def request_pin_from_user3(self, log_callback, ecu):
+	def request_pin_from_user3(self, log_callback, ecu: ECU):
 		# Prompt user for the current password
 		password, ok = QtWidgets.QInputDialog.getText(self, 'Enter Current Password', 'Enter 4-digit current password:')
 		if ok and password.isdigit() and len(password) == 4:
@@ -1051,7 +1049,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid current password or operation cancelled.')
 		return self.disconnect_ecu(ecu)	
 
-	def request_new_password_from_user(self, log_callback, ecu, current_password=""):
+	def request_new_password_from_user(self, log_callback, ecu: ECU, current_password: str = ''):
 		# Prompt user for the new password
 		password, ok = QtWidgets.QInputDialog.getText(self, 'Enter New Password', 'Enter 4-digit new password:')
 		if ok and password.isdigit() and len(password) == 4:
@@ -1061,7 +1059,7 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid new password or operation cancelled.')
 			return self.disconnect_ecu(ecu)
 
-	def continue_limp_home_teach(self, current_password, new_password, log_callback, ecu):
+	def continue_limp_home_teach(self, current_password: str, new_password: str, log_callback, ecu: ECU):
 		try:
 			# Validate and split passwords
 			if current_password:
@@ -1088,7 +1086,7 @@ class Ui(QtWidgets.QMainWindow):
 			# Confirm the new password
 			if QMessageBox.question(self, 'Confirm Password', 'Are you sure you want to set this password?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
 				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data()
-				self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
+				self.log(f'[*] Response: {" ".join(hex(x) for x in list(response))}')
 				#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
 				self.log('[*] Limp home password teaching completed successfully.')
 				#log_callback.emit('[*] Limp home password teaching completed successfully.')
@@ -1098,9 +1096,9 @@ class Ui(QtWidgets.QMainWindow):
 				#log_callback.emit('[*] Limp home password teaching cancelled.')
 				return self.disconnect_ecu(ecu)
 
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			#log_callback.emit('[!] Password teaching failed. Ensure the passwords are correct.')
-			self.log('[!] Password teaching failed. Ensure the passwords are correct.')
+			self.log('[!] Password teaching failed. Ensure the passwords are correct. ({})'.format(str(e.status)))
 		except ValueError:
 			#log_callback.emit('[!] Invalid password format.')
 			self.log('[!] Invalid password format.')
@@ -1113,27 +1111,35 @@ class Ui(QtWidgets.QMainWindow):
 	def read_vin(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if ecu is False:
 			return
 
+		# Start diagnostic session
+		if self.desired_baudrate is None:
+			log_callback.emit('[*] Starting default diagnostic session...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+		else:
+			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
+			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
 		try:
-			cmd = KWPCommand()
-			cmd.command = 0x09  # Undocumented service
-			cmd.data = [0x02]
+			cmd = kwp2000.Kwp2000Command()
+			cmd.set_service_identifier(0x09).set_data(bytes([0x02])) # undocumented service
+
 			vin_data = ecu.bus.execute(cmd).get_data()
-			vin = ''.join(chr(x) for x in vin_data)
+			vin = ''.join(chr(x) for x in list(vin_data))
 			log_callback.emit(f'[*] Vehicle Identification Number (VIN): {vin}')
-		except KWPNegativeResponseException:
-			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU.')
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU. ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 	def write_vin(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
 		if ecu is False:
@@ -1180,9 +1186,9 @@ class Ui(QtWidgets.QMainWindow):
 			#log_callback.emit('[*] VIN written successfully.')
 			self.log('[*] VIN written successfully.')
 			return self.disconnect_ecu(ecu)
-		except KWPNegativeResponseException:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			#log_callback.emit('[!] Writing VIN failed. Ensure the ECU is writable.')
-			self.log('[!] Writing VIN failed. Ensure the ECU is writable.')
+			self.log('[!] Writing VIN failed. Ensure the ECU is writable. ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 		except Exception as e:
 			#log_callback.emit(f'[!] Unexpected error while writing VIN: {e}')
