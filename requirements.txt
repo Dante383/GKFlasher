@@ -3,3 +3,5 @@ crcmod==1.7
 gkbus==0.3.4
 pyqt5==5.15.10
 PyYAML==6.0.1
+sip==6.10.0
+typing_extensions==4.12.2
