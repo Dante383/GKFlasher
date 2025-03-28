@@ -27,7 +27,7 @@ jobs:
           
       - name: Install Build Environment Prerequisites
         run: |
-          pip install pyinstaller==6.11.0
+          pip install pyinstaller==6.12.0
           pip install cryptography==43.0.3
           pip install pillow==11.0.0
           
