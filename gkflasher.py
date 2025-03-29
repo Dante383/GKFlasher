@@ -198,6 +198,7 @@ def cli_identify_ecu (bus: kwp2000.Kwp2000Protocol):
 
 def main(bus: kwp2000.Kwp2000Protocol, args):
 	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
+	bus.transport.set_buffer_size(20)
 
 	if args.desired_baudrate:
 		try:
@@ -319,6 +320,9 @@ if __name__ == '__main__':
 	except KeyboardInterrupt:
 		bus.close()
 	except Exception:
-		print('[!] Exception in main thread! Shutting down')
+		print('\n\n[!] Exception in main thread!')
 		print(traceback.format_exc())
+		print('[*] Dumping buffer:\n')
+		print('\n'.join([str(packet) for packet in bus.transport.buffer_dump()]))
+		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
 		bus.close()
