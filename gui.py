@@ -1,5 +1,4 @@
-import os
-import sys
+import os, sys
 from datetime import datetime
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
@@ -250,6 +249,7 @@ class Ui(QtWidgets.QMainWindow):
 		bus = kwp2000.Kwp2000Protocol(transport)
 		bus.open()
 		bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
+		self.bus = bus
 
 		if self.baudratesBox.currentData() == -1:
 			log_callback.emit('[*] Trying to start diagnostic session')
@@ -1342,7 +1342,6 @@ class Ui(QtWidgets.QMainWindow):
 		filename = self.checksumFileInput.text()
 		generate_bin(filename=filename)
 
-
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	stylesheet_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flasher', 'gkflasher.qss')
@@ -1352,4 +1351,16 @@ if __name__ == "__main__":
 	else:
 		print(f"Stylesheet not found at {stylesheet_path}")
 	window = Ui()
-	sys.exit(app.exec_())
+
+	try:
+		status = app.exec_()
+	except KeyboardInterrupt:
+		pass
+	except:
+		print('\n\n[!] Exception in main thread!')
+		print(traceback.format_exc())
+		print('[*] Dumping buffer:\n')
+		print('\n'.join([str(packet) for packet in window.bus.transport.buffer_dump()]))
+		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
+
+	sys.exit(status)

@@ -37,8 +37,8 @@ def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, addr
 		try:
 			calibration = ecu.get_calibration()
 			description = ecu.get_calibration_description()
-			hw_rev_c = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8c)).get_data())[1:]]))
-			hw_rev_d = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp.commands.ReadEcuIdentification(0x8d)).get_data())[1:]]))
+			hw_rev_c = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp2000.commands.ReadEcuIdentification(0x8c)).get_data())[1:]]))
+			hw_rev_d = strip(''.join([chr(x) for x in list(ecu.bus.execute(kwp2000.commands.ReadEcuIdentification(0x8d)).get_data())[1:]]))
 			output_filename = "{}_{}_{}_{}_{}.bin".format(description, calibration, hw_rev_c, hw_rev_d, datetime.now().strftime('%Y-%m-%d_%H%M'))
 		except: # dirty
 			output_filename = "output_{}_to_{}.bin".format(hex(address_start), hex(address_stop))
@@ -64,7 +64,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_program:
 		print('[*] start routine 0x00 (erase program code section)')
-		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
+		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 		flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
 		flash_size = ecu.get_program_section_flash_size()
@@ -79,7 +79,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
-		ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
+		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
 		flash_start = ecu.calculate_memory_write_offset(0x090000)
 		flash_size = ecu.get_calibration_size_bytes_flash()
@@ -94,12 +94,12 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 	ecu.bus.set_timeout(300)
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-	ecu.bus.execute(kwp.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
+	ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
 	ecu.bus.set_timeout(12)
 
 	print('[*] ecu reset')
 	print('[*] done!')
-	ecu.bus.execute(kwp.commands.ECUReset(kwp.enums.ResetMode.POWER_ON_RESET)).get_data()
+	ecu.bus.execute(kwp2000.commands.ECUReset(kwp2000.enums.ResetMode.POWER_ON_RESET)).get_data()
 	ecu.bus.shutdown()
 	
 def cli_clear_adaptive_values (ecu, desired_baudrate):
