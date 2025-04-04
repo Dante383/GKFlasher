@@ -2,7 +2,7 @@ import argparse, time, yaml, logging, sys, os, traceback
 from datetime import datetime
 from alive_progress import alive_bar
 from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
-from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
+from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
@@ -255,7 +255,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 	except kwp2000.Kwp2000NegativeResponseException:
 		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
-			sys.exit(1)
+			return
 
 	if (args.id):
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
@@ -298,6 +298,12 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 
 	bus.close()
 
+def packet2hex (packet: RawPacket) -> str:
+	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
+	data = ' '.join([hex(x)[2:].zfill(2) for x in packet.data])
+	parsed = 'RawPacket({}, ts={}, data={})'.format(direction, packet.timestamp, data)
+	return parsed
+	
 if __name__ == '__main__':
 	GKFlasher_config, args = load_arguments()
 
@@ -318,11 +324,11 @@ if __name__ == '__main__':
 	try:
 		main(bus, args)
 	except KeyboardInterrupt:
-		bus.close()
+		pass
 	except Exception:
 		print('\n\n[!] Exception in main thread!')
 		print(traceback.format_exc())
 		print('[*] Dumping buffer:\n')
-		print('\n'.join([str(packet) for packet in bus.transport.buffer_dump()]))
+		print('\n'.join([packet2hex(packet) for packet in bus.transport.buffer_dump()]))
 		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
-		bus.close()
+	bus.close()

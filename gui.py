@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
 import gkbus, yaml, traceback, bsl
 from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
-from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport
+from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
@@ -77,10 +77,10 @@ class Worker(QRunnable):
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
-        except:
-            traceback.print_exc()
-            exctype, value = sys.exc_info()[:2]
-            self.signals.error.emit((exctype, value, traceback.format_exc()))
+        except Exception as e:
+            #traceback.print_exc()
+            #exctype, value = sys.exc_info()[:2]
+            self.signals.error.emit((e, traceback.format_exc()))
         else:
             self.signals.result.emit(result)  # Return the result of the processing
         finally:
@@ -120,6 +120,14 @@ class Ui(QtWidgets.QMainWindow):
 		if not os.path.exists(home):
 			os.makedirs(home)
 		os.chdir (home)
+
+	def handle_exception (self, data):
+		exception, traceback_str = data
+		print('\n\n[!] Exception in main thread!')
+		print(traceback_str)
+		print('[*] Dumping buffer:\n')
+		print('\n'.join([packet2hex(packet) for packet in self.bus.transport.buffer_dump()]))
+		print('\n[!] For exception details, see above')
 
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
@@ -177,6 +185,7 @@ class Ui(QtWidgets.QMainWindow):
 		worker.signals.log.connect(self.log)
 		worker.signals.log2.connect(self.log2)
 		worker.signals.progress.connect(self.progress_callback)
+		worker.signals.error.connect(self.handle_exception)
 		self.thread_manager.start(worker)
 
 	def handler_select_file_reading (self):
@@ -482,7 +491,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[*] Immo seems to be disabled ({})'.format(str(e.status)))
+			log_callback.emit('[*] Immo seems to be disabled')
 			return self.disconnect_ecu(ecu)
 
 		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
@@ -1342,6 +1351,12 @@ class Ui(QtWidgets.QMainWindow):
 		filename = self.checksumFileInput.text()
 		generate_bin(filename=filename)
 
+def packet2hex (packet: RawPacket) -> str:
+	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
+	data = ' '.join([hex(x)[2:].zfill(2) for x in packet.data])
+	parsed = 'RawPacket({}, ts={}, data={})'.format(direction, packet.timestamp, data)
+	return parsed
+
 if __name__ == "__main__":
 	app = QtWidgets.QApplication(sys.argv)
 	stylesheet_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flasher', 'gkflasher.qss')
@@ -1352,15 +1367,5 @@ if __name__ == "__main__":
 		print(f"Stylesheet not found at {stylesheet_path}")
 	window = Ui()
 
-	try:
-		status = app.exec_()
-	except KeyboardInterrupt:
-		pass
-	except:
-		print('\n\n[!] Exception in main thread!')
-		print(traceback.format_exc())
-		print('[*] Dumping buffer:\n')
-		print('\n'.join([str(packet) for packet in window.bus.transport.buffer_dump()]))
-		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
-
+	status = app.exec_()
 	sys.exit(status)

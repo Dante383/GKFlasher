@@ -48,7 +48,7 @@ def enable_security_access (bus: kwp2000.Kwp2000Protocol):
 	seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
 
 	if (sum(seed) == 0):
-		logging.info('ECU returned seed=0x0. Either it\'s unlocked, or previous diagnostics session was still active')
+		logging.info('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
 		return
 
 	key = calculate_key(int.from_bytes(seed, 'big'))
