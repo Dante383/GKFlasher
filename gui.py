@@ -256,7 +256,6 @@ class Ui(QtWidgets.QMainWindow):
 		transport = Kwp2000OverKLineTransport(hardware, tx_id=config['kline']['tx_id'], rx_id=config['kline']['rx_id'])
 
 		bus = kwp2000.Kwp2000Protocol(transport)
-		bus.open()
 		bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
 		self.bus = bus
 
@@ -855,7 +854,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
 			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in list(data))}')
-		except Kwp2000Protocol.Kwp2000NegativeResponseException as e:
+		except kwp2000.Kwp2000NegativeResponseException as e:
 			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine. ({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 

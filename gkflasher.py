@@ -159,7 +159,6 @@ def initialize_bus (protocol: str, protocol_config: dict) -> kwp2000.Kwp2000Prot
 		transport = Kwp2000OverKLineTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
 
 	bus = kwp2000.Kwp2000Protocol(transport)
-	bus.open()
 
 	return bus
 
@@ -303,7 +302,7 @@ def packet2hex (packet: RawPacket) -> str:
 	data = ' '.join([hex(x)[2:].zfill(2) for x in packet.data])
 	parsed = 'RawPacket({}, ts={}, data={})'.format(direction, packet.timestamp, data)
 	return parsed
-	
+
 if __name__ == '__main__':
 	GKFlasher_config, args = load_arguments()
 
