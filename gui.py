@@ -126,8 +126,11 @@ class Ui(QtWidgets.QMainWindow):
 		print('\n\n[!] Exception in main thread!')
 		print(traceback_str)
 		print('[*] Dumping buffer:\n')
-		print('\n'.join([packet2hex(packet) for packet in self.bus.transport.buffer_dump()]))
-		print('\n[!] For exception details, see above')
+		try:
+			print('\n'.join([packet2hex(packet) for packet in self.bus.transport.buffer_dump()]))
+		except:
+			print('[!] Buffer not found!')
+		print('\n[!] For exception details, see above.')
 
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
@@ -356,10 +359,13 @@ class Ui(QtWidgets.QMainWindow):
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
 
-		with open(input_filename, 'rb') as file:
-			eeprom = file.read()
-
-		log_callback.emit('[*] Loaded {} bytes'.format(len(eeprom)))
+		try:
+			with open(input_filename, 'rb') as file:
+				eeprom = file.read()
+			log_callback.emit('[*] Loaded {} bytes'.format(len(eeprom)))
+		except FileNotFoundError:
+			log_callback.emit('[!] Error: File not found.')
+			return self.disconnect_ecu(ecu)
 
 		if flash_program:
 			log_callback.emit('[*] start routine 0x00 (erase program code section)')
@@ -511,7 +517,7 @@ class Ui(QtWidgets.QMainWindow):
 			with open(filename, 'rb') as file:
 				payload = file.read()
 		except FileNotFoundError:
-			self.log('[!] Error: No such file or directory.')
+			self.log('[!] Error: File not found.')
 			return
 		self.log('Trying to detect type.. ')
 		cks_type = detect_offsets(payload)
@@ -665,7 +671,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[*] Immo seems to be disabled ({})'.format(str(e.status)))
+			log_callback.emit('[*] Immo seems to be disabled')
 			return self.disconnect_ecu(ecu)
 
 		log_callback.emit('[*] Immo keys learnt: {}'.format(immo_data[1]))
@@ -703,7 +709,6 @@ class Ui(QtWidgets.QMainWindow):
 			#log_callback.emit(f'[*] BEFORE_IMMO_RESET response: {" ".join(hex(x) for x in data)}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			log_callback.emit('[!] Unable to validate immobilizer status. The immobilizer is either disabled or disconnected.')
-			log_callback.emit('({})'.format(str(e.status)))
 			return self.disconnect_ecu(ecu)
 
 		# Check if the system is locked
@@ -720,7 +725,6 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and pin.isdigit() and len(pin) == 6:
 			self.continue_immo_reset(pin, log_callback, ecu)  # Continue with the reset process
 		else:
-			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)	
 
@@ -728,7 +732,6 @@ class Ui(QtWidgets.QMainWindow):
 		pin = int('0x' + pin, 0)  # Treat the input as a hexadecimal string
 		pin_a, pin_b, pin_c = (pin >> 16) & 0xFF, (pin >> 8) & 0xFF, pin & 0xFF
 		
-		#log_callback.emit('[*] Sending PIN to the ECU...')
 		self.log('[*] Sending PIN to the ECU...')
 		try:
 			ecu.bus.execute(
@@ -737,10 +740,8 @@ class Ui(QtWidgets.QMainWindow):
 				)
 			)
 			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
-			#self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			#log_callback.emit('[!] Invalid PIN. Immobilizer reset failed.')
-			self.log('[!] Invalid PIN. Immobilizer reset failed. ({})'.format(str(e.status)))
+			self.log('[!] Invalid PIN. Immobilizer reset failed.')
 			return
 
 		# Confirm the immobilizer reset
@@ -748,15 +749,11 @@ class Ui(QtWidgets.QMainWindow):
 			try:
 				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data()
 				#log_callback.emit(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
-				#log_callback.emit('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
-				#self.log(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
 				self.log('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
 			except kwp2000.Kwp2000NegativeResponseException as e:
-				#log_callback.emit('[!] Immobilizer reset confirmation failed.')
-				self.log('[!] Immobilizer reset confirmation failed. ({})'.format(str(e.status)))
+				self.log('[!] Immobilizer reset confirmation failed.')
 
 		else:
-			#log_callback.emit('[*] Immobilizer reset cancelled by user.')
 			self.log('[*] Immobilizer reset cancelled by user.')
 
 
@@ -784,7 +781,7 @@ class Ui(QtWidgets.QMainWindow):
 				log_callback.emit('[!] System is locked by wrong data! It\'ll probably be locked for an hour.')
 				return self.disconnect_ecu(ecu)
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Error: Immo is inactive or limp home pin is not set. ({})'.format(str(e.status)))
+			log_callback.emit('[!] Error: Immo is inactive or limp home pin is not set.')
 			return self.disconnect_ecu(ecu)
 
 		# Save ECU context and proceed
@@ -800,7 +797,6 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and pin.isdigit() and len(pin) == 4:
 			self.continue_limp_home(pin, log_callback, ecu)  # Proceed to limp home process
 		else:
-			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)
 
@@ -811,26 +807,20 @@ class Ui(QtWidgets.QMainWindow):
 			pin_a = (pin >> 8)
 			pin_b = (pin & 0xFF)
 		except ValueError:
-			#log_callback.emit('[!] Invalid PIN format.')
 			self.log('[!] Invalid PIN format.')
 			return
 
 		try:
-			#log_callback.emit('[*] Activating limp home mode...')
 			self.log('[*] Activating limp home mode...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, pin_a, pin_b)).get_data()
-			#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
 			self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
 			
 			if len(response) > 1 and response[1] == 1:
-				#log_callback.emit('[*] Limp home mode activated successfully.')
 				self.log('[*] Limp home mode activated successfully.')
 			else:
-				#log_callback.emit('[!] Activation failed. Ensure the PIN is correct.')
 				self.log('[!] Activation failed. Ensure the PIN is correct.')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			#log_callback.emit('[!] Invalid PIN. Activation failed.')
-			self.log('[!] Invalid PIN. Activation failed. ({})'.format(str(e.status)))
+			self.log('[!] Invalid PIN. Activation failed.')
 
 	def smartra_neutralize(self, progress_callback=None, log_callback=None):
 		try:
@@ -855,7 +845,7 @@ class Ui(QtWidgets.QMainWindow):
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
 			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in list(data))}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine. ({})'.format(str(e.status)))
+			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine.')
 			return self.disconnect_ecu(ecu)
 
 		# Check if the system is locked
@@ -876,7 +866,6 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and pin.isdigit() and len(pin) == 6:
 			self.continue_smartra_neutralize(pin, log_callback, ecu)  # Proceed with SMARTRA neutralization
 		else:
-			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')	
 		return self.disconnect_ecu(ecu)	
 
@@ -888,33 +877,26 @@ class Ui(QtWidgets.QMainWindow):
 			pin_b = (pin >> 8) & 0xFF
 			pin_c = (pin & 0xFF)
 		except ValueError:
-			#log_callback.emit('[!] Invalid PIN format.')
 			self.log('[!] Invalid PIN format.')
 			return
 
 		try:
 			# Send the PIN
-			#log_callback.emit('[*] Sending PIN to the ECU...')
 			self.log('[*] Sending PIN to the ECU...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_INPUT_PASSWORD.value, pin_a, pin_b, pin_c, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)).get_data()
-			#log_callback.emit(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in response)}')
 			self.log(f'[*] IMMO_INPUT_PASSWORD response: {" ".join(hex(x) for x in list(response))}')
 
 			# Perform SMARTRA neutralization
-			#log_callback.emit('[*] Neutralizing SMARTRA...')
 			self.log('[*] Neutralizing SMARTRA...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.NEUTRALIZE_SMARTRA.value, 0x01)).get_data()
-			#log_callback.emit(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in response)}')
 			self.log(f'[*] NEUTRALIZE_SMARTRA response: {" ".join(hex(x) for x in list(response))}')
 
 			if len(response) > 1 and response[1] == 1:
-				#log_callback.emit('[*] SMARTRA neutralization completed successfully.')
 				self.log('[*] SMARTRA neutralization completed successfully.')
 			else:
-				#log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
 				self.log('[!] Neutralization failed. Ensure the PIN is correct.')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct. ({})'.format(str(e.status)))
+			log_callback.emit('[!] Neutralization failed. Ensure the PIN is correct.')
 		self.disconnect_ecu(ecu)
 
 	def teach_keys(self, progress_callback=None, log_callback=None):
@@ -940,8 +922,7 @@ class Ui(QtWidgets.QMainWindow):
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
 			#log_callback.emit(f'[*] BEFORE_IMMO_KEY_TEACHING response: {" ".join(hex(x) for x in data)}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Error starting IMMO_KEY_TEACHING routine. ({})'.format(str(e.status)))
-			return
+			log_callback.emit('[!] Error starting IMMO_KEY_TEACHING routine.')
 
 		# Request the PIN asynchronously
 		self.request_pin_signal2.emit(log_callback, ecu)
@@ -952,13 +933,11 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and pin.isdigit() and len(pin) == 6:
 			self.continue_teach_keys(pin, log_callback, ecu)  # Continue with the reset process
 		else:
-			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')
 		return self.disconnect_ecu(ecu)	
 
 	def continue_teach_keys(self, pin: str, log_callback, ecu: ECU):
 		if not pin or not pin.isdigit() or len(pin) != 6:
-			#log_callback.emit('[!] Invalid PIN or operation cancelled.')
 			self.log('[!] Invalid PIN or operation cancelled.')
 			return
 
@@ -1035,7 +1014,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit(f'[*] Current ECU status: {immo_status.get(status, status)}')
 		except kwp2000.Kwp2000NegativeResponseException:
 			log_callback.emit('[!] Failed to check ECU status.')
-			return
+			return self.disconnect_ecu(ecu)	
 
 		# Store context for continuation
 		self._ecu = ecu
@@ -1053,9 +1032,8 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and password.isdigit() and len(password) == 4:
 			self.request_new_password_signal.emit(log_callback, ecu, password)
 		else:
-			#log_callback.emit('[!] Invalid current password or operation cancelled.')
 			self.log('[!] Invalid current password or operation cancelled.')
-		return self.disconnect_ecu(ecu)	
+			return self.disconnect_ecu(ecu)	
 
 	def request_new_password_from_user(self, log_callback, ecu: ECU, current_password: str = ''):
 		# Prompt user for the new password
@@ -1063,7 +1041,6 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and password.isdigit() and len(password) == 4:
 			self.continue_limp_home_teach(current_password, password, log_callback, ecu)
 		else:
-			#log_callback.emit('[!] Invalid new password or operation cancelled.')
 			self.log('[!] Invalid new password or operation cancelled.')
 			return self.disconnect_ecu(ecu)
 
@@ -1077,7 +1054,6 @@ class Ui(QtWidgets.QMainWindow):
 
 				# Send the current password
 				self.log('[*] Sending current password to the ECU...')
-				#log_callback.emit('[*] Sending current password to the ECU...')
 				ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ACTIVATE_LIMP_HOME.value, current_password_a, current_password_b))
 
 			new_password = int('0x' + new_password, 0)
@@ -1086,29 +1062,23 @@ class Ui(QtWidgets.QMainWindow):
 
 			# Send the new password
 			self.log('[*] Sending new password to the ECU...')
-			#log_callback.emit('[*] Sending new password to the ECU...')
 			response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.LIMP_HOME_INPUT_NEW_PASSWORD.value, new_password_a, new_password_b)).get_data()
 			self.log(f'[*] Response: {" ".join(hex(x) for x in response)}')
-			#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
 
 			# Confirm the new password
 			if QMessageBox.question(self, 'Confirm Password', 'Are you sure you want to set this password?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
 				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.LIMP_HOME_CONFIRM_NEW_PASSWORD.value, 0x01)).get_data()
 				self.log(f'[*] Response: {" ".join(hex(x) for x in list(response))}')
-				#log_callback.emit(f'[*] Response: {" ".join(hex(x) for x in response)}')
 				self.log('[*] Limp home password teaching completed successfully.')
-				#log_callback.emit('[*] Limp home password teaching completed successfully.')
 				return self.disconnect_ecu(ecu)
 			else:
 				self.log('[*] Limp home password teaching cancelled.')
-				#log_callback.emit('[*] Limp home password teaching cancelled.')
 				return self.disconnect_ecu(ecu)
 
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			#log_callback.emit('[!] Password teaching failed. Ensure the passwords are correct.')
-			self.log('[!] Password teaching failed. Ensure the passwords are correct. ({})'.format(str(e.status)))
+			self.log('[!] Password teaching failed. Ensure the passwords are correct.')
+			return self.disconnect_ecu(ecu)
 		except ValueError:
-			#log_callback.emit('[!] Invalid password format.')
 			self.log('[!] Invalid password format.')
 		finally:
 			# Clean up temporary state
@@ -1140,8 +1110,9 @@ class Ui(QtWidgets.QMainWindow):
 			vin_data = ecu.bus.execute(cmd).get_data()
 			vin = ''.join(chr(x) for x in list(vin_data))
 			log_callback.emit(f'[*] Vehicle Identification Number (VIN): {vin}')
+			return self.disconnect_ecu(ecu)
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU. ({})'.format(str(e.status)))
+			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU.')
 			return self.disconnect_ecu(ecu)
 
 	def write_vin(self, progress_callback=None, log_callback=None):
@@ -1176,30 +1147,24 @@ class Ui(QtWidgets.QMainWindow):
 		if ok and len(vin.strip()) > 0 and len(vin) <= 17:
 			self.continue_write_vin(vin, log_callback, ecu)  # Proceed with VIN writing
 		else:
-			#log_callback.emit('[!] Invalid VIN or operation cancelled.')
 			self.log('[!] Invalid VIN or operation cancelled.')
 			return self.disconnect_ecu(ecu)
 
 	def continue_write_vin(self, vin, log_callback, ecu):
 		if not vin or len(vin) > 17 or len(vin.strip()) == 0:
-			#log_callback.emit('[!] Invalid VIN. It must be up to 17 characters long and cannot be empty.')
 			self.log('[!] Invalid VIN. It must be up to 17 characters long and cannot be empty.')
 			return self.disconnect_ecu(ecu)
 		# Pad VIN to 17 characters if necessary
 		vin_padded = vin.ljust(17)
 		try:
-			#log_callback.emit(f'[*] Writing VIN: {vin_padded}')
 			self.log(f'[*] Writing VIN: {vin_padded}')
 			ecu.bus.execute(WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin_padded]))
-			#log_callback.emit('[*] VIN written successfully.')
 			self.log('[*] VIN written successfully.')
 			return self.disconnect_ecu(ecu)
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			#log_callback.emit('[!] Writing VIN failed. Ensure the ECU is writable.')
-			self.log('[!] Writing VIN failed. Ensure the ECU is writable. ({})'.format(str(e.status)))
+			self.log('[!] Writing VIN failed. Ensure the ECU is writable.')
 			return self.disconnect_ecu(ecu)
 		except Exception as e:
-			#log_callback.emit(f'[!] Unexpected error while writing VIN: {e}')
 			self.log(f'[!] Unexpected error while writing VIN: {e}')
 			return self.disconnect_ecu(ecu)
 
