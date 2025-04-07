@@ -82,8 +82,13 @@ def cli_immo_reset (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x15')
-	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
-	print(' '.join([hex(x) for x in list(data)]))
+	try:
+		data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
+		print(' '.join([hex(x) for x in list(data)]))
+	except kwp2000.Kwp2000NegativeResponseException as e:
+		print('[!] Immo disabled or already viginised! \n ({})'.format(str(e.status)))
+		return
+
 
 	if (len(data) > 1):
 		if (data[1] == 4):
@@ -102,7 +107,7 @@ def cli_immo_reset (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None
 	if (input('[?] Looks good! Continue? [y/n]: ') == 'y'):
 		print(bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data())
 
-	print('[*] ECU reseted! Turn ignition off for 10 seconds for changes to take effect')
+	print('[*] ECU reset! Turn ignition off for 10 seconds for changes to take effect.')
 
 def cli_smartra_neutralize (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
