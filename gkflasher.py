@@ -92,15 +92,15 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=bar)
 
-	ecu.bus.set_timeout(300)
+	ecu.bus.transport.hardware.set_timeout(300)
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
 	ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
-	ecu.bus.set_timeout(12)
+	ecu.bus.transport.hardware.set_timeout(12)
 
 	print('[*] ecu reset')
 	print('[*] done!')
 	ecu.bus.execute(kwp2000.commands.ECUReset(kwp2000.enums.ResetMode.POWER_ON_RESET)).get_data()
-	ecu.bus.shutdown()
+	ecu.bus.close()
 	
 def cli_clear_adaptive_values (ecu, desired_baudrate):
 	print('[*] Clearing adaptive values.. ', end='')
@@ -238,7 +238,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 				*available_timing[1:]
 			)
 		)
-	except Kwp2000NegativeResponseException:
+	except kwp2000.Kwp2000NegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
 	print('[*] Security Access')
