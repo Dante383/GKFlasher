@@ -257,8 +257,6 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			return
 
 	if (args.id):
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-
 		print('[*] Reading ECU Identification..',end='')
 		for parameter_key, parameter in fetch_ecu_identification(bus).items():
 			value_dec = list(parameter['value'])
