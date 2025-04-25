@@ -17,7 +17,7 @@ def cli_immo_info (bus, desired_baudrate) -> None:
 	if desired_baudrate is None:
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
 	else:
-		bus.execute(kwp.commands2000.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
 		immo_data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 	except (kwp2000.Kwp2000NegativeResponseException):
