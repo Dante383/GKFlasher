@@ -413,6 +413,9 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
 		if (ecu == False):
 			return
 
@@ -450,6 +453,9 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
 		if (ecu == False):
 			return
 
@@ -471,6 +477,9 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 			return
 		if (ecu == False):
 			return
@@ -608,6 +617,9 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
 		if (ecu == False):
 			return
 
@@ -619,6 +631,9 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 			return
 		if (ecu == False):
 			return
@@ -632,6 +647,9 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
 		if (ecu == False):
 			return
 
@@ -643,6 +661,9 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 			return
 		if (ecu == False):
 			return
@@ -657,6 +678,9 @@ class Ui(QtWidgets.QMainWindow):
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 			return
 		if (ecu == False):
 			return
@@ -689,9 +713,12 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly.')
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 
 		# Start the default diagnostic session
@@ -763,7 +790,10 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 		
 		# Start the diagnostic session
@@ -825,10 +855,13 @@ class Ui(QtWidgets.QMainWindow):
 	def smartra_neutralize(self, progress_callback=None, log_callback=None):
 		try:
 			ecu = self.initialize_ecu(log_callback)
-		except gkbus.GKBusTimeoutException:
+		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 		
 		# Start the diagnostic session
@@ -845,7 +878,7 @@ class Ui(QtWidgets.QMainWindow):
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
 			log_callback.emit(f'[*] BEFORE_SMARTRA_NEUTRALIZE response: {" ".join(hex(x) for x in list(data))}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
-			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine.')
+			log_callback.emit('[!] Error: Unable to perform BEFORE_SMARTRA_NEUTRALIZE routine. Usually this means that connection with the transponder inside of your key couldn\'t be estabilished. If you intended to turn immo off, use the \'Immo reset\' feature - SMARTRA Neutralize wipes the key transponder so that it can be paired with another ECU.')
 			return self.disconnect_ecu(ecu)
 
 		# Check if the system is locked
@@ -905,9 +938,11 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 			return
-
+		if (ecu == False):
+			return
 		# Start the default diagnostic session
 		if self.desired_baudrate is None:
 			log_callback.emit('[*] Starting default diagnostic session...')
@@ -995,7 +1030,10 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 
 		log_callback.emit('[*] Starting limp home password teaching...')
@@ -1092,7 +1130,10 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 
 		# Start diagnostic session
@@ -1121,7 +1162,10 @@ class Ui(QtWidgets.QMainWindow):
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 			return
-		if ecu is False:
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+			return
+		if (ecu == False):
 			return
 		
 		# Start diagnostic session
