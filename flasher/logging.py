@@ -4,6 +4,7 @@ from gkbus.protocol.kwp2000.enums import *
 from .ecu import ECU
 
 # this is not the way to do it, @TODO load data dynamically from GDS definitions
+# definitions below are fine-tuned for ca663021
 data_sources = [
 	{
 		'payload': ReadDataByLocalIdentifier(0x01),
@@ -190,7 +191,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: a
+				'conversion': lambda a: 0x8e*((a&0x7) >> 1)
 			},
 			{
 				'name': 'CVVT Actuation Status',
@@ -198,7 +199,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: a
+				'conversion': lambda a: 0x8f*((a&0x3) >> 1)
 			},
 			{
 				'name': 'CVVT Duty Control Status',
@@ -206,7 +207,7 @@ data_sources = [
 				'size': 1,
 				'unit': '',
 				'precision': 1,
-				'conversion': lambda a: a
+				'conversion': lambda a: 0x94*((a&0x3) >> 1)
 			}
 		]
 	},
