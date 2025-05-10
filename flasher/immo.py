@@ -14,10 +14,7 @@ immo_status = {
 }
 
 def cli_immo_info (bus, desired_baudrate) -> None:
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
 		immo_data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 	except (kwp2000.Kwp2000NegativeResponseException):
@@ -41,10 +38,7 @@ def cli_immo_info (bus, desired_baudrate) -> None:
 
 def cli_limp_home (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 	try:
 		data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
 	except kwp2000.Kwp2000NegativeResponseException as e:
@@ -76,10 +70,7 @@ def cli_limp_home (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 
 def cli_immo_reset (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x15')
 	try:
@@ -111,10 +102,7 @@ def cli_immo_reset (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None
 
 def cli_smartra_neutralize (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x25')
 	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
@@ -141,10 +129,7 @@ def cli_smartra_neutralize (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int)
 
 def cli_immo_teach_keys (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	print('[*] starting routine 0x14')
 	data = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
@@ -169,10 +154,7 @@ def cli_immo_teach_keys (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) ->
 
 def cli_read_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] reverting to default session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	cmd = kwp2000.Kwp2000Command()
 	cmd.set_service_identifier(0x09).set_data(bytes([0x02])) # undocumented service
@@ -190,10 +172,7 @@ def cli_read_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 
 def cli_write_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting flash reprogramming session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate))
 
 	enable_security_access(bus)
 	vin = input('Enter VIN. WARNING! No validation!: ')
@@ -208,10 +187,7 @@ def cli_write_vin (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 
 def cli_limp_home_teach (bus: kwp2000.Kwp2000Protocol, desired_baudrate: int) -> None:
 	print('[*] starting default diagnostic session')
-	if desired_baudrate is None:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
-	else:
-		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 
 	status = bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 	print('[*] Current ECU status: {}'.format(immo_status[status]))
