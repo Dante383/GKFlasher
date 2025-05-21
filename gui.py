@@ -406,15 +406,16 @@ class Ui(QtWidgets.QMainWindow):
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
 
 	def read_calibration_zone (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -427,12 +428,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def read_program_zone (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -448,15 +453,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def full_read (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -474,15 +480,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
@@ -613,15 +620,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		filename = self.flashingFileInput.text()
@@ -629,15 +637,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def flash_program (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		filename = self.flashingFileInput.text()
@@ -645,15 +654,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def flash_full (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		filename = self.flashingFileInput.text()
@@ -661,15 +671,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def clear_adaptive_values (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		log_callback.emit('[*] Clearing adaptive values.. ')
@@ -678,15 +689,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def display_immo_information (self, progress_callback, log_callback):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 		
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
@@ -714,15 +726,16 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def immo_reset(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		# Start the default diagnostic session
@@ -789,15 +802,16 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def limp_home(self, progress_callback=None, log_callback=None) -> None:
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 		
 		# Start the diagnostic session
@@ -857,15 +871,16 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN. Activation failed.')
 
 	def smartra_neutralize(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 		
 		# Start the diagnostic session
@@ -937,15 +952,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def teach_keys(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 		# Start the default diagnostic session
 		if self.desired_baudrate is None:
@@ -1029,15 +1045,16 @@ class Ui(QtWidgets.QMainWindow):
 			QMessageBox.critical(self, 'Critical Error', f'Unexpected error during key teaching. Reason: {str(e)}')
 
 	def limp_home_teach(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		log_callback.emit('[*] Starting limp home password teaching...')
@@ -1129,15 +1146,16 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def read_vin(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 
 		# Start diagnostic session
@@ -1162,15 +1180,16 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def write_vin(self, progress_callback=None, log_callback=None):
+		ecu = False
 		try:
 			ecu = self.initialize_ecu(log_callback)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-			return
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-			return
+
 		if (ecu == False):
+			self.bus.close()
 			return
 		
 		# Start diagnostic session

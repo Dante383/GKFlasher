@@ -146,7 +146,7 @@ class ECU:
 		return data
 
 	def clear_adaptive_values (self, desired_baudrate):
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
 		self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):
