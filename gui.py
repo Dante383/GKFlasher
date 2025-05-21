@@ -131,6 +131,7 @@ class Ui(QtWidgets.QMainWindow):
 		except:
 			print('[!] Buffer not found!')
 		print('\n[!] For exception details, see above.')
+		self.bus.close()
 
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
