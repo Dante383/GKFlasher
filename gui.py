@@ -354,7 +354,6 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] saved to {}'.format(home + "/" + output_filename))
 
 		log_callback.emit('[*] Done!')
-		self.disconnect_ecu(ecu)
 
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
@@ -405,7 +404,6 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
-		ecu.bus.close()
 
 	def read_calibration_zone (self, progress_callback, log_callback):
 		try:
@@ -426,6 +424,7 @@ class Ui(QtWidgets.QMainWindow):
 			output_filename = self.readingFileInput.text()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def read_program_zone (self, progress_callback, log_callback):
 		try:
@@ -446,6 +445,7 @@ class Ui(QtWidgets.QMainWindow):
 		address_stop = address_start + ecu.get_program_section_size()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def full_read (self, progress_callback, log_callback):
 		try:
@@ -471,6 +471,7 @@ class Ui(QtWidgets.QMainWindow):
 		address_stop = ecu.get_program_section_offset()+ecu.get_program_section_size()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
 		try:
@@ -625,6 +626,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=False, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def flash_program (self, progress_callback, log_callback):
 		try:
@@ -640,6 +642,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=False, flash_program=True, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def flash_full (self, progress_callback, log_callback):
 		try:
@@ -655,6 +658,7 @@ class Ui(QtWidgets.QMainWindow):
 
 		filename = self.flashingFileInput.text()
 		self.gui_flash_eeprom(ecu, input_filename=filename, flash_calibration=True, flash_program=True, log_callback=log_callback, progress_callback=progress_callback)
+		self.disconnect_ecu(ecu)
 
 	def clear_adaptive_values (self, progress_callback, log_callback):
 		try:
@@ -1154,7 +1158,8 @@ class Ui(QtWidgets.QMainWindow):
 			return self.disconnect_ecu(ecu)
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			log_callback.emit('[!] Reading VIN failed. Not supported on this ECU.')
-			return self.disconnect_ecu(ecu)
+		
+		self.disconnect_ecu(ecu)
 
 	def write_vin(self, progress_callback=None, log_callback=None):
 		try:
@@ -1204,13 +1209,12 @@ class Ui(QtWidgets.QMainWindow):
 			self.log(f'[*] Writing VIN: {vin_padded}')
 			ecu.bus.execute(WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin_padded]))
 			self.log('[*] VIN written successfully.')
-			return self.disconnect_ecu(ecu)
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			self.log('[!] Writing VIN failed. Ensure the ECU is writable.')
-			return self.disconnect_ecu(ecu)
 		except Exception as e:
 			self.log(f'[!] Unexpected error while writing VIN: {e}')
-			return self.disconnect_ecu(ecu)
+
+		self.disconnect_ecu(ecu)
 
 	def vin_to_pin(self, progress_callback=None, log_callback=None):
 
