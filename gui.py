@@ -247,6 +247,9 @@ class Ui(QtWidgets.QMainWindow):
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
 	def initialize_ecu (self, log_callback) -> ECU:
+		if hasattr(self, 'bus'):
+			self.bus.close()
+
 		try:
 			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
 		except IndexError:
@@ -274,9 +277,9 @@ class Ui(QtWidgets.QMainWindow):
 				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
 				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
 			except TimeoutException:
-				# it's possible that the bus is already running at the desired baudrate - let's check
-				bus.transport.hardware.socket.flushInput() # @todo: expose this in public gkbus api
-				bus.transport.hardware.socket.flushOutput()
+				# it's possible that the ecu is already running at the desired baudrate - let's check
+				bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
+				bus.transport.hardware.socket.reset_output_buffer()
 				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
 				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
 
@@ -371,16 +374,15 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] start routine 0x00 (erase program code section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
-			flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
-			flash_size = ecu.get_program_section_size()
 			payload_start = ecu.get_program_section_flash_bin_offset()
-			payload_stop = payload_start + flash_size
+			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_program_section_size())])
 			payload = eeprom[payload_start:payload_stop]
-			payload_adjusted = payload[:dynamic_find_end(payload)]
-			flash_size = len(payload_adjusted)
+
+			flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
+			flash_size = payload_stop-payload_start
 
 			log_callback.emit('[*] Uploading data to the ECU')
-			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		if flash_calibration:
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')

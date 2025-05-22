@@ -1,10 +1,10 @@
 import logging
+from math import ceil
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
 from gkbus.protocol.kwp2000.enums import CompressionType, EncryptionType
 from gkbus.hardware import TimeoutException
 from .ecu import ECU
-from math import ceil
 logger = logging.getLogger(__name__)
 
 page_size_b = 16384
@@ -16,14 +16,15 @@ def round_to_multiple(number: int, multiple: int) -> int:
         return multiple * ceil(number / multiple)
 
 def dynamic_find_end (payload):
-	payload_len = len(payload)
-	end_offset = payload_len
-	for index, x in enumerate(reversed(payload)):
-		if x == 0xFF:
-			end_offset = (round_to_multiple(payload_len-index, 254))
-		else:
-			break
-	return end_offset
+	end_offset = len(payload)-1
+
+	try:
+		while payload[end_offset] == 0xFF:
+			end_offset -= 1
+	except IndexError:
+		pass
+
+	return round_to_multiple(end_offset, 254)
 
 def read_page_16kib(ecu: ECU, offset: int, at_a_time: int = 254, progress_callback=False) -> bytearray:
 	address_start = offset
@@ -95,53 +96,36 @@ def read_memory(ecu: ECU, address_start: int, address_stop: int, progress_callba
 	return buffer
 
 def write_memory(ecu: ECU, payload: bytes, flash_start: int, flash_size: int, progress_callback=False) -> None:
-	ecu.bus.execute(RequestDownload(offset=flash_start, size=flash_size, compression_type=CompressionType.UNCOMPRESSED, encryption_type=EncryptionType.UNENCRYPTED))
+	ecu.bus.execute(
+		RequestDownload(
+			offset=flash_start, 
+			size=flash_size, 
+			compression_type=CompressionType.UNCOMPRESSED, 
+			encryption_type=EncryptionType.UNENCRYPTED
+		)
+	)
 
 	packets_to_write = int(flash_size/254)
-	packets_written = 0
+	if (flash_size % 254 != 0):
+		packets_to_write += 1
 
-#Workaround to prevent progress bar overrun if flash_size is divisible by 254
-	if (flash_size%254==0) :
-			while packets_to_write > packets_written:
-				if (progress_callback):
-					progress_callback.title('Packet {}/{}'.format(packets_written+1, packets_to_write))
+	for packets_written in range(packets_to_write):
+		if (progress_callback):
+			progress_callback.title('Packet {}/{}'.format(packets_written, packets_to_write))
 
-				payload_packet_start = packets_written*254
-				payload_packet_end = payload_packet_start+254
-				payload_packet = payload[payload_packet_start:payload_packet_end]
+		payload_packet_start = packets_written*254
+		payload_packet_end = payload_packet_start+254
+		payload_packet = payload[payload_packet_start:payload_packet_end]
 
-				while True:
-					try:
-						ecu.bus.execute(TransferData(payload_packet))
-						break
-					except TimeoutException:
-						logger.warning('Timeout at Block %s! Trying again...', packets_written)
-						continue
-			
-				packets_written += 1
-				
-				if (progress_callback):
-					progress_callback(len(payload_packet))
-	else:
-			while packets_to_write >= packets_written:
-				if (progress_callback):
-					progress_callback.title('Packet {}/{}'.format(packets_written, packets_to_write))
-
-				payload_packet_start = packets_written*254
-				payload_packet_end = payload_packet_start+254
-				payload_packet = payload[payload_packet_start:payload_packet_end]
-
-				while True:
-					try:
-						ecu.bus.execute(TransferData(payload_packet))
-						break
-					except TimeoutException:
-						logger.warning('Timeout at Block %s! Trying again...', packets_written)
-						continue
-
-				packets_written += 1
-				
-				if (progress_callback):
-					progress_callback(len(payload_packet))
+		while True:
+			try:
+				ecu.bus.execute(TransferData(payload_packet))
+				break
+			except TimeoutException:
+				logger.warning('Timeout at Block %s! Trying again...', packets_written)
+				continue
+		
+		if (progress_callback):
+			progress_callback(len(payload_packet))
 
 	ecu.bus.execute(RequestTransferExit())

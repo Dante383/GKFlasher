@@ -66,16 +66,16 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		print('[*] start routine 0x00 (erase program code section)')
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
-		flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
-		flash_size = ecu.get_program_section_flash_size()
+
 		payload_start = ecu.get_program_section_flash_bin_offset()
-		payload_stop = payload_start + flash_size
+		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:ecu.get_program_section_size()])
 		payload = eeprom[payload_start:payload_stop]
-		payload_adjusted = payload[:dynamic_find_end(payload)]
-		flash_size = len(payload_adjusted)
+
+		flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()
+		flash_size = payload_stop-payload_start
 
 		with alive_bar(flash_size, unit='B') as bar:
-			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=bar)
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	if flash_calibration:
 		print('[*] start routine 0x01 (erase calibration section)')
@@ -214,8 +214,8 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
 		except TimeoutException:
 			# it's possible that the bus is already running at the desired baudrate - let's check
-			bus.transport.hardware.socket.flushInput() # @todo: expose this in public gkbus api
-			bus.transport.hardware.socket.flushOutput()
+			bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
+			bus.transport.hardware.socket.reset_output_buffer()
 			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
 			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
 	else:
