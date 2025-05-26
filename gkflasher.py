@@ -8,7 +8,7 @@ from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
-from flasher.logging import logger
+from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
 
@@ -291,7 +291,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		cli_clear_adaptive_values(ecu, desired_baudrate)
 
 	if (args.logger):
-		logger(ecu)
+		logger(ecu, desired_baudrate)
 
 	bus.close()
 
