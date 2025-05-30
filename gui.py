@@ -500,7 +500,7 @@ class Ui(QtWidgets.QMainWindow):
 		for parameter_key, parameter in fetch_ecu_identification(ecu.bus).items():
 			value_dec = list(parameter['value'])
 			value_hex = ' '.join([hex(x) for x in value_dec])
-			value_ascii = strip(''.join([chr(x) for x in value_dec]))
+			value_ascii = strip(''.join([chr(x) for x in value_dec if x != 0xFF]))
 
 			log_callback.emit('')
 			log_callback.emit('    [*] [{}] {}:'.format(hex(parameter_key), parameter['name']))

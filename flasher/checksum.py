@@ -1,6 +1,6 @@
 import crcmod, sys
 
-cks_types = [ # todo: incorporate into ECU definitions
+cks_types = [ # @todo: incorporate into ECU definitions
 	{
         'name': '2mbit',
         'identification_flag_address': 0xFEFE,
@@ -146,6 +146,20 @@ cks_types = [ # todo: incorporate into ECU definitions
 		        'init_address': 0x3FE4,
 		        'cks_address': 0x3EEC,
 		        'bin_offset': 0
+		    },
+		    {
+		    	'name': 'RSW_RAM',
+		    	'flag_address': 0x97EFE,
+		    	'init_address': 0xC014,
+		    	'cks_address': 0xC000,
+		    	'bin_offset': 0
+		    },
+		    {
+		    	'name': 'RSW',
+		    	'flag_address': 0x97EFE,
+		    	'init_address': 0x82014,
+		    	'cks_address': 0x82000,
+		    	'bin_offset': 0
 		    },
         	{
 	        	'name': 'Calibration',

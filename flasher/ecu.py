@@ -9,6 +9,12 @@ kwp_ecu_identification_parameters = [
 	{'value': 0x87, 'name': 'DCX/MMC ECU Identification'},
 	{'value': 0x88, 'name': 'VIN (original)'},
 	{'value': 0x89, 'name': 'Diagnostic Variant Code'},
+	{'value': 0x8A, 'name': 'System supplier specific'},
+	{'value': 0x8B, 'name': 'System supplier specific'},
+	{'value': 0x8C, 'name': 'Bootloader version'},
+	{'value': 0x8D, 'name': 'Program code version'},
+	{'value': 0x8E, 'name': 'Calibration version'},
+	{'value': 0x8F, 'name': 'System supplier specific'},
 	{'value': 0x90, 'name': 'VIN (current)'},
 	{'value': 0x96, 'name': 'Calibration identification'},
 	{'value': 0x97, 'name': 'Calibration Verification Number'},
@@ -18,12 +24,8 @@ kwp_ecu_identification_parameters = [
 	{'value': 0x9D, 'name': 'ECU Data Software Identification'},
 	{'value': 0x9E, 'name': 'ECU Boot Software Identification'},
 	{'value': 0x9F, 'name': 'ECU Boot Fingerprint'},
-	{'value': 0x8A, 'name': 'System supplier specific'},
-	{'value': 0x8B, 'name': 'System supplier specific'},
-	{'value': 0x8C, 'name': 'Bootloader version'},
-	{'value': 0x8D, 'name': 'Program code version'},
-	{'value': 0x8E, 'name': 'Calibration version'},
-	{'value': 0x8F, 'name': 'System supplier specific'},
+	{'value': 0x80, 'name': 'ECU Identification table'},
+	{'value': 0x81, 'name': 'ECU Identification scaling table'},
 ]
 
 def fetch_ecu_identification (bus):
@@ -45,15 +47,16 @@ def calculate_key (concat11_seed):
     return key & 0xFFFF
 
 def enable_security_access (bus: kwp2000.Kwp2000Protocol):
-	seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
+	seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed().set_data(b'\xFD')).get_data()[1:]
+	#seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
 
 	if (sum(seed) == 0):
 		logging.info('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
 		return
 
 	key = calculate_key(int.from_bytes(seed, 'big'))
-
-	bus.execute(kwp2000.commands.SecurityAccess().send_key(key))
+	#bus.execute(kwp2000.commands.SecurityAccess().send_key(key))
+	bus.execute(kwp2000.commands.SecurityAccess().send_key(key).set_data(b'\xFE\xCE\xC6\x42\x52'))
 
 class ECU:
 	def __init__ (self, 

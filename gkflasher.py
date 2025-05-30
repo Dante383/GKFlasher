@@ -11,6 +11,7 @@ from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
+from flasher.rsw import rsw_handler
 
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
@@ -134,6 +135,7 @@ def load_arguments ():
 	parser.add_argument('-c', '--config', help='Config filename', default='gkflasher.yml')
 	parser.add_argument('-v', '--verbose', action='count', default=0)
 	parser.add_argument('--immo', action='store_true')
+	parser.add_argument('--rsw', action='store_true')
 	args = parser.parse_args()
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
@@ -270,6 +272,9 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			print('')
 
 		cli_immo_info(bus, desired_baudrate)
+
+	if (args.rsw):
+		rsw_handler(ecu)
 
 	if (args.read):
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
