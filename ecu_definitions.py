@@ -9,7 +9,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
 			'memory_offset': 0,
 			'bin_offset': 0,
-			'memory_write_offset': -0x7000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
@@ -24,7 +23,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': 0,
 			'bin_offset': -0x80000,
-			'memory_write_offset': -0x7000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
@@ -39,7 +37,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
 			'bin_offset': -0x88000,
-			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
@@ -54,7 +51,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
 			'bin_offset': -0x88000,
-			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
@@ -69,7 +65,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 262144, # (256 KiB)
 			'memory_offset': -0x48000,
 			'bin_offset': -0x88000,
-			'memory_write_offset': -0xB800, # write at 0x84800
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
 			'program_section_size': 0x30000,
@@ -84,7 +79,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'memory_offset': -0x8000,
 			'bin_offset': -0x88000,
-			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
