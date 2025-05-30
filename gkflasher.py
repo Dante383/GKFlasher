@@ -5,7 +5,7 @@ from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, Tim
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
-from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException
+from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException, DesiredBaudrate
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
 from flasher.logging import logger, logger_raw
@@ -102,7 +102,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 	ecu.bus.execute(kwp2000.commands.ECUReset(kwp2000.enums.ResetMode.POWER_ON_RESET)).get_data()
 	ecu.bus.close()
 	
-def cli_clear_adaptive_values (ecu, desired_baudrate):
+def cli_clear_adaptive_values (ecu, desired_baudrate: DesiredBaudrate = None):
 	print('[*] Clearing adaptive values.. ', end='')
 	ecu.clear_adaptive_values(desired_baudrate)
 	print('Done! Turn off ignition for 10 seconds to apply changes.')
@@ -201,27 +201,29 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 
 	if args.desired_baudrate:
 		try:
-			desired_baudrate = args.desired_baudrate
+			desired_baudrate = DesiredBaudrate(index=args.desired_baudrate, baudrate=BAUDRATES[args.desired_baudrate])
 		except KeyError:
 			print('[!] Selected baudrate is invalid! Available baudrates:')
 			for key, baudrate in BAUDRATES.items():
 				print('{} - {}'.format(hex(key), baudrate))
-			sys.exit(1)
+			return
 
-		print('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[args.desired_baudrate]))
+		print('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 		try:
-			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
-			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
+			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+			bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
 		except TimeoutException:
 			# it's possible that the bus is already running at the desired baudrate - let's check
 			bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
 			bus.transport.hardware.socket.reset_output_buffer()
-			bus.transport.hardware.set_baudrate(BAUDRATES[args.desired_baudrate])
-			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, args.desired_baudrate))
+			bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
 	else:
+		# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
+		desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
 		print('[*] Trying to start diagnostic session')
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
-		desired_baudrate = None
+		
 	bus.transport.hardware.set_timeout(12)
 
 	if (args.immo):

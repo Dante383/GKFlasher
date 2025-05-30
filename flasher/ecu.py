@@ -2,6 +2,7 @@ import logging
 from typing_extensions import Self
 from gkbus.protocol import kwp2000
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier
+from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 kwp_ecu_identification_parameters = [
@@ -54,6 +55,14 @@ def enable_security_access (bus: kwp2000.Kwp2000Protocol):
 	key = calculate_key(int.from_bytes(seed, 'big'))
 
 	bus.execute(kwp2000.commands.SecurityAccess().send_key(key))
+
+@dataclass
+class DesiredBaudrate:
+	'''
+	Index is the value sent with StartDiagnosticSession, baudrate is the serial interface baudrate
+	'''
+	index: int
+	baudrate: int
 
 class ECU:
 	def __init__ (self, 
@@ -142,8 +151,8 @@ class ECU:
 				raise e
 		return data
 
-	def clear_adaptive_values (self, desired_baudrate):
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate))
+	def clear_adaptive_values (self, desired_baudrate: DesiredBaudrate):
+		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, desired_baudrate.index))
 		self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 
 class ECUIdentificationException (Exception):

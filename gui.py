@@ -9,7 +9,7 @@ from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, 
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU
+from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU, DesiredBaudrate
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
@@ -141,8 +141,7 @@ class Ui(QtWidgets.QMainWindow):
 		try:
 			self.detect_interfaces()
 		except ValueError:
-			print('[!] No serial interfaces found!')
-			return
+			print('[!] No serial interfaces found! If you plug in an interface now, you\'ll have to restart GKFlasher')
 
 		self.load_ecus()
 		self.load_baudrates()
@@ -237,7 +236,14 @@ class Ui(QtWidgets.QMainWindow):
 		url = self.interfacesBox.currentData()
 		if not url:
 			raise IndexError
-		return url 
+		return url
+
+	def get_desired_baudrate (self) -> DesiredBaudrate:
+		baudrate_index = self.baudratesBox.currentData()
+		if baudrate_index == -1:
+			# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
+			return DesiredBaudrate(index=None, baudrate=10400)
+		return DesiredBaudrate(index=baudrate_index, baudrate=BAUDRATES[baudrate_index])
 
 	def progress_callback (self, value):
 		if (len(value) > 1):
@@ -246,7 +252,7 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
-	def initialize_ecu (self, log_callback) -> ECU:
+	def _initialize_ecu (self, log_callback) -> ECU:
 		if hasattr(self, 'bus'):
 			self.bus.close()
 
@@ -266,22 +272,21 @@ class Ui(QtWidgets.QMainWindow):
 		bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
 		self.bus = bus
 
-		if self.baudratesBox.currentData() == -1:
+		if not self.get_desired_baudrate().index:
 			log_callback.emit('[*] Trying to start diagnostic session')
 			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
-			self.desired_baudrate = None  # No specific baud rate
 		else:
-			self.desired_baudrate = self.baudratesBox.currentData()
-			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(BAUDRATES[self.desired_baudrate]))
+			desired_baudrate = self.get_desired_baudrate()
+			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 			try:
-				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
-				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
+				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+				bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
 			except TimeoutException:
 				# it's possible that the ecu is already running at the desired baudrate - let's check
 				bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
 				bus.transport.hardware.socket.reset_output_buffer()
-				bus.transport.hardware.set_baudrate(BAUDRATES[self.desired_baudrate])
-				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, self.desired_baudrate))
+				bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
 
 		bus.transport.hardware.set_timeout(12)
 
@@ -315,6 +320,16 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Found! {}'.format(ecu.get_name()))
 		
 		return ecu
+
+	def initialize_ecu (self, log_callback) -> ECU:
+		try:
+			return self._initialize_ecu(log_callback)
+		except TimeoutException:
+			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
+		except Exception as e:
+			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
+
+		return False
 
 	def disconnect_ecu (self, ecu: ECU) -> None:
 		try:
@@ -409,14 +424,8 @@ class Ui(QtWidgets.QMainWindow):
 		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
 
 	def read_calibration_zone (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -431,14 +440,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def read_program_zone (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -456,14 +459,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def full_read (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -483,14 +480,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -508,11 +499,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 			log_callback.emit('')
 
-		if self.baudratesBox.currentData() == -1:
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			desired_baudrate = self.baudratesBox.currentData()
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -623,14 +610,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -640,14 +621,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def flash_program (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -657,14 +632,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def flash_full (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
@@ -674,43 +643,28 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def clear_adaptive_values (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 
 		log_callback.emit('[*] Clearing adaptive values.. ')
-		ecu.clear_adaptive_values(self.desired_baudrate)
+		ecu.clear_adaptive_values(self.get_desired_baudrate())
 		log_callback.emit('Done! Turn off ignition for 10 seconds to apply changes.')
 		self.disconnect_ecu(ecu)
 
 	def display_immo_information (self, progress_callback, log_callback):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 		
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
-		if self.baudratesBox.currentData() == -1:
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			desired_baudrate = self.baudratesBox.currentData()
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -729,25 +683,14 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def immo_reset(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 
-		# Start the default diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		# Start the BEFORE_IMMO_RESET routine
 		log_callback.emit('[*] Checking Immobilizer status...')
@@ -805,25 +748,14 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def limp_home(self, progress_callback=None, log_callback=None) -> None:
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 		
-		# Start the diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		# Check the ECU status
 		try:
@@ -874,25 +806,14 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Invalid PIN. Activation failed.')
 
 	def smartra_neutralize(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
-		
-		# Start the diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Starting SMARTRA neutralization...')
 		# Check the ECU status with BEFORE_SMARTRA_NEUTRALIZE
@@ -955,24 +876,14 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def teach_keys(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
-		# Start the default diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Teaching immobilizer keys...')
 		#log_callback.emit('[*] starting routine 0x14')
@@ -1048,27 +959,16 @@ class Ui(QtWidgets.QMainWindow):
 			QMessageBox.critical(self, 'Critical Error', f'Unexpected error during key teaching. Reason: {str(e)}')
 
 	def limp_home_teach(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 
 		log_callback.emit('[*] Starting limp home password teaching...')
 		
-		# Start diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		# Check ECU status
 		try:
@@ -1149,29 +1049,18 @@ class Ui(QtWidgets.QMainWindow):
 
 
 	def read_vin(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 
-		# Start diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		try:
 			cmd = kwp2000.Kwp2000Command()
-			cmd.set_service_identifier(0x09).set_data(bytes([0x02])) # undocumented service
+			cmd.set_service_identifier(0x09).set_data(b'\x02') # OBD2 service
 
 			vin_data = ecu.bus.execute(cmd).get_data()
 			vin = ''.join(chr(x) for x in list(vin_data))
@@ -1183,25 +1072,14 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def write_vin(self, progress_callback=None, log_callback=None):
-		ecu = False
-		try:
-			ecu = self.initialize_ecu(log_callback)
-		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+		ecu = self.initialize_ecu(log_callback)
+		
 		if (ecu == False):
 			self.bus.close()
 			return
 		
-		# Start diagnostic session
-		if self.desired_baudrate is None:
-			log_callback.emit('[*] Starting default diagnostic session...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
-		else:
-			log_callback.emit(f'[*] Starting diagnostic session with baudrate {self.desired_baudrate}...')
-			ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.desired_baudrate))
+		log_callback.emit('[*] Starting default diagnostic session...')
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Starting VIN writing process...')
 
@@ -1239,7 +1117,6 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def vin_to_pin(self, progress_callback=None, log_callback=None):
-
 		log_callback.emit('[*] SMARTRA VIN to PIN calculator')
 		log_callback.emit('[*] This calculator should apply for all Hyundai and KIA models equipped with SMARTRA2')
 		log_callback.emit('[*] From 2007 or so, some models started using SMARTRA3 and a different algorithm - beware.')
@@ -1275,7 +1152,6 @@ class Ui(QtWidgets.QMainWindow):
 				break
 			except ValueError:
 				print('[!] Something went wrong. Try again')
-
 
 	def get_or_generate_file_path(self) -> str:
 		# Retrieve the file path from the QLineEdit

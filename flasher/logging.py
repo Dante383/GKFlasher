@@ -2,7 +2,7 @@ import csv, time
 from datetime import datetime
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
-from .ecu import ECU
+from .ecu import ECU, DesiredBaudrate
 
 # this is not the way to do it, @TODO load data dynamically from GDS definitions
 # definitions below are fine-tuned for ca663056
@@ -352,8 +352,8 @@ def poll (ecu: ECU) -> list[int]:
 			print('{}: {}{} ({})'.format(parameter['name'], value_converted, parameter['unit'], hex(int.from_bytes(value, 'little'))))
 	return data
 
-def logger(ecu: ECU, desired_baudrate: int) -> None:
-	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+def logger(ecu: ECU, desired_baudrate: DesiredBaudrate) -> None:
+	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate.index))
 
 	print('[*] Building parameter header')
 	data = [['Unix timestamp']]
@@ -383,8 +383,8 @@ def poll_raw (ecu: ECU) -> bytes:
 		data.append(raw_data)
 	return data
 
-def logger_raw (ecu: ECU, desired_baudrate: int) -> None:
-	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate))
+def logger_raw (ecu: ECU, desired_baudrate: DesiredBaudrate) -> None:
+	ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, desired_baudrate.index))
 
 	output_filename = 'log_raw_{}.csv'.format(datetime.now().strftime('%Y-%m-%d_%H%M'))
 
