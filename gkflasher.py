@@ -67,8 +67,9 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 
-		payload_start = ecu.get_program_section_flash_bin_offset()
-		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:ecu.get_program_section_size()])
+		# we need to start 16 bytes later as the program section starts with a flag that we can't write
+		payload_start = ecu.calculate_bin_offset(ecu.get_program_section_offset()) + 16
+		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_program_section_size()-16)])
 		payload = eeprom[payload_start:payload_stop]
 
 		flash_start = ecu.get_program_section_offset() + ecu.get_program_section_flash_memory_offset()

@@ -13,7 +13,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
-			'program_section_flash_bin_offset': 0xA0010,
 			'program_section_flash_memory_offset': 0x10
 		}
 	},
@@ -29,7 +28,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
-			'program_section_flash_bin_offset': 0x20010,
 			'program_section_flash_memory_offset': 0x10
 		},
 	},
@@ -45,7 +43,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
-			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
 		}
 	},
@@ -61,13 +58,12 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
-			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
 		}
 	},
 	{
 		'offset': 0x48040,
-		'expected': [[b'\x63\x61\x36\x36\x30'], [b'\x63\x61\x36\x35\x32'], [b'\x63\x61\x36\x35\x30']], #[[99, 97, 54, 54, 48], [99, 97, 54, 53, 50], [99, 97, 54, 53, 48]], #CA660, CA652, CA650
+		'expected': [[b'\x63\x61\x36\x36\x30'], [b'\x63\x61\x36\x35\x32'], [b'\x63\x61\x36\x35\x30']], #CA660, CA652, CA650
 		'ecu': {
 			'name': 'SIMK41 / V6 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)
@@ -77,7 +73,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
 			'program_section_size': 0x30000,
-			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x47FF0 #write at 0x50010
 		}
 	},
@@ -93,7 +88,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
-			'program_section_flash_bin_offset': 0x10010,
 			'program_section_flash_memory_offset': -0x7FF0 # write to 0x90010
 		}
 	},	

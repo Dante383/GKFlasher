@@ -71,14 +71,14 @@ class ECU:
 		memory_offset: int, bin_offset: int, memory_write_offset: int,
 		calibration_size_bytes: int,
 		program_section_offset: int, program_section_size: int,
-		program_section_flash_bin_offset: int, program_section_flash_memory_offset: int
+		program_section_flash_memory_offset: int
 		):
 		self.name = name
 		self.eeprom_size_bytes = eeprom_size_bytes
 		self.memory_offset, self.bin_offset, self.memory_write_offset = memory_offset, bin_offset, memory_write_offset
 		self.calibration_size_bytes = calibration_size_bytes
 		self.program_section_offset, self.program_section_size = program_section_offset, program_section_size
-		self.program_section_flash_bin_offset, self.program_section_flash_memory_offset = program_section_flash_bin_offset, program_section_flash_memory_offset 
+		self.program_section_flash_memory_offset = program_section_flash_memory_offset 
 
 	def get_name (self) -> str:
 		return self.name 
@@ -94,9 +94,6 @@ class ECU:
 
 	def get_program_section_size (self) -> int:
 		return self.program_section_size
-
-	def get_program_section_flash_bin_offset (self) -> int:
-		return self.program_section_flash_bin_offset
 
 	def get_program_section_flash_memory_offset (self) -> int:
 		return self.program_section_flash_memory_offset
