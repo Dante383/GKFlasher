@@ -403,16 +403,16 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-			flash_start = ecu.calculate_memory_write_offset(0x090000)
-			flash_size = ecu.get_calibration_size_bytes_flash()
 			payload_start = ecu.calculate_bin_offset(0x090000)
-			payload_stop = payload_start + flash_size
+			# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
+			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_calibration_size_bytes()-16)])
 			payload = eeprom[payload_start:payload_stop]
-			payload_adjusted = payload[:dynamic_find_end(payload)]
-			flash_size = len(payload_adjusted)
+
+			flash_start = ecu.calculate_memory_write_offset(0x090000)
+			flash_size = payload_stop-payload_start
 
 			log_callback.emit('[*] Uploading data to the ECU')
-			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
 		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')

@@ -81,20 +81,20 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		print('[*] start routine 0x01 (erase calibration section)')
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-		flash_start = ecu.calculate_memory_write_offset(0x090000)
-		flash_size = ecu.get_calibration_size_bytes_flash()
 		payload_start = ecu.calculate_bin_offset(0x090000)
-		payload_stop = payload_start + flash_size
+		# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
+		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_calibration_size_bytes()-16)])
 		payload = eeprom[payload_start:payload_stop]
-		payload_adjusted = payload[:dynamic_find_end(payload)]
-		flash_size = len(payload_adjusted)
+
+		flash_start = ecu.calculate_memory_write_offset(0x090000)
+		flash_size = payload_stop-payload_start
 
 		with alive_bar(flash_size, unit='B') as bar:
-			write_memory(ecu, payload_adjusted, flash_start, flash_size, progress_callback=bar)
+			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.transport.hardware.set_timeout(300)
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-	ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value)).get_data()
+	ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
 	ecu.bus.transport.hardware.set_timeout(12)
 
 	print('[*] ecu reset')

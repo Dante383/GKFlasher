@@ -3,7 +3,7 @@ from enum import Enum
 ECU_IDENTIFICATION_TABLE = [
 	{
 		'offset': 0x82014, # RSW zone
-		'expected': [b'\x36\x36\x32\x31'], #[[54, 54, 50, 49]], #6621
+		'expected': [b'\x36\x36\x32\x31'], #6621
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
@@ -11,7 +11,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': 0,
 			'memory_write_offset': -0x7000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
-			'calibration_size_bytes_flash': 0xFEFE, #rounded down to nearest 254 bytes was 0xFFF0
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
 			'program_section_flash_bin_offset': 0xA0010,
@@ -20,7 +19,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x90040,
-		'expected': [b'\x63\x61\x36\x36'], #[[99, 97, 54, 54]], #CA66
+		'expected': [b'\x63\x61\x36\x36'], #CA66
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -28,7 +27,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x80000,
 			'memory_write_offset': -0x7000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
-			'calibration_size_bytes_flash': 0xFEFE, #rounded down to nearest 254 bytes was 0xFFF0
 			'program_section_offset': 0xA0000,
 			'program_section_size': 0x60000,
 			'program_section_flash_bin_offset': 0x20010,
@@ -37,7 +35,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [b'\x63\x61\x36\x35\x34\x30\x31'], #[[99, 97, 54, 53, 52, 48, 49]], #CA65401 (5WY17)
+		'expected': [b'\x63\x61\x36\x35\x34\x30\x31'], #CA65401 (5WY17)
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY17)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -45,7 +43,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes_flash': 0x5F40, #rounded upto nearest 254 was 0x5F00
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
 			'program_section_flash_bin_offset': 0x10010,
@@ -54,7 +51,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 		{
 		'offset': 0x88040,
-		'expected': [[b'\x63\x61\x36\x35\x34'], [b'\x63\x61\x36\x35\x35']], #[[99, 97, 54, 53, 52], [99, 97, 54, 53, 53]], #CA654, CA655 (5WY18+)
+		'expected': [[b'\x63\x61\x36\x35\x34'], [b'\x63\x61\x36\x35\x35']], #CA654, CA655 (5WY18+)
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY18+)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -62,7 +59,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes_flash': 0x6F20, #rounded upto nearest 254 was 0x6F00
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
 			'program_section_flash_bin_offset': 0x10010,
@@ -79,7 +75,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0xB800, # write at 0x84800
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes_flash': 0x7F00, #already rounded to 254!
 			'program_section_offset': 0x98000, #0xA0000 - 0x8000
 			'program_section_size': 0x30000,
 			'program_section_flash_bin_offset': 0x10010,
@@ -88,7 +83,7 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 	{
 		'offset': 0x88040,
-		'expected': [[b'\x63\x61\x36\x36\x31']], #[[99, 97, 54, 54, 49]], #CA661 (Sonata)
+		'expected': [[b'\x63\x61\x36\x36\x31']], #CA661 (Sonata)
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit (Sonata)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
@@ -96,7 +91,6 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x88000,
 			'memory_write_offset': -0x7800,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes_flash': 0x5F40, #rounded upto nearest 254 was 0x5F00
 			'program_section_offset': 0x98000,
 			'program_section_size': 0x70000,
 			'program_section_flash_bin_offset': 0x10010,
