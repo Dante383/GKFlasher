@@ -402,9 +402,8 @@ def logger_raw (ecu: ECU, desired_baudrate: DesiredBaudrate) -> None:
 				i += 1
 
 				if i % 10 == 0:
-					for frame in frames:
-						logwriter.writerow(frame)
+					logwriter.writerows(frames)
 					frames = []
 					print('\033[Fframes: {}'.format(i))
-		except KeyboardInterrupt: # up to 100 last frames might be lost here
+		except KeyboardInterrupt: # up to 10 last frames might be lost here
 			pass
