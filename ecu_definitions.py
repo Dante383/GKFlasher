@@ -7,10 +7,10 @@ ECU_IDENTIFICATION_TABLE = [
 		'ecu': {
 			'name': 'SIMK43 8mbit',
 			'eeprom_size_bytes': 1048576, # (1024 KiB)
-			'memory_offset': 0,
 			'bin_offset': 0,
+			'calibration_section_address': 0x90000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
-			'program_section_offset': 0xA0000,
+			'program_section_address': 0xA0000,
 			'program_section_size': 0x60000
 		}
 	},
@@ -20,10 +20,10 @@ ECU_IDENTIFICATION_TABLE = [
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit',
 			'eeprom_size_bytes': 524288, # (512 KiB)
-			'memory_offset': 0,
 			'bin_offset': -0x80000,
+			'calibration_section_address': 0x90000,
 			'calibration_size_bytes': 0x10000, # 65536 bytes (64 KiB)
-			'program_section_offset': 0xA0000,
+			'program_section_address': 0xA0000,
 			'program_section_size': 0x60000
 		},
 	},
@@ -33,49 +33,49 @@ ECU_IDENTIFICATION_TABLE = [
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY17)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
-			'memory_offset': -0x8000,
-			'bin_offset': -0x88000,
+			'bin_offset': -0x80000,
+			'calibration_section_address': 0x88000,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'program_section_offset': 0x98000,
+			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
 	},
 		{
 		'offset': 0x88040,
-		'expected': [[b'\x63\x61\x36\x35\x34'], [b'\x63\x61\x36\x35\x35']], #CA654, CA655 (5WY18+)
+		'expected': [b'\x63\x61\x36\x35\x34', b'\x63\x61\x36\x35\x35'], #CA654, CA655 (5WY18+)
 		'ecu': {
 			'name': 'SIMK43 V6 4mbit (5WY18+)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
-			'memory_offset': -0x8000,
-			'bin_offset': -0x88000,
+			'bin_offset': -0x80000,
+			'calibration_section_address': 0x88000,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'program_section_offset': 0x98000,
+			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
 	},
 	{
 		'offset': 0x48040,
-		'expected': [[b'\x63\x61\x36\x36\x30'], [b'\x63\x61\x36\x35\x32'], [b'\x63\x61\x36\x35\x30']], #CA660, CA652, CA650
+		'expected': [b'\x63\x61\x36\x36\x30', b'\x63\x61\x36\x35\x32', b'\x63\x61\x36\x35\x30'], #CA660, CA652, CA650
 		'ecu': {
 			'name': 'SIMK41 / V6 2mbit',
 			'eeprom_size_bytes': 262144, # (256 KiB)
-			'memory_offset': -0x48000,
-			'bin_offset': -0x88000,
+			'bin_offset': -0x40000,
+			'calibration_section_address': 0x48000,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'program_section_offset': 0x98000, #0xA0000 - 0x8000
+			'program_section_address': 0x50000, 
 			'program_section_size': 0x30000
 		}
 	},
 	{
 		'offset': 0x88040,
-		'expected': [[b'\x63\x61\x36\x36\x31']], #CA661 (Sonata)
+		'expected': [b'\x63\x61\x36\x36\x31'], #CA661 (Sonata)
 		'ecu': {
 			'name': 'SIMK43 2.0 4mbit (Sonata)',
 			'eeprom_size_bytes': 524288, # (512 KiB)
-			'memory_offset': -0x8000,
-			'bin_offset': -0x88000,
+			'bin_offset': -0x80000,
+			'calibration_section_address': 0x88000,
 			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'program_section_offset': 0x98000,
+			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
 	},	

@@ -68,15 +68,15 @@ class ECU:
 	def __init__ (self, 
 		name: str, 
 		eeprom_size_bytes: int,
-		memory_offset: int, bin_offset: int,
-		calibration_size_bytes: int,
-		program_section_offset: int, program_section_size: int
+		bin_offset: int,
+		calibration_section_address: int, calibration_size_bytes: int,
+		program_section_address: int, program_section_size: int
 		):
 		self.name = name
 		self.eeprom_size_bytes = eeprom_size_bytes
-		self.memory_offset, self.bin_offset = memory_offset, bin_offset
-		self.calibration_size_bytes = calibration_size_bytes
-		self.program_section_offset, self.program_section_size = program_section_offset, program_section_size
+		self.bin_offset = bin_offset
+		self.calibration_section_address, self.calibration_size_bytes = calibration_section_address, calibration_size_bytes
+		self.program_section_address, self.program_section_size = program_section_address, program_section_size
 
 	def get_name (self) -> str:
 		return self.name 
@@ -84,11 +84,14 @@ class ECU:
 	def get_eeprom_size_bytes (self) -> int:
 		return self.eeprom_size_bytes
 
+	def get_calibration_section_address (self) -> int:
+		return self.calibration_section_address
+
 	def get_calibration_size_bytes (self) -> int:
 		return self.calibration_size_bytes
 
-	def get_program_section_offset (self) -> int:
-		return self.program_section_offset
+	def get_program_section_address (self) -> int:
+		return self.program_section_address
 
 	def get_program_section_size (self) -> int:
 		return self.program_section_size
@@ -97,24 +100,18 @@ class ECU:
 		self.bus = bus
 		return self
 
-	def calculate_memory_offset (self, offset: int) -> int:
-		return offset + self.memory_offset
-
 	def calculate_bin_offset (self, offset: int) -> int:
 		return offset + self.bin_offset
 
-	def get_memory_write_offset (self) -> int:
-		return -((self.memory_offset >> 4) + 0x7000)
-
 	def calculate_memory_write_offset (self, offset: int) -> int:
-		return (offset + self.get_memory_write_offset()) << 4
+		return (0x80000 << 4) + offset
 
 	def get_calibration (self) -> str:
-		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090000), size=8)).get_data()
+		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_calibration_section_address(), size=8)).get_data()
 		return ''.join([chr(x) for x in list(calibration)])
 
 	def get_calibration_description (self) -> str:
-		description = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.calculate_memory_offset(0x090040), size=8)).get_data()
+		description = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_calibration_section_address()+0x40, size=8)).get_data()
 		return ''.join([chr(x) for x in list(description)])
 
 	def read_memory_by_address (self, offset: int, size: int) -> bytes:
@@ -123,7 +120,7 @@ class ECU:
 		try:
 			data = self.bus.execute(
 				kwp2000.commands.ReadMemoryByAddress(
-					offset=self.calculate_memory_offset(offset), 
+					offset=offset, 
 					size=size
 				)
 			).get_data()

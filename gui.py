@@ -390,11 +390,11 @@ class Ui(QtWidgets.QMainWindow):
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 			# we need to start 16 bytes later as the program section starts with a flag that we can't write
-			payload_start = ecu.calculate_bin_offset(ecu.get_program_section_offset()) + 16
+			payload_start = ecu.calculate_bin_offset(ecu.get_program_section_address()) + 16
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_program_section_size()-16)])
 			payload = eeprom[payload_start:payload_stop]
 
-			flash_start = ecu.calculate_memory_offset(ecu.get_program_section_offset()) + 16
+			flash_start = ecu.get_program_section_address() + 16
 			flash_size = payload_stop-payload_start
 
 			log_callback.emit('[*] Uploading data to the ECU')
@@ -404,12 +404,12 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-			payload_start = ecu.calculate_bin_offset(0x090000)
+			payload_start = ecu.calculate_bin_offset(ecu.get_calibration_section_address())
 			# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_calibration_size_bytes()-16)])
 			payload = eeprom[payload_start:payload_stop]
 
-			flash_start = ecu.calculate_memory_write_offset(0x090000)
+			flash_start = ecu.calculate_memory_write_offset(ecu.get_calibration_section_address())
 			flash_size = payload_stop-payload_start
 
 			log_callback.emit('[*] Uploading data to the ECU')
@@ -437,7 +437,15 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			output_filename = self.readingFileInput.text()
 
-		self.gui_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.gui_read_eeprom(
+			ecu, 
+			eeprom_size, 
+			address_start=ecu.get_calibration_section_address(), 
+			address_stop=ecu.get_calibration_section_address()+ecu.get_calibration_size_bytes(), 
+			output_filename=output_filename, 
+			log_callback=log_callback, 
+			progress_callback=progress_callback
+		)
 		self.disconnect_ecu(ecu)
 
 	def read_program_zone (self, progress_callback, log_callback):
@@ -453,7 +461,7 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			output_filename = self.readingFileInput.text()
 
-		address_start = ecu.get_program_section_offset()
+		address_start = ecu.get_program_section_address()
 		address_stop = address_start + ecu.get_program_section_size()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
@@ -474,8 +482,8 @@ class Ui(QtWidgets.QMainWindow):
 
 		#address_start = abs(ecu.bin_offset)
 		#address_stop = address_start + eeprom_size
-		address_start = 0x090000
-		address_stop = ecu.get_program_section_offset()+ecu.get_program_section_size()
+		address_start = ecu.get_calibration_section_address()
+		address_stop = ecu.get_program_section_address()+ecu.get_program_section_size()
 
 		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 		self.disconnect_ecu(ecu)

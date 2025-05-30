@@ -68,11 +68,11 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 
 		# we need to start 16 bytes later as the program section starts with a flag that we can't write
-		payload_start = ecu.calculate_bin_offset(ecu.get_program_section_offset()) + 16
+		payload_start = ecu.calculate_bin_offset(ecu.get_program_section_address()) + 16
 		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_program_section_size()-16)])
 		payload = eeprom[payload_start:payload_stop]
 
-		flash_start = ecu.calculate_memory_offset(ecu.get_program_section_offset()) + 16
+		flash_start = ecu.get_program_section_address() + 16
 		flash_size = payload_stop-payload_start
 
 		with alive_bar(flash_size, unit='B') as bar:
@@ -82,12 +82,12 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		print('[*] start routine 0x01 (erase calibration section)')
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-		payload_start = ecu.calculate_bin_offset(0x090000)
+		payload_start = ecu.calculate_bin_offset(ecu.get_calibration_section_address())
 		# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
 		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_calibration_size_bytes()-16)])
 		payload = eeprom[payload_start:payload_stop]
 
-		flash_start = ecu.calculate_memory_write_offset(0x090000)
+		flash_start = ecu.calculate_memory_write_offset(ecu.get_calibration_section_address())
 		flash_size = payload_stop-payload_start
 
 		with alive_bar(flash_size, unit='B') as bar:
@@ -174,7 +174,7 @@ def cli_choose_ecu ():
 		choice = int(input('ECU or any other char to abort: '))
 	except ValueError:
 		print('[!] Aborting..')
-		sys.exit(1)
+		return
 
 	try:
 		ECU_IDENTIFICATION_TABLE[choice]
@@ -190,7 +190,10 @@ def cli_identify_ecu (bus: kwp2000.Kwp2000Protocol):
 	try:
 		ecu = identify_ecu(bus)
 	except ECUIdentificationException:
-		ecu = ECU(**cli_choose_ecu()['ecu'])
+		choice = cli_choose_ecu()
+		if not choice:
+			return None
+		ecu = ECU(**choice['ecu'])
 		ecu.set_bus(bus)
 
 	print('[*] Found! {}'.format(ecu.get_name()))
@@ -248,6 +251,8 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	enable_security_access(bus)
 
 	ecu = cli_identify_ecu(bus)
+	if not ecu:
+		return
 
 	print('[*] Trying to find calibration..')
 	
@@ -277,9 +282,9 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	if (args.read):
 		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
 	if (args.read_calibration):
-		cli_read_eeprom(ecu, eeprom_size, address_start=0x090000, address_stop=0x090000+ecu.get_calibration_size_bytes(), output_filename=args.output)
+		cli_read_eeprom(ecu, eeprom_size, address_start=ecu.get_calibration_section_address(), address_stop=ecu.get_calibration_section_address()+ecu.get_calibration_size_bytes(), output_filename=args.output)
 	if (args.read_program):
-		address_start = ecu.get_program_section_offset()
+		address_start = ecu.get_program_section_address()
 		address_stop = address_start+ecu.get_program_section_size()
 		cli_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=args.output)
 
