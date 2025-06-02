@@ -104,7 +104,9 @@ class ECU:
 		return offset + self.bin_offset
 
 	def calculate_memory_write_offset (self, offset: int) -> int:
-		return (0x80000 << 4) + offset
+		# @todo: find out why and what is the magic 0x7000 number
+		# this happens only for the calibration zone
+		return (offset-0x7000) << 4
 
 	def get_calibration (self) -> str:
 		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_calibration_section_address(), size=8)).get_data()
