@@ -106,7 +106,7 @@ class ECU:
 	def calculate_memory_write_offset (self, offset: int) -> int:
 		# @todo: find out why this byte shift is needed
 		# this happens only for the calibration zone
-		return return (0x80000 << 4) + offset
+		return (0x80000 << 4) + offset
 
 	def get_calibration (self) -> str:
 		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_calibration_section_address(), size=8)).get_data()
