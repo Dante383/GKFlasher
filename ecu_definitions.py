@@ -49,7 +49,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'bin_offset': -0x80000,
 			'calibration_section_address': 0x88000,
 			#'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes': 0x6EF0, # experiment
+			'calibration_size_bytes': 0x6EFF, # experiment
 			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
