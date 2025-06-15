@@ -648,9 +648,9 @@ p, li { white-space: pre-wrap; }
   <widget class="QComboBox" name="ecusBox">
    <property name="geometry">
     <rect>
-     <x>530</x>
+     <x>571</x>
      <y>10</y>
-     <width>261</width>
+     <width>220</width>
      <height>23</height>
     </rect>
    </property>
@@ -664,9 +664,9 @@ p, li { white-space: pre-wrap; }
   <widget class="QComboBox" name="baudratesBox">
    <property name="geometry">
     <rect>
-     <x>530</x>
+     <x>571</x>
      <y>40</y>
-     <width>261</width>
+     <width>220</width>
      <height>23</height>
     </rect>
    </property>
