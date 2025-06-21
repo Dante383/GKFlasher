@@ -7,7 +7,7 @@ from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException, DesiredBaudrate
 from flasher.checksum import correct_checksum
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, ReprogrammingStatus, AccessLevel
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
@@ -15,7 +15,18 @@ from flasher.lineswap import generate_sie, generate_bin
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
 
-def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, address_stop: int = None, output_filename: str = None):
+def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, address_stop: int = None, escalate_privileges: bool = False, output_filename: str = None):
+	if escalate_privileges:
+		print('[*] Attempting privilege escalation with the IOCLID patch')
+		if (ecu.security_access(AccessLevel.SIEMENS_0xFD)):
+			print('[*] Success!')
+		else:
+			print('[!] Patch likely not present, failed to escalate privileges.')
+			print('    Read will only include the calibration and program zones.')
+			print('    If you\'re running ca663056, feel encouraged to apply the IOCLID patch.')
+			print('    It will allow you to read the whole memory over OBD2, just like BSL.')
+			print('    You can find it at https://github.com/OpenGK-org/opengk-simk')
+
 	if (address_start == None):
 		address_start = abs(ecu.bin_offset)
 	if (address_stop == None):
@@ -94,8 +105,25 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.transport.hardware.set_timeout(300)
+
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-	ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
+	try:
+		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
+	except kwp2000.Kwp2000NegativeResponseException as e:
+		print('[*] Verifying blocks failed! Did you forget to correct the checksum?')
+		print('[*] Fetching detailed reprogramming status..')
+		reprogramming_status_response = ecu.bus.execute(
+			kwp2000.commands.StartRoutineByLocalIdentifier(
+				Routine.CHECK_REPROGRAMMING_STATUS.value
+			)
+		).get_data()[1:]
+
+		reprogramming_status = ReprogrammingStatus(int.from_bytes(reprogramming_status_response, 'big'))
+
+		print(str(reprogramming_status))
+
+		print('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
+
 	ecu.bus.transport.hardware.set_timeout(12)
 
 	print('[*] ecu reset')
@@ -103,9 +131,9 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 	ecu.bus.execute(kwp2000.commands.ECUReset(kwp2000.enums.ResetMode.POWER_ON_RESET)).get_data()
 	ecu.bus.close()
 	
-def cli_clear_adaptive_values (ecu, desired_baudrate: DesiredBaudrate = None):
+def cli_clear_adaptive_values (ecu):
 	print('[*] Clearing adaptive values.. ', end='')
-	ecu.clear_adaptive_values(desired_baudrate)
+	ecu.clear_adaptive_values()
 	print('Done! Turn off ignition for 10 seconds to apply changes.')
 
 def load_config (config_filename):
@@ -230,9 +258,6 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		
 	bus.transport.hardware.set_timeout(12)
 
-	if (args.immo):
-		return cli_immo(bus, desired_baudrate)
-
 	print('[*] Set timing parameters to maximum')
 	try:
 		available_timing = bus.execute(
@@ -247,6 +272,10 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	except kwp2000.Kwp2000NegativeResponseException:
 		print('[!] Not supported on this ECU!')
 
+	# this stays for now instead of the method built in the ECU class
+	# @todo - after moving ecu definitions to classes, either start 
+	# with an empty ECU object that'll implement security access (and then fill the object upon identification),
+	# or better, come up with an identification way that doesn't require memory reading access
 	print('[*] Security Access')
 	enable_security_access(bus)
 
@@ -254,15 +283,21 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	if not ecu:
 		return
 
+	ecu.set_desired_baudrate(desired_baudrate)
+	ecu.diagnostic_session_type = kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING
+	ecu.access_level = AccessLevel.HYUNDAI_0x1
+
 	print('[*] Trying to find calibration..')
 	
-	eeprom_size = ecu.get_eeprom_size_bytes()
 	try:
 		description, calibration = ecu.get_calibration_description(), ecu.get_calibration()
 		print('[*] Found! Description: {}, calibration: {}'.format(description, calibration))
 	except kwp2000.Kwp2000NegativeResponseException:
 		if (input('[!] Failed! Do you want to continue? [y/n]: ') != 'y'):
 			return
+
+	if (args.immo):
+		return cli_immo(ecu)
 
 	if (args.id):
 		print('[*] Reading ECU Identification..',end='')
@@ -277,10 +312,12 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			print('            [ASCII]: {}'.format(value_ascii))
 			print('')
 
-		cli_immo_info(bus, desired_baudrate)
+		cli_immo_info(ecu)
+
+	eeprom_size = ecu.get_eeprom_size_bytes()
 
 	if (args.read):
-		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, output_filename=args.output)
+		cli_read_eeprom(ecu, eeprom_size, address_start=args.address_start, address_stop=args.address_stop, escalate_privileges=True, output_filename=args.output)
 	if (args.read_calibration):
 		cli_read_eeprom(ecu, eeprom_size, address_start=ecu.get_calibration_section_address(), address_stop=ecu.get_calibration_section_address()+ecu.get_calibration_size_bytes(), output_filename=args.output)
 	if (args.read_program):
@@ -296,10 +333,10 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		cli_flash_eeprom(ecu, input_filename=args.flash_program, flash_program=True, flash_calibration=False)
 
 	if (args.clear_adaptive_values):
-		cli_clear_adaptive_values(ecu, desired_baudrate)
+		cli_clear_adaptive_values(ecu)
 
 	if (args.logger):
-		logger(ecu, desired_baudrate)
+		logger(ecu)
 
 	bus.close()
 

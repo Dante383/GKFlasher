@@ -1,4 +1,6 @@
 from enum import Enum 
+import ctypes
+from flasher.utils import WordBitfield
 
 ECU_IDENTIFICATION_TABLE = [
 	{
@@ -48,8 +50,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'bin_offset': -0x80000,
 			'calibration_section_address': 0x88000,
-			#'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
-			'calibration_size_bytes': 0x6EFF, # experiment
+			'calibration_size_bytes': 0x6EFF, # there is some readable but non-writable section after this
 			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
@@ -75,7 +76,7 @@ ECU_IDENTIFICATION_TABLE = [
 			'eeprom_size_bytes': 524288, # (512 KiB)
 			'bin_offset': -0x80000,
 			'calibration_section_address': 0x88000,
-			'calibration_size_bytes': 0x8000, # 32,768 bytes (32 KiB)
+			'calibration_size_bytes': 0x5FF8, # yes, this is correct. this is a 4mbit ecu with a calibration zone smaller than 2mbit ecus. i dont know either
 			'program_section_address': 0x90000,
 			'program_section_size': 0x70000
 		}
@@ -90,10 +91,36 @@ BAUDRATES = {
 	0x05: 120000
 }
 
+class ReprogrammingStatus(WordBitfield):
+	class bits(ctypes.LittleEndianStructure):
+		_fields_ = [
+			('checksum_of_calibration_data_is_correct', ctypes.c_uint16, 1),
+			('security_keys_for_calibration_data_are_not_written', ctypes.c_uint16, 1),
+			('security_keys_for_calibration_data_are_correct', ctypes.c_uint16, 1),
+			('calibration_data_is_correct', ctypes.c_uint16, 1),
+			('checksum_of_ecu_sw_is_correct', ctypes.c_uint16, 1),
+			('security_keys_for_ecu_sw_are_not_written', ctypes.c_uint16, 1),
+			('security_keys_for_ecu_sw_are_correct', ctypes.c_uint16, 1),
+			('ecu_sw_is_correct', ctypes.c_uint16, 1),
+			('ecu_reprogramming_successfully_completed', ctypes.c_uint16, 1),
+			('ecu_is_not_at_the_end_of_reprogramming_session', ctypes.c_uint16, 1),
+			('coherence_identifiers_fit_together', ctypes.c_uint16, 1),
+			('calibration_data_does_not_fit_to_ecu_sw', ctypes.c_uint16, 1),
+			('ecu_sw_does_not_fit_to_boot_sw', ctypes.c_uint16, 1),
+			('coherence_identifier_in_calibration_data_is_erroneous', ctypes.c_uint16, 1),
+			('coherence_identifier_in_ecu_sw_is_erroneous', ctypes.c_uint16, 1),
+			('coherence_identifier_in_boot_sw_is_erroneous', ctypes.c_uint16, 1),
+		]
+
+class AccessLevel (Enum):
+	HYUNDAI_0x1 = 0x1
+	SIEMENS_0xFD = 0xFD
+
 class Routine (Enum):
 	ERASE_PROGRAM = 0x00
 	ERASE_CALIBRATION = 0x01
 	VERIFY_BLOCKS = 0x02
+	CHECK_REPROGRAMMING_STATUS = 0x03
 
 	QUERY_IMMO_INFO = 0x12
 	BEFORE_LIMP_HOME = 0x16 # what does this actually do?
@@ -107,7 +134,7 @@ class Routine (Enum):
 	IMMO_RESET_CONFIRM = 0x20
 
 	BEFORE_IMMO_KEY_TEACHING = 0x14 # what does this actually do?
-	# these enums below are not actually used, just serve as documentation
+	# these 4 enums below are not actually used, just serve as documentation
 	IMMO_TEACH_KEY_1 = 0x1B
 	IMMO_TEACH_KEY_2 = 0x1C
 	IMMO_TEACH_KEY_3 = 0x1D
@@ -117,9 +144,7 @@ class Routine (Enum):
 	SMARTRA_NEUTRALIZE = 0x26
 
 class IOIdentifier (Enum):
-	CHECK_ENGINE_LIGHT = 0x10
-	COOLING_FAN_RELAY_HIGH = 0x1A
-	COOLING_FAN_RELAY_LOW = 0x1B
-	IDLE_SPEED_ACTUATOR = 0x23
-	CVVT_VALVE = 0x24
+	VERSION_CONFIGURATION_AUTOMATIC_TRANSAXLE = 0x40
+	VERSION_CONFIGURATION_TRACTION_CONTROL_SYSTEM = 0x41
 	ADAPTIVE_VALUES = 0x50
+	_OPENGK_PATCH_PRIVILEGE_ESCALATION = 0xBB 

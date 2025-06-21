@@ -13,7 +13,7 @@ from flasher.ecu import enable_security_access, fetch_ecu_identification, identi
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine
+from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, AccessLevel
 from gkflasher import strip
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
@@ -273,6 +273,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.bus = bus
 
 		if not self.get_desired_baudrate().index:
+			desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
 			log_callback.emit('[*] Trying to start diagnostic session')
 			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 		else:
@@ -317,6 +318,11 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
 			ecu.set_bus(bus)
+		
+		ecu.set_desired_baudrate(desired_baudrate)
+		ecu.diagnostic_session_type = DiagnosticSession.FLASH_REPROGRAMMING
+		ecu.access_level = AccessLevel.HYUNDAI_0x1
+
 		log_callback.emit('[*] Found! {}'.format(ecu.get_name()))
 		
 		return ecu
@@ -338,7 +344,22 @@ class Ui(QtWidgets.QMainWindow):
 			pass
 		ecu.bus.close()
 
-	def gui_read_eeprom (self, ecu: ECU, eeprom_size: int, address_start: int = 0x000000, address_stop: int = None, output_filename: str = None, log_callback=None, progress_callback=None):
+	def gui_read_eeprom (self, ecu: ECU, address_start: int = 0x000000, address_stop: int = None, escalate_privileges: bool = False, output_filename: str = None, log_callback=None, progress_callback=None):
+		eeprom_size = ecu.get_eeprom_size_bytes()
+
+		if escalate_privileges:
+			log_callback.emit('[*] Attempting privilege escalation with the IOCLID patch')
+			if (ecu.security_access(AccessLevel.SIEMENS_0xFD)):
+				log_callback.emit('[*] Success!')
+				address_start = 0
+				address_stop = eeprom_size
+			else:
+				log_callback.emit('[!] Patch likely not present, failed to escalate privileges.')
+				log_callback.emit('    Read will only include the calibration and program zones.')
+				log_callback.emit('    If you\'re running ca663056, feel encouraged to apply the IOCLID patch.')
+				log_callback.emit('    It will allow you to read the whole memory over OBD2, just like BSL.')
+				log_callback.emit('    You can find it at https://github.com/OpenGK-org/opengk-simk')
+
 		if (address_stop == None):
 			address_stop = eeprom_size
 
@@ -417,12 +438,24 @@ class Ui(QtWidgets.QMainWindow):
 
 		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-		ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
-		ecu.bus.transport.hardware.set_timeout(12)
+		try:
+			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
+		except kwp2000.Kwp2000NegativeResponseException as e:
+			print(str(e))
+			log_callback.emit(str(e))
+			log_callback.emit('[*] Verifying blocks failed! Did you forget to correct the checksum?')
+			
+			log_callback.emit('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
+			return
 
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
-		ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
+		
+		ecu.bus.transport.hardware.set_timeout(0.5)
+		try:
+			ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
+		except TimeoutException: 
+			pass # response is not guaranteed
 
 	def read_calibration_zone (self, progress_callback, log_callback):
 		ecu = self.initialize_ecu(log_callback)
@@ -480,12 +513,10 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			output_filename = self.readingFileInput.text()
 
-		#address_start = abs(ecu.bin_offset)
-		#address_stop = address_start + eeprom_size
 		address_start = ecu.get_calibration_section_address()
 		address_stop = ecu.get_program_section_address()+ecu.get_program_section_size()
 
-		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.gui_read_eeprom(ecu, address_start=address_start, address_stop=address_stop, escalate_privileges=True, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 		self.disconnect_ecu(ecu)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
@@ -508,7 +539,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 			log_callback.emit('')
 
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -659,7 +690,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Clearing adaptive values.. ')
-		ecu.clear_adaptive_values(self.get_desired_baudrate())
+		ecu.clear_adaptive_values()
 		log_callback.emit('Done! Turn off ignition for 10 seconds to apply changes.')
 		self.disconnect_ecu(ecu)
 
@@ -672,7 +703,7 @@ class Ui(QtWidgets.QMainWindow):
 		
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 		
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
@@ -699,13 +730,11 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
-		# Start the BEFORE_IMMO_RESET routine
 		log_callback.emit('[*] Checking Immobilizer status...')
 		try:
 			data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_RESET.value)).get_data()
-			#log_callback.emit(f'[*] BEFORE_IMMO_RESET response: {" ".join(hex(x) for x in data)}')
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			log_callback.emit('[!] Unable to validate immobilizer status. The immobilizer is either disabled or disconnected.')
 			return self.disconnect_ecu(ecu)
@@ -747,7 +776,6 @@ class Ui(QtWidgets.QMainWindow):
 		if QMessageBox.question(self, 'Confirm Reset', 'Do you want to proceed with the immobilizer reset?', QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
 			try:
 				response = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.IMMO_RESET_CONFIRM.value, 0x01)).get_data()
-				#log_callback.emit(f'[*] IMMO_RESET_CONFIRM response: {" ".join(hex(x) for x in response)}')
 				self.log('[*] Immobilizer reset successful. Turn off ignition for 10 seconds to apply changes.')
 			except kwp2000.Kwp2000NegativeResponseException as e:
 				self.log('[!] Immobilizer reset confirmation failed.')
@@ -764,7 +792,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		# Check the ECU status
 		try:
@@ -822,7 +850,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Starting SMARTRA neutralization...')
 		# Check the ECU status with BEFORE_SMARTRA_NEUTRALIZE
@@ -892,7 +920,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Teaching immobilizer keys...')
 		#log_callback.emit('[*] starting routine 0x14')
@@ -977,7 +1005,7 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Starting limp home password teaching...')
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		# Check ECU status
 		try:
@@ -1065,7 +1093,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		try:
 			cmd = kwp2000.Kwp2000Command()
@@ -1088,7 +1116,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, self.get_desired_baudrate().index))
+		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
 
 		log_callback.emit('[*] Starting VIN writing process...')
 
@@ -1116,7 +1144,7 @@ class Ui(QtWidgets.QMainWindow):
 		vin_padded = vin.ljust(17)
 		try:
 			self.log(f'[*] Writing VIN: {vin_padded}')
-			ecu.bus.execute(WriteDataByLocalIdentifier(0x90, [ord(c) for c in vin_padded]))
+			ecu.bus.execute(WriteDataByLocalIdentifier(0x90, vin_padded.encode('ascii')))
 			self.log('[*] VIN written successfully.')
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			self.log('[!] Writing VIN failed. Ensure the ECU is writable.')
