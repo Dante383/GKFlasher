@@ -18,11 +18,6 @@ from gkflasher import strip
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logging.getLogger('requests').setLevel(logging.DEBUG)
-#logging.basicConfig(level=3)
-
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
 # Ideally, in gkflasher.py break up most of methods that are duplicated here so that 
@@ -39,6 +34,8 @@ if os.name == 'nt':
 		home = os.sep.join([winhome.value,"GKFlasher Files"])
 else: #nix
 	home = os.path.expanduser(os.sep.join(["~","Documents","GKFlasher Files"]))
+
+logging.basicConfig(level=4, filename=home + '/gkflasher_debug_build.log')
 
 class Progress(object):
 	def __init__ (self, progress_callback, max_value: int):
