@@ -3,7 +3,7 @@ from datetime import datetime
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
-import gkbus, yaml, traceback, bsl
+import gkbus, yaml, traceback, bsl, logging
 from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
@@ -17,6 +17,11 @@ from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, Access
 from gkflasher import strip
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging.getLogger('requests').setLevel(logging.DEBUG)
+#logging.basicConfig(level=3)
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -464,15 +469,13 @@ class Ui(QtWidgets.QMainWindow):
 			self.bus.close()
 			return
 
-		eeprom_size = ecu.get_eeprom_size_bytes()
 		if (self.readingFileInput.text() == ''):
 			output_filename = None
 		else:
 			output_filename = self.readingFileInput.text()
 
 		self.gui_read_eeprom(
-			ecu, 
-			eeprom_size, 
+			ecu,
 			address_start=ecu.get_calibration_section_address(), 
 			address_stop=ecu.get_calibration_section_address()+ecu.get_calibration_size_bytes(), 
 			output_filename=output_filename, 
@@ -488,7 +491,6 @@ class Ui(QtWidgets.QMainWindow):
 			self.bus.close()
 			return
 
-		eeprom_size = ecu.get_eeprom_size_bytes()
 		if (self.readingFileInput.text() == ''):
 			output_filename = None
 		else:
@@ -497,7 +499,7 @@ class Ui(QtWidgets.QMainWindow):
 		address_start = ecu.get_program_section_address()
 		address_stop = address_start + ecu.get_program_section_size()
 
-		self.gui_read_eeprom(ecu, eeprom_size, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
+		self.gui_read_eeprom(ecu, address_start=address_start, address_stop=address_stop, output_filename=output_filename, log_callback=log_callback, progress_callback=progress_callback)
 		self.disconnect_ecu(ecu)
 
 	def full_read (self, progress_callback, log_callback):
