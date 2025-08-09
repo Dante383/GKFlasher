@@ -1,7 +1,7 @@
 name: Build Workflow
 on:
   push:
-    tags:
+    tags
 
 permissions:
   contents: write
@@ -11,11 +11,13 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
 
       - name: Get Build Version from git tag
         run: |
-          $buildversion = ${GITHUB_REF_NAME}
+          $buildversion = ${{ github.ref_name }}
           echo "Build version: $buildversion"
           echo "VERSION=${buildversion}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
 
