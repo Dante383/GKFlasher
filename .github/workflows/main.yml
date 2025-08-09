@@ -1,7 +1,7 @@
 name: Build Workflow
 on:
   push:
-    tags: [ 'v*' ]
+    tags:
 
 permissions:
   contents: write
