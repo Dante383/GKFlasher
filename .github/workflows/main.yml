@@ -1,7 +1,8 @@
 name: Build Workflow
 on:
   push:
-    tags
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -12,14 +13,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-tags: true
 
       - name: Get Build Version from git tag
-        run: |
-          $buildversion = ${{ github.ref_name }}
-          echo "Build version: $buildversion"
-          echo "VERSION=${buildversion}" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
+        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v5
