@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools", "setuptools_scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[project]
+name = "GKFlasher"
+dynamic = ["version"]
+dependencies = []
+requires-python = ">=3.10"
+authors = [
+  {name = "dante383", email = "dante383@protonmail.com"},
+  {name = "dmg210", email = "returntosender@opengk.org"}
+]
+readme = "README.md"
