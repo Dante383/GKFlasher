@@ -11,6 +11,7 @@ from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, Reprog
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
+from _version import __version__
 
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
@@ -140,7 +141,7 @@ def load_config (config_filename):
 	return yaml.safe_load(open('gkflasher.yml'))
 
 def load_arguments ():
-	parser = argparse.ArgumentParser(prog='GKFlasher')
+	parser = argparse.ArgumentParser(prog='GKFlasher v{}'.format(__version__))
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface')
 	parser.add_argument('-b', '--baudrate', type=int)
@@ -349,6 +350,8 @@ def packet2hex (packet: RawPacket) -> str:
 if __name__ == '__main__':
 	GKFlasher_config, args = load_arguments()
 
+	print('[*] GKFlasher v{}'.format(__version__))
+
 	if (args.correct_checksum):
 		correct_checksum(filename=args.correct_checksum)
 
@@ -359,7 +362,7 @@ if __name__ == '__main__':
 	if (args.sie_to_bin):
 		generate_bin(filename=args.sie_to_bin)
 		sys.exit()
-		
+	
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
 

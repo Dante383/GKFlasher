@@ -1,7 +1,11 @@
 name: Build Workflow
 on:
   push:
-#    branches: master
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-2022
@@ -9,11 +13,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v1
 
-      - name: Get Build Version
-        run: |
-            $buildversion = "1.0."+$Env:GITHUB_RUN_NUMBER
-            echo "Build Number: $buildversion"
-            echo "version=$buildversion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf-8 -Append
+      - name: Get Build Version from git tag
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -26,6 +27,9 @@ jobs:
         run: |
           pip install -r requirements.txt
           
+      - name: Embed version into package
+        run: |
+          echo "__version__ = '${VERSION#v}'" > gkflasher/__init__.py
       - name: Install Build Environment Prerequisites
         run: |
           pip install pyinstaller==6.12.0
@@ -46,15 +50,15 @@ jobs:
 
       - name: Build MSI Package
         run: |
-           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{env.version}}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{env.version}}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
+           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{env.VERSION}}"
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{env.VERSION}}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${{env.version}}
+          automatic_release_tag: ${{env.VERSION}}
           prerelease: false
-          title: ${{env.version}}
+          title: ${{env.VERSION}}
           files: |
-            GKFlasher-${{env.version}}-amd64.msi
+            GKFlasher-${{env.VERSION}}-amd64.msi

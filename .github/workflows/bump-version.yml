@@ -1,0 +1,46 @@
+name: Bump version and tag
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          git fetch --tags --force
+          latest="$(git tag -l 'v*' --sort=-v:refname | head -n1 || true)"
+          if [ -z "$latest" ]; then
+            echo "tag=v1.0.59" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compute next patch
+        id: next
+        run: |
+          cur="${{ steps.get_tag.outputs.tag }}"
+          cur="${cur#v}"  # strip v
+          IFS='.' read -r MAJ MIN PAT <<< "$cur"
+          PAT=$((PAT+1))
+          echo "version=${MAJ}.${MIN}.${PAT}" >> $GITHUB_OUTPUT
+          echo "tag=v${MAJ}.${MIN}.${PAT}" >> $GITHUB_OUTPUT
+
+      - name: Create tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          new_tag="${{ steps.next.outputs.tag }}"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git tag -a "$new_tag" -m "Auto bump to $new_tag"
+          git push origin "$new_tag"

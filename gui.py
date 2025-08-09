@@ -15,6 +15,7 @@ from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, AccessLevel
 from gkflasher import strip
+from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
 
@@ -146,6 +147,7 @@ class Ui(QtWidgets.QMainWindow):
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
 		self.thread_manager = QThreadPool()
+		self.setWindowTitle('GKFlasher [v{}]'.format(__version__))
 		self.show()
 		
 		try:
