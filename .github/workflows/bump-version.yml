@@ -54,4 +54,4 @@ jobs:
           git push origin "$new_tag"
           # good luck trying to figure out by yourself that this won't run automatically
           # and it's a feature not a bug
-          gh workflow run release.yml -f
+          gh workflow run release.yml
