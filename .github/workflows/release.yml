@@ -62,10 +62,29 @@ jobs:
         run: dotnet tool install --global wix --version 5.0.2
 
       - name: Build MSI Package
+        shell: pwsh
         run: |
-           echo release_version="${{ inputs.tag }}"
-           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${release_version:#}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out "./GKFlasher-${{ inputs.tag }}-amd64.msi" ./dialog.wixobj ./ui.wixobj ./product.wixobj
+          $tag = '${{ inputs.tag }}'
+          if (-not $tag) { throw "inputs.tag is empty" }
+
+          # Trim leading "v" and enforce MSI-friendly A.B.C
+          $ver = $tag.TrimStart('v')
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version '$ver' is not MSI-safe (expected a.b.c). Tag was '$tag'."
+          }
+
+          echo "Using MSI ProductVersion: $ver"
+
+          # Compile .wxs to .wixobj
+          candle .github/workflows/dialog.wxs `
+                 .github/workflows/ui.wxs `
+                 .github/workflows/product.wxs `
+                 -dversion="$ver"
+
+          # Link to .msi
+          light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb `
+                -out "./GKFlasher-$tag-amd64.msi" `
+                ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
