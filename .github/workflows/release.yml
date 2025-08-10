@@ -65,7 +65,7 @@ jobs:
         run: |
            echo release_version="${{ inputs.tag }}"
            candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${release_version:1}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{ inputs.tag }}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out "./GKFlasher-${{ inputs.tag }}-amd64.msi" ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
