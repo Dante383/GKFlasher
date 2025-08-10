@@ -16,6 +16,7 @@ permissions:
 jobs:
   build-windows:
     runs-on: windows-2022
+    if: ${{ inputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -43,7 +44,7 @@ jobs:
           
       - name: Embed version into package
         run: |
-          echo "__version__ = '${{ steps.get_build_version.outputs.TARGET_VERSION }}'" > _version.py
+          echo "__version__ = '${{ inputs.tag }}'" > _version.py
       - name: Install Build Environment Prerequisites
         run: |
           pip install pyinstaller==6.12.0
@@ -64,15 +65,15 @@ jobs:
 
       - name: Build MSI Package
         run: |
-           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{ steps.get_build_version.outputs.TARGET_VERSION }}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{ steps.get_build_version.outputs.TARGET_VERSION }}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
+           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{ inputs.tag }}"
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{ inputs.tag }}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${{ steps.get_build_version.outputs.TARGET_VERSION }}
+          automatic_release_tag: ${{ inputs.tag }}
           prerelease: false
-          title: ${{ steps.get_build_version.outputs.TARGET_VERSION }}
+          title: ${{ inputs.tag }}
           files: |
-            GKFlasher-${{ steps.get_build_version.outputs.TARGET_VERSION }}-amd64.msi
+            GKFlasher-${{ inputs.tag }}-amd64.msi
