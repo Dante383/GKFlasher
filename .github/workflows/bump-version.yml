@@ -44,3 +44,6 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git tag -a "$new_tag" -m "Auto bump to $new_tag"
           git push origin "$new_tag"
+          # good luck trying to figure out by yourself that this won't run automatically
+          # and it's a feature not a bug
+          gh workflow run main.yml --ref $new_tag
