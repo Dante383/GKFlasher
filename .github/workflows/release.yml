@@ -24,7 +24,11 @@ jobs:
           ref: ${{ inputs.tag }}
 
       - name: Get Build Version from git tag
-        run: echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
+        id: get_build_version
+        run: |
+        echo "TARGET_VERSION=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+        echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
+        echo "target version is ${{ steps.get_build_version.outputs.TARGET_VERSION }}"
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -39,7 +43,7 @@ jobs:
           
       - name: Embed version into package
         run: |
-          echo "__version__ = '${VERSION#v}'" > _version.py
+          echo "__version__ = '${{ steps.get_build_version.outputs.TARGET_VERSION }}'" > _version.py
       - name: Install Build Environment Prerequisites
         run: |
           pip install pyinstaller==6.12.0
@@ -60,15 +64,15 @@ jobs:
 
       - name: Build MSI Package
         run: |
-           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${VERSION#v}"
-           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{env.VERSION}}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
+           candle .github/workflows/dialog.wxs .github/workflows/ui.wxs .github/workflows/product.wxs -dversion="${{ steps.get_build_version.outputs.TARGET_VERSION }}"
+           light -ext WixUIExtension -ext WixUtilExtension -sacl -spdb  -out ./GKFlasher-${{ steps.get_build_version.outputs.TARGET_VERSION }}-amd64.msi ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${VERSION#v}
+          automatic_release_tag: ${{ steps.get_build_version.outputs.TARGET_VERSION }}
           prerelease: false
-          title: ${VERSION#v}
+          title: ${{ steps.get_build_version.outputs.TARGET_VERSION }}
           files: |
-            GKFlasher-${VERSION#v}-amd64.msi
+            GKFlasher-${{ steps.get_build_version.outputs.TARGET_VERSION }}-amd64.msi
