@@ -4,6 +4,11 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,9 +19,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.tag }}
 
       - name: Get Build Version from git tag
-        run: echo "VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+        run: echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
 
       - name: Install Python
         uses: actions/setup-python@v5

@@ -4,19 +4,13 @@ on:
     branches: [ main ]
 
 permissions:
-  id-token: write
   contents: write
-  pull-requests: write
-  repository-projects: write
 
 jobs:
   bump:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: write
-      pull-requests: write
-      repository-projects: write
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,6 +46,10 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git tag -a "$new_tag" -m "Auto bump to $new_tag"
           git push origin "$new_tag"
-          # good luck trying to figure out by yourself that this won't run automatically
-          # and it's a feature not a bug
-          gh workflow run release.yml
+
+  release:
+    needs: bump
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.bump.outputs.tag }}
+    secrets: inherit
