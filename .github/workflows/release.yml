@@ -27,8 +27,7 @@ jobs:
       - name: Get Build Version from git tag
         id: get_build_version
         run: |
-        echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
-        echo "target version is ${{ steps.get_build_version.outputs.TARGET_VERSION }}"
+        echo "target version is ${{ inputs.tag }}"
 
       - name: Install Python
         uses: actions/setup-python@v5
