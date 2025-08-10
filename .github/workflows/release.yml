@@ -27,7 +27,7 @@ jobs:
       - name: Get Build Version from git tag
         id: get_build_version
         run: |
-        echo "target version is ${{ inputs.tag }}"
+          echo "target version is ${{ inputs.tag }}"
 
       - name: Install Python
         uses: actions/setup-python@v5
