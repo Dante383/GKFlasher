@@ -26,7 +26,8 @@ jobs:
       - name: Get Build Version from git tag
         id: get_build_version
         run: |
-        echo "TARGET_VERSION=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+        echo "_version=${{ inputs.tag }}"
+        echo "TARGET_VERSION=${_version}" >> $GITHUB_OUTPUT
         echo "VERSION=${{ inputs.tag }}" >> $GITHUB_ENV
         echo "target version is ${{ steps.get_build_version.outputs.TARGET_VERSION }}"
 
