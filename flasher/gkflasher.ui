@@ -719,16 +719,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <property name="visible">
     <bool>false</bool>
    </property>
-   <widget class="QWidget" name="tab">
-    <attribute name="title">
-     <string>Tab 1</string>
-    </attribute>
-   </widget>
-   <widget class="QWidget" name="tab_2">
-    <attribute name="title">
-     <string>Tab 2</string>
-    </attribute>
-   </widget>
   </widget>
   <widget class="QFrame" name="defaultView">
    <property name="geometry">

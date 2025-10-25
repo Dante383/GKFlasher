@@ -18,7 +18,7 @@ from gkflasher import strip
 from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
-
+from flasher.gui_logger import ADXLogger
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
 # Ideally, in gkflasher.py break up most of methods that are duplicated here so that 
@@ -238,6 +238,9 @@ class Ui(QtWidgets.QMainWindow):
 			self.startLoggingBtn.setEnabled(False)
 			return
 		self.startLoggingBtn.setEnabled(True)
+		logger = ADXLogger(filename=filename)  # Initialize the ADXLogger singleton
+		logger.init_tabs(tab_widget=self.logTabWidget)
+
 
 
 	def log (self, text):
