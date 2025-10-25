@@ -180,6 +180,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.checksumFileBtn.clicked.connect(self.handler_select_file_checksum)
 		self.bslFileBtn.clicked.connect(self.handler_select_bsl_file)
 
+		self.tabWidget.currentChanged.connect(self.handle_tab_change)
+		self.adxFileBtn.clicked.connect(self.handler_select_adx_file)
+
 		self.immoInfoBtn.clicked.connect(lambda: self.click_handler(self.display_immo_information))
 		self.limpHomeModeBtn.clicked.connect(lambda: self.click_handler(self.limp_home))
 		self.limpHomePasswordChangeBtn.clicked.connect(lambda: self.click_handler(self.limp_home_teach))
@@ -218,6 +221,24 @@ class Ui(QtWidgets.QMainWindow):
 	def handler_select_bsl_file (self):
 		filename = QFileDialog().getOpenFileName()[0]
 		self.bslFileInput.setText(filename)
+
+	def handle_tab_change (self):
+		tabName = self.tabWidget.currentWidget().objectName()
+		if tabName == 'tab_log':
+			self.defaultView.hide()
+			self.logTabWidget.show()
+		else:
+			self.defaultView.show()
+			self.logTabWidget.hide()
+
+	def handler_select_adx_file (self):
+		filename = QFileDialog().getOpenFileName(filter="adx(*.adx)")[0]
+		self.adxFileInput.setText(filename)
+		if filename =='':
+			self.startLoggingBtn.setEnabled(False)
+			return
+		self.startLoggingBtn.setEnabled(True)
+
 
 	def log (self, text):
 		self.logOutput.append(text)
