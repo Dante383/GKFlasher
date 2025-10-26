@@ -206,6 +206,12 @@ class Ui(QtWidgets.QMainWindow):
 		worker.signals.error.connect(self.handle_exception)
 		self.thread_manager.start(worker)
 
+	def send_notification (self, title: str, body: str) -> None:
+		try:
+			notification.notify(title=title, message=body)
+		except Exception as e:
+			print('[.] Non-critical: Exception while trying to send a notification: {}'.format(str(e)))
+
 	def handler_select_file_reading (self):
 		filename = QFileDialog().getSaveFileName()[0]
 		self.readingFileInput.setText(filename)
@@ -414,7 +420,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] saved to {}'.format(home + "/" + output_filename))
 
 		log_callback.emit('[*] Done!')
-		notification.notify(title='Reading finished', message='Saved to {}'.format(home + "\\" + output_filename))
+		self.send_notification('Reading finished', 'Saved to {}'.format(home + "\\" + output_filename))
 
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
@@ -480,7 +486,7 @@ class Ui(QtWidgets.QMainWindow):
 		progress_callback(100, 100)
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
-		notification.notify(title='Flashing finished', message='Turn off your ignition for 10 seconds')
+		self.send_notification('Flashing finished', 'Turn off your ignition for 10 seconds')
 		
 		ecu.bus.transport.hardware.set_timeout(0.5)
 		try:
