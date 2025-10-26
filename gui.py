@@ -1,10 +1,13 @@
 import os, sys
 from datetime import datetime
+
+import plyer
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
+from plyer import notification
 import gkbus, yaml, traceback, bsl, logging
-from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
+from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException, HardwareException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
@@ -39,8 +42,8 @@ else: #nix
 try:
 	log_path = home + '/gkflasher_debug.log'
 	with open(log_path, 'a+') as f:
-		f.write('GKFlasher GUI launched, v{}\n'.format(__version__))
-	logging.basicConfig(level=4, filename=log_path)
+		f.write('\n\nGKFlasher GUI launched, v{}\n'.format(__version__))
+	logging.basicConfig(level=4, filename=log_path, datefmt='%Y-%m-%d %H:%M:%S.%f')
 except KeyboardInterrupt:
 	pass
 except Exception as e:
@@ -264,9 +267,15 @@ class Ui(QtWidgets.QMainWindow):
 		else:
 			self.progressBar.setValue(self.progressBar.value()+value[0])
 
-	def _initialize_ecu (self, log_callback) -> ECU:
+	def _close_bus (self, log_callback) -> None:
 		if hasattr(self, 'bus'):
-			self.bus.close()
+			try:
+				self.bus.close()
+			except HardwareException as e:
+				log_callback.emit('[!] Failed to close the port. This shouldn\'t affect operation. Please report to OpenGK: {}'.format(str(e)))
+
+	def _initialize_ecu (self, log_callback) -> ECU:
+		self._close_bus(log_callback)
 
 		try:
 			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
@@ -280,36 +289,35 @@ class Ui(QtWidgets.QMainWindow):
 		hardware = KLineHardware(self.get_interface_url())
 		transport = Kwp2000OverKLineTransport(hardware, tx_id=config['kline']['tx_id'], rx_id=config['kline']['rx_id'])
 
-		bus = kwp2000.Kwp2000Protocol(transport)
-		bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
-		self.bus = bus
+		self.bus = kwp2000.Kwp2000Protocol(transport)
+		self.bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
 
 		if not self.get_desired_baudrate().index:
 			desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
 			log_callback.emit('[*] Trying to start diagnostic session')
-			bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
+			self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 		else:
 			desired_baudrate = self.get_desired_baudrate()
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 			try:
-				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
-				bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+				self.bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
 			except TimeoutException:
 				# it's possible that the ecu is already running at the desired baudrate - let's check
-				bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
-				bus.transport.hardware.socket.reset_output_buffer()
-				bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
-				bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+				self.bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
+				self.bus.transport.hardware.socket.reset_output_buffer()
+				self.bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
 
-		bus.transport.hardware.set_timeout(12)
+		self.bus.transport.hardware.set_timeout(12)
 
 		log_callback.emit('[*] Set timing parameters to maximum')
 		try:
-			available_timing = bus.execute(
+			available_timing = self.bus.execute(
 				kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
 			).get_data()
 
-			bus.execute(
+			self.bus.execute(
 				kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(
 					*available_timing[1:]
 				)
@@ -318,18 +326,18 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[!] Not supported on this ECU!')
 
 		log_callback.emit('[*] Security Access')
-		enable_security_access(bus)
+		enable_security_access(self.bus)
 
 		log_callback.emit('[*] Trying to identify ECU.. ')
 		if self.ecusBox.currentData() == -1:
 			try:
-				ecu = identify_ecu(bus)
+				ecu = identify_ecu(self.bus)
 			except ECUIdentificationException:
 				log_callback.emit('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
 				return False
 		else:
 			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
-			ecu.set_bus(bus)
+			ecu.set_bus(self.bus)
 		
 		ecu.set_desired_baudrate(desired_baudrate)
 		ecu.diagnostic_session_type = DiagnosticSession.FLASH_REPROGRAMMING
@@ -406,6 +414,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] saved to {}'.format(home + "/" + output_filename))
 
 		log_callback.emit('[*] Done!')
+		notification.notify(title='Reading finished', message='Saved to {}'.format(home + "\\" + output_filename))
 
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
@@ -427,6 +436,9 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_program_section_size()-16)])
 			payload = eeprom[payload_start:payload_stop]
 
+			if payload_stop == payload_start:
+				log_callback.emit('[!!!] Adjusted payload has a length of 0. This most probably means you\'re trying to flash an empty file, or trying to flash a zone from a file that doesn\'t have it.')
+
 			flash_start = ecu.get_program_section_address() + 16
 			flash_size = payload_stop-payload_start
 
@@ -442,11 +454,16 @@ class Ui(QtWidgets.QMainWindow):
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_calibration_size_bytes()-16)])
 			payload = eeprom[payload_start:payload_stop]
 
+			if payload_stop == payload_start:
+				log_callback.emit('[!!!] Adjusted payload has a length of 0. This most probably means you\'re trying to flash an empty file, or trying to flash a zone from a file that doesn\'t have it.')
+
 			flash_start = ecu.calculate_memory_write_offset(ecu.get_calibration_section_address())
 			flash_size = payload_stop-payload_start
 
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+
+		progress_callback(99, 100)
 
 		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
@@ -460,8 +477,10 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
 			return
 
+		progress_callback(100, 100)
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
+		notification.notify(title='Flashing finished', message='Turn off your ignition for 10 seconds')
 		
 		ecu.bus.transport.hardware.set_timeout(0.5)
 		try:
@@ -473,7 +492,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		if (self.readingFileInput.text() == ''):
@@ -495,7 +514,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		if (self.readingFileInput.text() == ''):
@@ -513,7 +532,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -532,7 +551,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
@@ -662,7 +681,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		filename = self.flashingFileInput.text()
@@ -673,7 +692,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		filename = self.flashingFileInput.text()
@@ -684,7 +703,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		filename = self.flashingFileInput.text()
@@ -695,7 +714,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Clearing adaptive values.. ')
@@ -707,7 +726,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 		
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
@@ -735,7 +754,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
@@ -797,7 +816,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
@@ -846,6 +865,7 @@ class Ui(QtWidgets.QMainWindow):
 			
 			if len(response) > 1 and response[1] == 1:
 				self.log('[*] Limp home mode activated successfully.')
+				self.log('[*] You need to start the engine within 5-10 seconds, without unplugging the adapter. After starting, adapter may be unplugged')
 			else:
 				self.log('[!] Activation failed. Ensure the PIN is correct.')
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -855,7 +875,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
@@ -925,7 +945,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
@@ -1008,7 +1028,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Starting limp home password teaching...')
@@ -1098,7 +1118,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
@@ -1121,7 +1141,7 @@ class Ui(QtWidgets.QMainWindow):
 		ecu = self.initialize_ecu(log_callback)
 		
 		if (ecu == False):
-			self.bus.close()
+			self._close_bus(log_callback)
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
