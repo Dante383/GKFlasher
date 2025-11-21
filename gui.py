@@ -469,7 +469,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
-		progress_callback(99, 100)
+		progress_callback.emit((99, 100))
 
 		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
@@ -483,7 +483,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
 			return
 
-		progress_callback(100, 100)
+		progress_callback.emit((100, 100))
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
 		self.send_notification('Flashing finished', 'Turn off your ignition for 10 seconds')
