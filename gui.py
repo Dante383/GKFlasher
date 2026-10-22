@@ -401,10 +401,11 @@ class Ui(QtWidgets.QMainWindow):
 		)
 		return interface_name.startswith(can_prefixes)
 
+	# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
 	def get_desired_baudrate (self) -> DesiredBaudrate:
 		baudrate_index = self.baudratesBox.currentData()
-		if baudrate_index == -1:
-			# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
+		if (baudrate_index == -1
+		or BAUDRATES.get(baudrate_index) == 10400):
 			return DesiredBaudrate(index=None, baudrate=10400)
 		return DesiredBaudrate(index=baudrate_index, baudrate=BAUDRATES[baudrate_index])
 

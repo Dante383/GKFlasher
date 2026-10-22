@@ -343,7 +343,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
 	bus.transport.set_buffer_size(20)
 
-	if args.desired_baudrate:
+	if args.desired_baudrate and BAUDRATES.get(args.desired_baudrate) != 10400:
 		try:
 			desired_baudrate = DesiredBaudrate(index=args.desired_baudrate, baudrate=BAUDRATES[args.desired_baudrate])
 		except KeyError:
