@@ -1,6 +1,7 @@
 protocol: 'canbus'
 canbus:
   interface: 'can0'
+  bitrate: 500000
   tx_id: 0x7e0
   rx_id: 0x7e8
 kline:
