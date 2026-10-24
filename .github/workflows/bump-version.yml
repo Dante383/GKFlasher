@@ -1,7 +1,9 @@
 name: Bump version and tag
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'test-*[0-9][0-9]-u[0-9]*'
 
 permissions:
   contents: write
