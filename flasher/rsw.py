@@ -496,7 +496,7 @@ def rsw_handler(
     # ======================================================
     # CAN HARDWARE CHECK
     # ======================================================
-    if ecu.bus.transport.hardware.__class__.__name__ != 'CanHardware':
+    if 'CanHardware' not in ecu.bus.transport.hardware.__class__.__name__:
         raise Exception(
             'RSW mode requires a CANBUS interface.'
         )
