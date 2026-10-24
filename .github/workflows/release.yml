@@ -47,7 +47,7 @@ jobs:
           echo "__version__ = '${{ inputs.tag }}'" > _version.py
       - name: Install Build Environment Prerequisites
         run: |
-          pip install pyinstaller==6.16.0
+          pip install pyinstaller==6.16.0 pyinstaller-hooks-contrib==2025.9
           pip install cryptography==45.0.1
           pip install pillow==10.4.0
 
