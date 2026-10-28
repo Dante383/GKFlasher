@@ -1615,9 +1615,9 @@ class Ui(QtWidgets.QMainWindow):
 		except Exception as e:
 
 			log_callback.emit(f'[!] RSW flash failed: {str(e)}')
-			self._close_bus(log_callback)
-
-		self.disconnect_ecu(ecu)
+		finally:
+			# RSW owns the CAN bus now; the original KWP socket is no longer usable.
+			ecu.bus.close()
 
 	# ==========================================================
 	# BUTTON HANDLERS
