@@ -1,5 +1,7 @@
 import os
 import time
+from sys import platform
+from contextlib import nullcontext
 from gkbus.transport import CcpOverCanTransport
 from gkbus.protocol import ccp
 from alive_progress import alive_bar
@@ -66,6 +68,9 @@ def init_ccp(ecu):
 
     hardware = ecu.bus.transport.hardware
 
+    # Prevents a Scapy timeout timeout error on linux during the RSW upload.
+    ecu.bus._stop_keepalive()
+
     transport = CcpOverCanTransport(
         hardware,
         tx_id=TX_ID,
@@ -73,7 +78,10 @@ def init_ccp(ecu):
         crm_only=True
     )
 
-    transport.init()
+    if platform.startswith('win32'):
+        hardware.open(raw=True)
+    else:
+        transport.init()
 
     ccp_client = ccp.CcpProtocol(transport)
 
@@ -169,81 +177,14 @@ def native_bootstrap():
 # ==========================================================
 
 def flash_rsw(data, progress_callback=None, log_callback=None):
-
-    ptr = 0
-    total_chunks = (len(data) + 4) // 5
     log('[*] Uploading RSW', log_callback)
 
-    # ======================================================
-    # GUI MODE
-    # ======================================================
+    def download(chunk):
+        return (ccp.commands.DataDownload6Bytes(data=chunk) if len(chunk) == 6
+                else ccp.commands.DataDownload(size=len(chunk), data=chunk))
 
-    progress = None
-
-    if progress_callback is not None:
-        progress = Progress(progress_callback, 100)
-
-    if progress:
-
-        current_chunk = 0
-
-        while ptr < len(data):
-
-            chunk = data[ptr:ptr + 5]
-
-            ptr += 5
-
-            if len(chunk) < 5:
-                chunk += bytes(5 - len(chunk))
-
-            ccp_client.execute(
-                ccp.commands.DataDownload(
-                    size=5,
-                    data=chunk
-                )
-            )
-
-            current_chunk += 1
-
-            percent = int(
-                (current_chunk / total_chunks) * 100
-            )
-
-            progress(percent)
-
-    # ======================================================
-    # CLI MODE
-    # ======================================================
-
-    else:
-
-        with alive_bar(
-            total_chunks,
-            title='Uploading RSW'
-        ) as bar:
-
-            while ptr < len(data):
-
-                chunk = data[ptr:ptr + 5]
-
-                ptr += 5
-
-                if len(chunk) < 5:
-                    chunk += bytes(5 - len(chunk))
-
-                ccp_client.execute(
-                    ccp.commands.DataDownload(
-                        size=5,
-                        data=chunk
-                    )
-                )
-
-                bar()
-
-    ccp_client.execute(
-        ccp.commands.ActionService(0xC314)
-    )
-
+    _transfer_6byte(data, download, 'Uploading RSW', progress_callback, percentage=True)
+    ccp_client.execute(ccp.commands.ActionService(0xC314))
     log('[*] RSW upload complete', log_callback)
 
 # ==========================================================
@@ -350,75 +291,28 @@ def prep_cal(cal_address, cal_size):
 # GENERIC 6 BYTE FLASHER
 # ==========================================================
 
-def flash_file_6byte(
-    name,
-    data,
-    progress_callback=None,
-    log_callback=None
-):
-
-    ptr = 0
-
+def _transfer_6byte(data, command, title, progress_callback=None, percentage=False):
     total_chunks = (len(data) + 5) // 6
+    progress = (Progress(progress_callback, 100 if percentage else total_chunks)
+                if progress_callback is not None else None)
 
+    with (nullcontext() if progress is not None else alive_bar(len(data), title=title, unit='B')) as bar:
+        for current, offset in enumerate(range(0, len(data), 6), 1):
+            ccp_client.execute(command(data[offset:offset + 6]))
+            if progress is not None:
+                progress(int(current * 100 / total_chunks) if percentage else current)
+            else:
+                bar(len(data[offset:offset + 6]))
+
+
+def flash_file_6byte(name, data, progress_callback=None, log_callback=None):
     log(f'[*] Flashing {name}', log_callback)
-
-    # ======================================================
-    # GUI MODE
-    # ======================================================
-
-    progress = None
-
-    if progress_callback is not None:
-        progress = Progress(progress_callback, total_chunks)
-
-    if progress is not None:
-
-        current_chunk = 0
-
-        while ptr < len(data):
-
-            chunk = data[ptr:ptr + 6]
-
-            ptr += 6
-
-            if len(chunk) < 6:
-                chunk += bytes(6 - len(chunk))
-
-            ccp_client.execute(
-                ccp.commands.Program6Bytes(data=chunk)
-            )
-
-            current_chunk += 1
-
-            progress(current_chunk)
-
-    # ======================================================
-    # CLI MODE
-    # ======================================================
-
-    else:
-
-        with alive_bar(
-            total_chunks,
-            title=f'Flashing {name}'
-        ) as bar:
-
-            while ptr < len(data):
-
-                chunk = data[ptr:ptr + 6]
-
-                ptr += 6
-
-                if len(chunk) < 6:
-                    chunk += bytes(6 - len(chunk))
-
-                ccp_client.execute(
-                    ccp.commands.Program6Bytes(data=chunk)
-                )
-
-                bar()
-
+    _transfer_6byte(
+        data,
+        lambda chunk: ccp.commands.Program6Bytes(data=chunk.ljust(6, b"\x00")),
+        f'Flashing {name}',
+        progress_callback,
+    )
     log(f'[*] {name} upload complete', log_callback)
 
 # ==========================================================
@@ -496,7 +390,7 @@ def rsw_handler(
     # ======================================================
     # CAN HARDWARE CHECK
     # ======================================================
-    if ecu.bus.transport.hardware.__class__.__name__ != 'CanHardware':
+    if 'CanHardware' not in ecu.bus.transport.hardware.__class__.__name__:
         raise Exception(
             'RSW mode requires a CANBUS interface.'
         )

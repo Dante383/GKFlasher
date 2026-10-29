@@ -14,6 +14,7 @@ from flasher.lineswap import generate_sie, generate_bin
 from flasher.rsw import rsw_handler
 from flasher.mtos import mtos_handler
 from _version import __version__
+from sys import platform
 
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
@@ -167,7 +168,7 @@ def load_config (config_filename):
 def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher v{}'.format(__version__))
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
-	parser.add_argument('-i', '--interface')
+	parser.add_argument('-i', '--interface', help='Linux: can0 for socketCAN. | Windows: gs_usb:0, slcan:COM69, pcan:PCAN_USBBUS1, vector:0')
 	parser.add_argument('-b', '--baudrate', type=int)
 	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0))
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
@@ -202,21 +203,97 @@ def load_arguments ():
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 	logging.basicConfig(level=logging_levels[min(args.verbose, len(logging_levels) -1)])
+	logging.getLogger("can").setLevel(logging.CRITICAL)
 
 	GKFlasher_config = load_config(args.config)
-	
-	if (args.protocol):
-		GKFlasher_config['protocol'] = args.protocol
-	if (args.interface):
-		GKFlasher_config[GKFlasher_config['protocol']]['interface'] = args.interface
-	if (args.baudrate):
-		GKFlasher_config[GKFlasher_config['protocol']]['baudrate'] = args.baudrate
+
+	if args.protocol:
+			GKFlasher_config['protocol'] = args.protocol
+
+	protocol = GKFlasher_config['protocol']
+	protocol_config = GKFlasher_config[protocol]
+
+
+	if args.interface:
+		protocol_config['interface'] = args.interface
+
+	if protocol == 'canbus' and platform.startswith('win32'):
+		requested_interface = protocol_config['interface']
+
+		is_valid_interface = (
+			requested_interface.startswith('pcan:')
+			and requested_interface.removeprefix(
+				'pcan:PCAN_USBBUS').isdigit()
+		) or (
+			requested_interface.startswith('slcan:')
+			and requested_interface.split(':', 1)[1] != ''
+		) or (
+			requested_interface.startswith('vector:')
+			and requested_interface.split(':', 1)[1].isdigit()
+		) or (
+			requested_interface.startswith('gs_usb:')
+			and requested_interface.split(':', 1)[1].isdigit()
+		)
+
+		if requested_interface == 'can0' or not is_valid_interface:
+			print('[*] Detecting CAN bus interfaces...')
+			ports = sorted(
+				CanHardware.available_ports(),
+				key=lambda port: port.port,
+			)
+
+			if not ports:
+				raise RuntimeError(
+					'No supported CAN interfaces found on Windows.'
+				)
+
+			if requested_interface != 'can0':
+				print(
+					f'Invalid Windows CAN interface: {requested_interface}'
+				)
+
+			print('Available CAN interfaces:')
+			for index, port in enumerate(ports, start=1):
+				print(f"  {index}. {port.manufacturer} {port.port_name} "f"({port.port})")
+
+			while True:
+				try:
+					choice = input('Select CAN interface [1]: ').strip()
+					index = int(choice or '1')
+
+					if 1 <= index <= len(ports):
+						protocol_config['interface'] = ports[index - 1].port
+						break
+
+					print(f'Enter a number from 1 to {len(ports)}.')
+				except ValueError:
+					print('Please enter a valid number.')
+
+	if protocol == 'canbus' and platform.startswith('linux'):
+		requested_interface = protocol_config['interface']
+		ports = sorted(
+			CanHardware.available_ports(),
+			key=lambda port: port.port,
+		)
+		available_interfaces = [port.port for port in ports]
+
+		if requested_interface not in available_interfaces:
+			print(f'[!] Invalid interface: {requested_interface}')
+			print('[*] Available CAN interfaces:')
+
+			if ports:
+				for port in ports:
+					print(f'    - {port.port}')
+			else:
+				print('[!] No CAN interfaces found.')
+
+			raise SystemExit(1)
 
 	return GKFlasher_config, args
 
 def initialize_bus (protocol: str, protocol_config: dict) -> kwp2000.Kwp2000Protocol:
 	if protocol == 'canbus':
-		hardware = CanHardware(protocol_config['interface'])
+		hardware = CanHardware(protocol_config['interface'], protocol_config['bitrate'])
 		transport = Kwp2000OverCanTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
 	elif protocol == 'kline':
 		hardware = KLineHardware(protocol_config['interface'])
@@ -266,7 +343,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
 	bus.transport.set_buffer_size(20)
 
-	if args.desired_baudrate:
+	if args.desired_baudrate and BAUDRATES.get(args.desired_baudrate) != 10400:
 		try:
 			desired_baudrate = DesiredBaudrate(index=args.desired_baudrate, baudrate=BAUDRATES[args.desired_baudrate])
 		except KeyError:

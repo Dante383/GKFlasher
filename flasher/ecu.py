@@ -1,5 +1,5 @@
 import logging
-from typing_extensions import Self
+from typing import Self
 from gkbus.protocol import kwp2000
 from gkbus.hardware import TimeoutException
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier, AccessLevel

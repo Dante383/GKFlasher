@@ -111,7 +111,7 @@ def write_memory(ecu: ECU, payload: bytes, flash_start: int, flash_size: int, pr
 
 	for packets_written in range(packets_to_write):
 		if (progress_callback):
-			progress_callback.title('Packet {}/{}'.format(packets_written, packets_to_write))
+			progress_callback.title('Packet {}/{}'.format(packets_written+1, packets_to_write))
 
 		payload_packet_start = packets_written*254
 		payload_packet_end = payload_packet_start+254

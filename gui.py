@@ -4,7 +4,7 @@ from datetime import datetime
 import plyer
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
-from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot
+from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot, QTimer
 from plyer import notification
 import gkbus, yaml, traceback, bsl, logging
 from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException, HardwareException
@@ -22,6 +22,12 @@ from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
 from flasher.rsw import rsw_handler
+
+
+from serial.tools import list_ports
+SUPPORTED_SLCAN_DEVICES = {
+	(0xAD50, 0x60C4): "CANable",
+}
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -134,7 +140,30 @@ class Worker(QRunnable):
         finally:
             self.signals.finished.emit()  # Done
 
+class InterfaceDiscoverySignals(QObject):
+    result = pyqtSignal(object)
+
+class InterfaceDiscoveryWorker(QRunnable):
+    def __init__(self):
+        super().__init__()
+        self.signals = InterfaceDiscoverySignals()
+
+    @pyqtSlot()
+    def run(self):
+        devices = []
+
+        for hw in (KLineHardware, CanHardware):
+            try:
+                devices.extend(hw.available_ports())
+            except Exception:
+                pass
+
+        self.signals.result.emit(devices)
+
 class Ui(QtWidgets.QMainWindow):
+	VALIDATION_INTERVAL = 180 # Validation routine Animation duration.
+	ERASE_INTERVAL = 20 # Erase routine animation duration.
+
 	request_pin_signal1 = pyqtSignal(object, object)  # Signal to request PIN from the main thread. # Pass `log_callback` and `ecu`  
 	request_pin_signal2 = pyqtSignal(object, object)  # Signal to request PIN from the main thread. # Pass `log_callback` and `ecu`  
 	request_pin_signal3 = pyqtSignal(object, object)  # For requesting the current password
@@ -187,10 +216,17 @@ class Ui(QtWidgets.QMainWindow):
 		self.setWindowTitle('GKFlasher [{}]'.format(__version__))
 		self.show()
 		
-		try:
-			self.detect_interfaces()
-		except ValueError:
-			print('[!] No serial interfaces found! If you plug in an interface now, you\'ll have to restart GKFlasher')
+		# Seperate thread to run the interface discovery process.
+		self.interfacesBox.addItem("Discovering interfaces...")
+		self.interface_discovery_worker = InterfaceDiscoveryWorker()
+		self.interface_discovery_worker.signals.result.connect(self.populate_interfaces)
+		self.thread_manager.start(self.interface_discovery_worker)
+
+		# Timer animation that updates the progress bar every 200 milliseconds.
+		self.validation_timer = QTimer(self)
+		self.validation_timer.setInterval(200)
+		self.validation_progress = 0
+		self.validation_timer.timeout.connect(self.update_validation_progress)
 
 		self.load_ecus()
 		self.load_baudrates()
@@ -278,17 +314,49 @@ class Ui(QtWidgets.QMainWindow):
 		self.bslOutput.setPlainText(text)
 		self.bslOutput.setReadOnly(True)
 
-	def detect_interfaces(self):
-		devices = []
-		for hw in (KLineHardware, CanHardware):
-			try:
-				devices.extend(hw.available_ports())
-			except Exception:
-				pass
-		if (len(devices) == 0):
-			raise ValueError
+
+
+
+
+
+
+
+	def is_slcan_device(self, device) -> bool:
+		# Look up USB IDs using the COM port name.
+		vid, pid = self.usb_ids_by_port.get(
+			device.port, (None, None)
+		)
+
+		return (vid, pid) in SUPPORTED_SLCAN_DEVICES
+
+
+	def populate_interfaces(self, devices):
+		self.interfacesBox.clear()
+
+		# Build a COM port -> (VID, PID) lookup using PySerial.
+		self.usb_ids_by_port = {
+			port.device: (port.vid, port.pid)
+			for port in list_ports.comports()
+		}
+
+		if len(devices) == 0:
+			self.interfacesBox.addItem('[!] No interfaces found. Connect an interface and restart GKFlasher.')
+			return
+
 		for device in devices:
-			self.interfacesBox.addItem(device.description(), device.port)
+			# Skip SLCAN COMM Port devices; can_hardware.py discovers them.
+			if self.is_slcan_device(device):
+				continue
+
+			self.interfacesBox.addItem(
+				device.description(), device.port
+			)
+
+		self.update_baudrate_state()
+
+
+
+
 
 	def load_ecus (self):
 		self.ecusBox.addItem('ECU (autodetect)', -1)
@@ -322,21 +390,53 @@ class Ui(QtWidgets.QMainWindow):
 		return url
 
 	def is_can_interface(self, interface_name: str) -> bool:
-		return str(interface_name).upper().startswith("PCAN_")
+		interface_name = str(interface_name).upper()
+		can_prefixes = (
+			"PCAN:",
+			"SLCAN:",
+			"VECTOR:",
+			"GS_USB:",
+			"CAN",
+			"VCAN",
+		)
+		return interface_name.startswith(can_prefixes)
 
+	# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
 	def get_desired_baudrate (self) -> DesiredBaudrate:
 		baudrate_index = self.baudratesBox.currentData()
-		if baudrate_index == -1:
-			# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
+		if (baudrate_index == -1
+		or BAUDRATES.get(baudrate_index) == 10400):
 			return DesiredBaudrate(index=None, baudrate=10400)
 		return DesiredBaudrate(index=baudrate_index, baudrate=BAUDRATES[baudrate_index])
 
 	def progress_callback(self, value):
-		if len(value) > 1:
+		if len(value) > 2:
+			if value[2] == 1:
+				self.validation_progress = 0
+				self.progressBar.setMaximum(100)
+				self.progressBar.setValue(0)
+
+				if len(value) > 3 and value[3] == 'erase':
+					self.validation_timer.setInterval(self.ERASE_INTERVAL)
+				else:
+					self.validation_timer.setInterval(self.VALIDATION_INTERVAL)
+
+				self.validation_timer.start()
+
+			elif value[2] == 0:
+				self.validation_timer.stop()
+				self.progressBar.setValue(100)
+
+		elif len(value) > 1:
 			self.progressBar.setMaximum(value[0])
 			self.progressBar.setValue(0)
 		else:
 			self.progressBar.setValue(value[0])
+
+	def update_validation_progress(self):
+		if self.validation_progress < 95:
+			self.validation_progress += 1
+			self.progressBar.setValue(self.validation_progress)
 
 	def _close_bus (self, log_callback) -> None:
 		if hasattr(self, 'bus'):
@@ -360,7 +460,7 @@ class Ui(QtWidgets.QMainWindow):
 		interface = self.get_interface_url()
 
 		if self.is_can_interface(interface):
-			hardware = CanHardware(interface)
+			hardware = CanHardware(interface, bitrate=config['canbus']['bitrate'])
 			transport = Kwp2000OverCanTransport(hardware, tx_id=config['canbus']['tx_id'], rx_id=config['canbus']['rx_id'])	
 		else:
 			hardware = KLineHardware(interface)
@@ -506,9 +606,15 @@ class Ui(QtWidgets.QMainWindow):
 
 		if flash_program:
 			log_callback.emit('[*] start routine 0x00 (erase program code section)')
-			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
+			# Start the estimated erase progress animation.
+			progress_callback.emit((0, 0, 1, 'erase'))
+			try:
+				ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
+			finally:
+				# Stop the animation when the erase routine finishes.
+				progress_callback.emit((0, 0, 0))
 
-			# we need to start 16 bytes later as the program section starts with a flag that we can't write
+			# we need to start 16 bytes later as the program section starts with a flag that we can't write.
 			payload_start = ecu.calculate_bin_offset(ecu.get_region('program').write.address) + 16
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('program').write.size-16)])
 			payload = eeprom[payload_start:payload_stop]
@@ -527,7 +633,7 @@ class Ui(QtWidgets.QMainWindow):
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
 			payload_start = ecu.calculate_bin_offset(ecu.get_region('calibration').write.address)
-			# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
+			# we need to shave 16 bytes off the top as this is where a flag that we can't write is located.
 			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('calibration').write.size-16)])
 			payload = eeprom[payload_start:payload_stop]
 
@@ -542,7 +648,13 @@ class Ui(QtWidgets.QMainWindow):
 
 		ecu.bus.transport.hardware.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
-		progress_callback.emit((40,))
+
+		# Sends a signal from the flashing worker to the GUI, telling it to start the validation progress animation.
+		# The bar advances to 95% based on elapsed time, not actual ECU-reported progress. It reaches 100% when the validation routine returns.
+		# (0, 0, 1) → start the progress animation.
+		# (0, 0, 0) → stop the animation and mark progress as 100%.
+		progress_callback.emit((0, 0, 1))
+
 		try:
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -551,9 +663,11 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Verifying blocks failed! Did you forget to correct the checksum?')
 			
 			log_callback.emit('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
+			progress_callback.emit((0, 0, 0))
 			return
 
-		progress_callback.emit((100,))
+		progress_callback.emit((0, 0, 0))
+
 		log_callback.emit('[*] ecu reset')
 		log_callback.emit('[*] Done!')
 		self.send_notification('Flashing finished', 'Turn off your ignition for 10 seconds')
@@ -1488,9 +1602,9 @@ class Ui(QtWidgets.QMainWindow):
 		except Exception as e:
 
 			log_callback.emit(f'[!] RSW flash failed: {str(e)}')
-			self._close_bus(log_callback)
-
-		self.disconnect_ecu(ecu)
+		finally:
+			# RSW owns the CAN bus now; the original KWP socket is no longer usable.
+			ecu.bus.close()
 
 	# ==========================================================
 	# BUTTON HANDLERS
