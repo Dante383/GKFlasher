@@ -353,7 +353,7 @@ class Ui(QtWidgets.QMainWindow):
 		}
 
 		if len(devices) == 0:
-			self.textBox.append('[!] No serial interfaces found! If you plug in an interface now, you may need to restart GKFlasher')
+			self.interfacesBox.addItem('[!] No interfaces found. Connect an interface and restart GKFlasher.')
 			return
 
 		for device in devices:
