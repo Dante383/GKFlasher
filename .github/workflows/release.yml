@@ -51,31 +51,6 @@ jobs:
           pip install cryptography==45.0.1
           pip install pillow==10.4.0
 
-# TEMPORARY workaround whilst waiting for the merge of https://github.com/hardbyte/python-can/pull/2106
-# Patch 'gs_usb.py' which is embedded in python-can.
-# Note: this file located under "C:\Program Files\Python311\Lib\site-packages\can\interfaces\gs_usb.py"
-
-#      - name: Apply gs_usb shutdown fix
-#        shell: pwsh
-#        run: |
-#          $file = python -c "import can.interfaces.gs_usb; print(can.interfaces.gs_usb.__file__)"
-#          $source = Get-Content $file -Raw
-#
-#          $old = "        self._is_shutdown = True"
-#          $new = "        usb.util.dispose_resources(self.gs_usb.gs_usb)`n        self._is_shutdown = True"
-#
-#          if ($source.Contains("usb.util.dispose_resources(self.gs_usb.gs_usb)")) {
-#              Write-Host "gs_usb patch already applied"
-#          }
-#          elseif ($source.Contains($old)) {
-#              $source = $source.Replace($old, $new)
-#              Set-Content -Path $file -Value $source -NoNewline
-#              Write-Host "Applied gs_usb shutdown fix"
-#          }
-#          else {
-#              throw "Could not find the expected shutdown line. Check the installed python-can version."
-#          }
-
       - name: Build EXE Package
         run: |
           python -m PyInstaller .github/workflows/gui.spec
