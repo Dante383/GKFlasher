@@ -176,7 +176,6 @@ class Ui(QtWidgets.QMainWindow):
 
 	def __init__(self):
 		super(Ui, self).__init__()
-		self._operation_running = False
 		self.load_ui()
 		self.previous_baudrate = False
 		self.interfacesBox.currentIndexChanged.connect(self.update_baudrate_state)
@@ -278,24 +277,12 @@ class Ui(QtWidgets.QMainWindow):
 		self.rswVirginizeBtn.clicked.connect(lambda: self.click_handler(self.rsw_virginize))
 
 	def click_handler (self, callback):
-		if self._operation_running:
-			self.log('[*] Chill out dude, the previous operation is still running or disconnecting.')
-			return
 		worker = Worker(callback)
 		worker.signals.log.connect(self.log)
 		worker.signals.log2.connect(self.log2)
 		worker.signals.progress.connect(self.progress_callback)
 		worker.signals.error.connect(self.handle_exception)
-		worker.signals.finished.connect(self._operation_finished)
-		self._operation_running = True
-		try:
-			self.thread_manager.start(worker)
-		except Exception:
-			self._operation_running = False
-			raise
-
-	def _operation_finished(self):
-		self._operation_running = False
+		self.thread_manager.start(worker)
 
 	def send_notification (self, title: str, body: str) -> None:
 		try:
