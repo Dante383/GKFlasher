@@ -31,8 +31,6 @@
                         <File Id="ApplicationFile9" Source="dist\gui\_queue.pyd" />
                         <File Id="ApplicationFile10" Source="dist\gui\_socket.pyd" />
                         <File Id="ApplicationFile11" Source="dist\gui\_ssl.pyd" />
-                       <!-- <File Id="ApplicationFile12" Source="dist\gui\_uuid.pyd" />
-                        <File Id="ApplicationFile12" Source="dist\gui\_wmi.pyd" />-->
                         <File Id="ApplicationFile12" Source="dist\gui\base_library.zip" />
                         <File Id="ApplicationFile13" Source="ecu_definitions.py" />
                         <File Id="ApplicationFile14" Source="gkflasher.py" />
@@ -48,61 +46,62 @@
                         <File Id="ApplicationFile24" Source="bsl.py" />
                         <File Id="ApplicationFile25" Source="dist\gui\_sqlite3.pyd" />
                         <File Id="ApplicationFile26" Source="dist\gui\sqlite3.dll" />
+                        <File Id="ApplicationFile27" Source="dist\gui\libusb-1.0.dll" />
                     </Component>
                     <Directory Id="FLASHERDIR" Name="flasher">
                         <Component Id="ApplicationFilesB" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE8}">
-                            <File Id="ApplicationFile27" Source="flasher\checksum.py" />
-                            <File Id="ApplicationFile28" Source="flasher\ecu.py" />
-                            <File Id="ApplicationFile29" Source="flasher\gkflasher.ui" />
-                            <File Id="ApplicationFile30" Source="flasher\gkflasher.qss" />
-                            <File Id="ApplicationFile31" Source="flasher\immo.py" />
-                            <File Id="ApplicationFile32" Source="flasher\logging.py" />
-                            <File Id="ApplicationFile33" Source="flasher\lineswap.py" />
-                            <File Id="ApplicationFile34" Source="flasher\memory.py" />
-                            <File Id="ApplicationFile35" Source="flasher\smartra.py" />
-                            <File Id="ApplicationFile36" Source="flasher\mtos.py" />
-                            <File Id="ApplicationFile37" Source="flasher\rsw.py" />
+                            <File Id="ApplicationFile28" Source="flasher\checksum.py" />
+                            <File Id="ApplicationFile29" Source="flasher\ecu.py" />
+                            <File Id="ApplicationFile30" Source="flasher\gkflasher.ui" />
+                            <File Id="ApplicationFile31" Source="flasher\gkflasher.qss" />
+                            <File Id="ApplicationFile32" Source="flasher\immo.py" />
+                            <File Id="ApplicationFile33" Source="flasher\logging.py" />
+                            <File Id="ApplicationFile34" Source="flasher\lineswap.py" />
+                            <File Id="ApplicationFile35" Source="flasher\memory.py" />
+                            <File Id="ApplicationFile36" Source="flasher\smartra.py" />
+                            <File Id="ApplicationFile37" Source="flasher\mtos.py" />
+                            <File Id="ApplicationFile38" Source="flasher\rsw.py" />
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
                         <Component Id="ApplicationFilesC" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
-                            <File Id="ApplicationFile38" Source="assets\Siemens_T_Logo.ico" />
-                            <File Id="ApplicationFile39" Source="assets\simk4x_bootstrap.bin" />
-                            <File Id="ApplicationFile40" Source="assets\simk4x_kernel.bin" />
-                            <File Id="ApplicationFile41" Source="assets\simk4x_driver_i4_a29fx00bx.bin" />
-                            <File Id="ApplicationFile42" Source="assets\simk4x_driver_v6_a29fx00bx.bin" />
-                            <File Id="ApplicationFile43" Source="assets\simk43_rsw_fl2.bin" />
+                            <File Id="ApplicationFile39" Source="assets\Siemens_T_Logo.ico" />
+                            <File Id="ApplicationFile40" Source="assets\simk4x_bootstrap.bin" />
+                            <File Id="ApplicationFile41" Source="assets\simk4x_kernel.bin" />
+                            <File Id="ApplicationFile42" Source="assets\simk4x_driver_i4_a29fx00bx.bin" />
+                            <File Id="ApplicationFile43" Source="assets\simk4x_driver_v6_a29fx00bx.bin" />
+                            <File Id="ApplicationFile44" Source="assets\simk43_rsw_fl2.bin" />
                         </Component>
                     </Directory>
                     <Directory Id="PYQT5DIR" Name="PyQt5">
                         <Component Id="ApplicationFilesD" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
-                            <File Id="ApplicationFile44" Source="dist\gui\PyQt5\QtCore.pyd" />
-                            <File Id="ApplicationFile45" Source="dist\gui\PyQt5\QtGui.pyd" />
-                            <File Id="ApplicationFile46" Source="dist\gui\PyQt5\QtWidgets.pyd" />
-                            <File Id="ApplicationFile47" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
+                            <File Id="ApplicationFile45" Source="dist\gui\PyQt5\QtCore.pyd" />
+                            <File Id="ApplicationFile46" Source="dist\gui\PyQt5\QtGui.pyd" />
+                            <File Id="ApplicationFile47" Source="dist\gui\PyQt5\QtWidgets.pyd" />
+                            <File Id="ApplicationFile48" Source="dist\gui\PyQt5\sip.cp312-win_amd64.pyd" />
                         </Component>
                             <Directory Id="QT5DIR" Name="Qt5">
                                     <Directory Id="PYQT5BINDIR" Name="bin">
                                         <Component Id="ApplicationFilesE" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE5}">
-                                            <File Id="ApplicationFile48" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
-                                            <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
-                                            <File Id="ApplicationFile50" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                            <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
+                                            <File Id="ApplicationFile50" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
+                                            <File Id="ApplicationFile51" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
                                         <Directory Id="PLATFORMDIR" Name="platforms">
                                             <Component Id="ApplicationFilesF" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
-                                                <File Id="ApplicationFile51" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
+                                                <File Id="ApplicationFile52" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
                                             </Component>
                                         </Directory>
                                         <Directory Id="STYLESDIR" Name="styles">
                                             <Component Id="ApplicationFilesG" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE3}">
-                                                <File Id="ApplicationFile52" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
+                                                <File Id="ApplicationFile53" Source="dist\gui\PyQt5\Qt5\plugins\styles\qwindowsvistastyle.dll" />
                                             </Component>
                                         </Directory>
                                         <Directory Id="IMAGEFORMATSDIR" Name="imageformats">
                                             <Component Id="ApplicationFilesH" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE2}">
-                                                <File Id="ApplicationFile53" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qico.dll" />
+                                                <File Id="ApplicationFile54" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qico.dll" />
                                             </Component>
                                         </Directory>
                                     </Directory>
