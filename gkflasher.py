@@ -1,7 +1,8 @@
 import argparse, time, yaml, logging, sys, os, traceback
 from datetime import datetime
 from alive_progress import alive_bar
-from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException
+from gkbus.device import Bus, DeviceABC, discover, find_device
+from gkbus.exceptions import DeviceException, GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
@@ -14,7 +15,6 @@ from flasher.lineswap import generate_sie, generate_bin
 from flasher.rsw import rsw_handler
 from flasher.mtos import mtos_handler
 from _version import __version__
-from sys import platform
 
 def strip (string):
 	return ''.join(x for x in string if x.isalnum())
@@ -108,7 +108,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
-	ecu.bus.transport.hardware.set_timeout(300)
+	ecu.bus.transport.set_timeout(300)
 
 	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
 	try:
@@ -128,7 +128,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 
 		print('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
 
-	ecu.bus.transport.hardware.set_timeout(12)
+	ecu.bus.transport.set_timeout(12)
 
 	print('[*] ecu reset')
 	print('[*] done!')
@@ -210,98 +210,53 @@ def load_arguments ():
 	if args.protocol:
 			GKFlasher_config['protocol'] = args.protocol
 
-	protocol = GKFlasher_config['protocol']
-	protocol_config = GKFlasher_config[protocol]
-
-
 	if args.interface:
-		protocol_config['interface'] = args.interface
-
-	if protocol == 'canbus' and platform.startswith('win32'):
-		requested_interface = protocol_config['interface']
-
-		is_valid_interface = (
-			requested_interface.startswith('pcan:')
-			and requested_interface.removeprefix(
-				'pcan:PCAN_USBBUS').isdigit()
-		) or (
-			requested_interface.startswith('slcan:')
-			and requested_interface.split(':', 1)[1] != ''
-		) or (
-			requested_interface.startswith('vector:')
-			and requested_interface.split(':', 1)[1].isdigit()
-		) or (
-			requested_interface.startswith('gs_usb:')
-			and requested_interface.split(':', 1)[1].isdigit()
-		)
-
-		if requested_interface == 'can0' or not is_valid_interface:
-			print('[*] Detecting CAN bus interfaces...')
-			ports = sorted(
-				CanHardware.available_ports(),
-				key=lambda port: port.port,
-			)
-
-			if not ports:
-				raise RuntimeError(
-					'No supported CAN interfaces found on Windows.'
-				)
-
-			if requested_interface != 'can0':
-				print(
-					f'Invalid Windows CAN interface: {requested_interface}'
-				)
-
-			print('Available CAN interfaces:')
-			for index, port in enumerate(ports, start=1):
-				print(f"  {index}. {port.manufacturer} {port.port_name} "f"({port.port})")
-
-			while True:
-				try:
-					choice = input('Select CAN interface [1]: ').strip()
-					index = int(choice or '1')
-
-					if 1 <= index <= len(ports):
-						protocol_config['interface'] = ports[index - 1].port
-						break
-
-					print(f'Enter a number from 1 to {len(ports)}.')
-				except ValueError:
-					print('Please enter a valid number.')
-
-	if protocol == 'canbus' and platform.startswith('linux'):
-		requested_interface = protocol_config['interface']
-		ports = sorted(
-			CanHardware.available_ports(),
-			key=lambda port: port.port,
-		)
-		available_interfaces = [port.port for port in ports]
-
-		if requested_interface not in available_interfaces:
-			print(f'[!] Invalid interface: {requested_interface}')
-			print('[*] Available CAN interfaces:')
-
-			if ports:
-				for port in ports:
-					print(f'    - {port.port}')
-			else:
-				print('[!] No CAN interfaces found.')
-
-			raise SystemExit(1)
+		GKFlasher_config[GKFlasher_config['protocol']]['interface'] = args.interface
 
 	return GKFlasher_config, args
 
-def initialize_bus (protocol: str, protocol_config: dict) -> kwp2000.Kwp2000Protocol:
-	if protocol == 'canbus':
-		hardware = CanHardware(protocol_config['interface'], protocol_config['bitrate'])
-		transport = Kwp2000OverCanTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
-	elif protocol == 'kline':
-		hardware = KLineHardware(protocol_config['interface'])
-		transport = Kwp2000OverKLineTransport(hardware, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
+def select_device (interface: str, bus_type: Bus) -> DeviceABC:
+	try:
+		return find_device(interface, {bus_type})
+	except DeviceException:
+		print('[!] Interface not found: {}'.format(interface))
 
-	bus = kwp2000.Kwp2000Protocol(transport)
+	devices = discover({bus_type})
+	if not devices:
+		print('[!] No interfaces found.')
+		raise SystemExit(1)
 
-	return bus
+	print('[*] Available interfaces:')
+	for index, device in enumerate(devices, start=1):
+		print('    {}. {}'.format(index, device.description()))
+
+	while True:
+		try:
+			index = int(input('Select interface [1]: ').strip() or '1')
+		except ValueError:
+			print('Please enter a valid number.')
+			continue
+		if 1 <= index <= len(devices):
+			return devices[index - 1]
+		print('Enter a number from 1 to {}.'.format(len(devices)))
+
+def initialize_bus (protocol: str, protocol_config: dict) -> tuple[DeviceABC, kwp2000.Kwp2000Protocol]:
+	bus_type = Bus(protocol)
+	device = select_device(protocol_config['interface'], bus_type)
+	print('[*] Interface: {}'.format(device.description()))
+
+	if bus_type == Bus.CANBUS:
+		channel = device.canbus(protocol_config['bitrate'])
+		transport = Kwp2000OverCanTransport(channel, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
+	else:
+		channel = device.kline()
+		transport = Kwp2000OverKLineTransport(channel, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
+
+	# opened here rather than by the transport, so the channel outlives the KWP2000 session
+	# (RSW switches to CCP on it). Closed by device.close()
+	channel.open()
+
+	return device, kwp2000.Kwp2000Protocol(transport)
 
 def cli_choose_ecu ():
 	print('[!] Failed to identify your ECU!')
@@ -355,12 +310,11 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		print('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 		try:
 			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
-			bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+			bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 		except TimeoutException:
 			# it's possible that the bus is already running at the desired baudrate - let's check
-			bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
-			bus.transport.hardware.socket.reset_output_buffer()
-			bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+			bus.transport.channel.reset_buffers()
+			bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
 	else:
 		# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
@@ -368,7 +322,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		print('[*] Trying to start diagnostic session')
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 		
-	bus.transport.hardware.set_timeout(12)
+	bus.transport.set_timeout(12)
 
 	print('[*] Set timing parameters to maximum')
 	try:
@@ -497,7 +451,11 @@ if __name__ == '__main__':
 		sys.exit()
 	
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
-	bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])	
+	try:
+		device, bus = initialize_bus(GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']])
+	except GkbusException as e:
+		print('[!] Failed to open the interface: {}'.format(e))
+		sys.exit(1)
 
 	try:
 		main(bus, args)
@@ -510,4 +468,5 @@ if __name__ == '__main__':
 		print('\n'.join([packet2hex(packet) for packet in bus.transport.buffer_dump()]))
 		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
 	bus.close()
+	device.close()
 	os._exit(0)

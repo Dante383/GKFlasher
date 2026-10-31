@@ -1,7 +1,7 @@
 import os
 import time
-from sys import platform
 from contextlib import nullcontext
+from gkbus.channel import CanChannel
 from gkbus.transport import CcpOverCanTransport
 from gkbus.protocol import ccp
 from alive_progress import alive_bar
@@ -52,7 +52,6 @@ RX_ID = 0x6A1 # ca663057 ccp
 
 # ==========================================================
 
-hardware = None
 transport = None
 ccp_client = None
 
@@ -62,30 +61,25 @@ ccp_client = None
 
 def init_ccp(ecu):
 
-    global hardware
     global transport
     global ccp_client
 
-    hardware = ecu.bus.transport.hardware
+    channel = ecu.bus.transport.channel
 
-    # Prevents a Scapy timeout timeout error on linux during the RSW upload.
-    ecu.bus._stop_keepalive()
+    # CCP takes over the CAN channel, so stop KWP2000 (keepalive and ISO-TP link) first.
+    # The channel itself stays open if it was opened before the KWP2000 transport
+    ecu.bus.close()
 
     transport = CcpOverCanTransport(
-        hardware,
+        channel,
         tx_id=TX_ID,
         rx_id=RX_ID,
-        crm_only=True
+        crm_only=True,
+        timeout=10,
     )
-
-    if platform.startswith('win32'):
-        hardware.open(raw=True)
-    else:
-        transport.init()
+    transport.init()
 
     ccp_client = ccp.CcpProtocol(transport)
-
-    hardware.set_timeout(10)
 
 # ==========================================================
 # CONNECT
@@ -352,7 +346,7 @@ def extract_bin_region(
 
 def finalize():
 
-    hardware.set_timeout(3)
+    transport.set_timeout(3)
 
     try:
 
@@ -363,7 +357,7 @@ def finalize():
     except:
         pass
 
-    hardware.set_timeout(1)
+    transport.set_timeout(1)
 
     time.sleep(3)
 
@@ -390,7 +384,7 @@ def rsw_handler(
     # ======================================================
     # CAN HARDWARE CHECK
     # ======================================================
-    if 'CanHardware' not in ecu.bus.transport.hardware.__class__.__name__:
+    if not isinstance(ecu.bus.transport.channel, CanChannel):
         raise Exception(
             'RSW mode requires a CANBUS interface.'
         )

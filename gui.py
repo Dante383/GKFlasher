@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot, QTimer
 from plyer import notification
 import gkbus, yaml, traceback, bsl, logging
-from gkbus.hardware import KLineHardware, CanHardware, OpeningPortException, TimeoutException, HardwareException
+from gkbus.device import Bus, DeviceABC, discover
+from gkbus.exceptions import GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
@@ -23,11 +24,7 @@ from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
 from flasher.rsw import rsw_handler
 
-
-from serial.tools import list_ports
-SUPPORTED_SLCAN_DEVICES = {
-	(0xAD50, 0x60C4): "CANable",
-}
+BUS_NAMES = {Bus.KLINE: 'K-Line', Bus.CANBUS: 'CAN bus'}
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -150,15 +147,7 @@ class InterfaceDiscoveryWorker(QRunnable):
 
     @pyqtSlot()
     def run(self):
-        devices = []
-
-        for hw in (KLineHardware, CanHardware):
-            try:
-                devices.extend(hw.available_ports())
-            except Exception:
-                pass
-
-        self.signals.result.emit(devices)
+        self.signals.result.emit(discover({Bus.KLINE, Bus.CANBUS}))
 
 class Ui(QtWidgets.QMainWindow):
 	VALIDATION_INTERVAL = 180 # Validation routine Animation duration.
@@ -208,7 +197,7 @@ class Ui(QtWidgets.QMainWindow):
 		except:
 			print('[!] Buffer not found!')
 		print('\n[!] For exception details, see above.')
-		self.bus.close()
+		self._close_bus(self.log_signal)
 
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
@@ -321,36 +310,21 @@ class Ui(QtWidgets.QMainWindow):
 
 
 
-	def is_slcan_device(self, device) -> bool:
-		# Look up USB IDs using the COM port name.
-		vid, pid = self.usb_ids_by_port.get(
-			device.port, (None, None)
-		)
-
-		return (vid, pid) in SUPPORTED_SLCAN_DEVICES
-
-
 	def populate_interfaces(self, devices):
 		self.interfacesBox.clear()
-
-		# Build a COM port -> (VID, PID) lookup using PySerial.
-		self.usb_ids_by_port = {
-			port.device: (port.vid, port.pid)
-			for port in list_ports.comports()
-		}
 
 		if len(devices) == 0:
 			self.interfacesBox.addItem('[!] No interfaces found. Connect an interface and restart GKFlasher.')
 			return
 
-		for device in devices:
-			# Skip SLCAN COMM Port devices; can_hardware.py discovers them.
-			if self.is_slcan_device(device):
-				continue
-
-			self.interfacesBox.addItem(
-				device.description(), device.port
-			)
+		# one entry per bus a device supports - not every ECU speaks CAN, so on a device
+		# supporting both the user picks which one to use
+		for bus_type in (Bus.KLINE, Bus.CANBUS):
+			for device in devices:
+				if bus_type in device.buses:
+					self.interfacesBox.addItem(
+						'{} ({})'.format(device.description(), BUS_NAMES[bus_type]), (device, bus_type)
+					)
 
 		self.update_baudrate_state()
 
@@ -374,32 +348,20 @@ class Ui(QtWidgets.QMainWindow):
 			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
 
 	def update_baudrate_state(self):
-		interface_name = self.interfacesBox.currentData()
+		selected = self.interfacesBox.currentData()
 
-		is_can = self.is_can_interface(interface_name)
+		is_can = bool(selected) and selected[1] == Bus.CANBUS
 
 		self.baudratesBox.setEnabled(not is_can)
 
 		if is_can:
 			self.baudratesBox.setCurrentIndex(0)	
 
-	def get_interface_url (self):
-		url = self.interfacesBox.currentData()
-		if not url:
+	def get_selected_interface (self) -> tuple[DeviceABC, Bus]:
+		selected = self.interfacesBox.currentData()
+		if not selected:
 			raise IndexError
-		return url
-
-	def is_can_interface(self, interface_name: str) -> bool:
-		interface_name = str(interface_name).upper()
-		can_prefixes = (
-			"PCAN:",
-			"SLCAN:",
-			"VECTOR:",
-			"GS_USB:",
-			"CAN",
-			"VCAN",
-		)
-		return interface_name.startswith(can_prefixes)
+		return selected
 
 	# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
 	def get_desired_baudrate (self) -> DesiredBaudrate:
@@ -439,32 +401,39 @@ class Ui(QtWidgets.QMainWindow):
 			self.progressBar.setValue(self.validation_progress)
 
 	def _close_bus (self, log_callback) -> None:
-		if hasattr(self, 'bus'):
+		# the device too, it closes the channel opened in _initialize_ecu()
+		for closeable in (getattr(self, 'bus', None), getattr(self, 'device', None)):
+			if closeable is None:
+				continue
 			try:
-				self.bus.close()
-			except HardwareException as e:
+				closeable.close()
+			except GkbusException as e:
 				log_callback.emit('[!] Failed to close the port. This shouldn\'t affect operation. Please report to OpenGK: {}'.format(str(e)))
 
 	def _initialize_ecu (self, log_callback) -> ECU:
 		self._close_bus(log_callback)
 
 		try:
-			log_callback.emit('[*] Initializing interface ' + self.get_interface_url())
+			device, bus_type = self.get_selected_interface()
 		except IndexError:
 			log_callback.emit('[*] Interface not found!')
 			return False
 
+		log_callback.emit('[*] Initializing interface {} ({})'.format(device.description(), BUS_NAMES[bus_type]))
+
 		config = yaml.safe_load(open(os.path.dirname(os.path.abspath(__file__)) + '/gkflasher.yml'))
-		del config['kline']['interface']
 
-		interface = self.get_interface_url()
-
-		if self.is_can_interface(interface):
-			hardware = CanHardware(interface, bitrate=config['canbus']['bitrate'])
-			transport = Kwp2000OverCanTransport(hardware, tx_id=config['canbus']['tx_id'], rx_id=config['canbus']['rx_id'])	
+		self.device = device
+		if bus_type == Bus.CANBUS:
+			channel = device.canbus(config['canbus']['bitrate'])
+			transport = Kwp2000OverCanTransport(channel, tx_id=config['canbus']['tx_id'], rx_id=config['canbus']['rx_id'])
 		else:
-			hardware = KLineHardware(interface)
-			transport = Kwp2000OverKLineTransport(hardware, tx_id=config['kline']['tx_id'], rx_id=config['kline']['rx_id'])	
+			channel = device.kline()
+			transport = Kwp2000OverKLineTransport(channel, tx_id=config['kline']['tx_id'], rx_id=config['kline']['rx_id'])
+
+		# opened here rather than by the transport, so the channel outlives the KWP2000 session
+		# (RSW switches to CCP on it). Closed by _close_bus() along with the device
+		channel.open()
 
 		self.bus = kwp2000.Kwp2000Protocol(transport)
 		self.bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
@@ -478,15 +447,14 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 			try:
 				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
-				self.bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+				self.bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 			except TimeoutException:
 				# it's possible that the ecu is already running at the desired baudrate - let's check
-				self.bus.transport.hardware.socket.reset_input_buffer() # @todo: expose this in public gkbus api
-				self.bus.transport.hardware.socket.reset_output_buffer()
-				self.bus.transport.hardware.set_baudrate(desired_baudrate.baudrate)
+				self.bus.transport.channel.reset_buffers()
+				self.bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
 
-		self.bus.transport.hardware.set_timeout(12)
+		self.bus.transport.set_timeout(12)
 
 		log_callback.emit('[*] Set timing parameters to maximum')
 		try:
@@ -646,7 +614,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
 
-		ecu.bus.transport.hardware.set_timeout(300)
+		ecu.bus.transport.set_timeout(300)
 		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
 
 		# Sends a signal from the flashing worker to the GUI, telling it to start the validation progress animation.
@@ -672,7 +640,7 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Done!')
 		self.send_notification('Flashing finished', 'Turn off your ignition for 10 seconds')
 		
-		ecu.bus.transport.hardware.set_timeout(0.5)
+		ecu.bus.transport.set_timeout(0.5)
 		try:
 			ecu.bus.execute(ECUReset(ResetMode.POWER_ON_RESET))
 		except TimeoutException: 

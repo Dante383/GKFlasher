@@ -89,7 +89,7 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--desired-baudrate {baudrate identifier}` - See ecu_definitions.py
 
-`-i --interface {interface}`
+`-i --interface {interface}` - for example `/dev/ttyUSB0` or `COM3` (K-Line), `can0` (SocketCAN) or `pcan:PCAN_USBBUS1` (python-can interface:channel). If the interface isn't found, GKFlasher lists the available ones to choose from
 
 `-r --read`
 

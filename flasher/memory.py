@@ -3,7 +3,7 @@ from math import ceil
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
 from gkbus.protocol.kwp2000.enums import CompressionType, EncryptionType
-from gkbus.hardware import TimeoutException
+from gkbus.exceptions import TimeoutException
 from .ecu import ECU
 logger = logging.getLogger(__name__)
 

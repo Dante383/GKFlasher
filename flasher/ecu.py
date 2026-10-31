@@ -1,7 +1,7 @@
 import logging
 from typing import Self
 from gkbus.protocol import kwp2000
-from gkbus.hardware import TimeoutException
+from gkbus.exceptions import TimeoutException
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier, AccessLevel
 from dataclasses import dataclass
 

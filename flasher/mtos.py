@@ -1,4 +1,4 @@
-import gkbus.hardware
+from gkbus.exceptions import TimeoutException
 from gkbus.protocol import kwp2000
 
 from .ecu import ECU
@@ -55,20 +55,21 @@ def mtos_handler (ecu: ECU, payload_filename: str, mtos_key: int):
     print(bytes_written)
 
     print('[*] executing')
+    channel = ecu.bus.transport.channel
     try:
-        ecu.bus.transport.hardware.set_timeout(0)
+        ecu.bus.transport.set_timeout(0)
         ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.EXECUTE_MTOS.value))
-    except gkbus.hardware.TimeoutException:
+    except TimeoutException:
         pass # to be expected
-    ecu.bus.transport.hardware.socket.reset_input_buffer()
-    ecu.bus.transport.hardware.socket.reset_output_buffer()
-    ecu.bus.transport.hardware.socket.write(b'\x00')
+    channel.reset_buffers()
+    channel.write(b'\x00')
     print('[*] listening on serial port')
 
     try:
         while True:
-            content = ecu.bus.transport.hardware.socket.read()
-            if len(content) != 0:
-                print(content)
+            try:
+                print(channel.read(1, timeout=1))
+            except TimeoutException:
+                pass
     except KeyboardInterrupt:
         pass

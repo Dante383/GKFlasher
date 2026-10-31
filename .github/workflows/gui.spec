@@ -4,7 +4,6 @@ from PyInstaller.utils.hooks import collect_submodules
 hiddenimports = []
 hiddenimports += collect_submodules('crcmod')
 #hiddenimports += collect_submodules('pyftdi')
-hiddenimports += collect_submodules('scapy')
 hiddenimports += collect_submodules('pyserial')
 hiddenimports += collect_submodules('pyusb')
 hiddenimports += collect_submodules('plyer')
