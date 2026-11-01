@@ -73,6 +73,18 @@
                             <File Id="ApplicationFile44" Source="assets\simk43_rsw_fl2.bin" />
                         </Component>
                     </Directory>
+                    <Directory Id="GKBUSDIR" Name="gkbus">
+                        <Directory Id="GKBUSDEVICEDIR" Name="device">
+                            <Directory Id="GKBUSJ2534DIR" Name="j2534">
+                                <Directory Id="GKBUSHELPERDIR" Name="helper">
+                                    <!-- loads 32 bit J2534 DLLs (Tactrix op20pt32.dll) for 64 bit gkflasher -->
+                                    <Component Id="ApplicationFilesI" Guid="{807EFD24-71E0-4759-BDB7-E94B0BD7C863}">
+                                        <File Id="ApplicationFile55" Source="dist\gui\gkbus\device\j2534\helper\gkbus_j2534_helper32.exe" />
+                                    </Component>
+                                </Directory>
+                            </Directory>
+                        </Directory>
+                    </Directory>
                     <Directory Id="PYQT5DIR" Name="PyQt5">
                         <Component Id="ApplicationFilesD" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE6}">
                             <File Id="ApplicationFile45" Source="dist\gui\PyQt5\QtCore.pyd" />
@@ -141,6 +153,7 @@
             <ComponentRef Id="ApplicationFilesF" />
             <ComponentRef Id="ApplicationFilesG" />
             <ComponentRef Id="ApplicationFilesH" />
+            <ComponentRef Id="ApplicationFilesI" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
 
