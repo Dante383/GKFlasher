@@ -13,6 +13,7 @@ from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, 
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
+from gkbus.channel import KLineTiming
 from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU, DesiredBaudrate
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
@@ -467,6 +468,15 @@ class Ui(QtWidgets.QMainWindow):
 					*available_timing[1:]
 				)
 			)
+
+			# the ECU advertises p3min=0 but drops requests that arrive too soon after its response
+			# (measured on a SIMK43 bench: 7 ms fails, 10 ms works), so keep a margin floor. this is
+			# what actually speeds bulk reads up: the host now waits this long before each request
+			# instead of KLineTiming's safe 60 ms default. 20 ms gives ~2x margin over the measured
+			# edge and still cuts a 254-byte read at 125000 baud from ~140 ms to ~50 ms. honor the
+			# ECU's own p3min if it asks for more. no-op on adapters that time the bus themselves
+			ecu_p3min = available_timing[3]  # p2min p2max >p3min< p3max p4min
+			self.bus.transport.channel.set_timing(KLineTiming(p3_min=max(ecu_p3min, 20)))
 		except kwp2000.Kwp2000NegativeResponseException:
 			log_callback.emit('[!] Not supported on this ECU!')
 
