@@ -264,10 +264,10 @@ ECU_IDENTIFICATION_TABLE = [
 
 BAUDRATES = {
 	0x01: 10400,
-	0x02: 20000,
-	0x03: 40000,
-	0x04: 60000,
-	0x05: 120000
+	0x02: 19231,
+	0x03: 39474,
+	0x04: 57692,
+	0x05: 125000
 }
 
 class ReprogrammingStatus(WordBitfield):
