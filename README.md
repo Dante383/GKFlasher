@@ -119,7 +119,7 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--sie-to-bin {input filename}` - Convert SIE to BIN after (Chip-off) Flashing
 
-`--mtos {input filename}` - Mini Test Operating System
+`--mtos` - Mini Test Operating System - upload and execute a small routine in ECU RAM. See [docs/mtos.md](docs/mtos.md). Use with `--mtos-key`, `--mtos-mode {hello,dump,payload,loader}`, `--mtos-payload {file}`.
 
 `--rsw-boot1 {input filename}` - Flash Boot1 using RSW bootstrap
 

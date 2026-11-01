@@ -198,7 +198,8 @@ def load_arguments ():
 	parser.add_argument('--rsw-full', help='Flash full image set using RSW bootstrap')
 	parser.add_argument('--rsw-virginize', help='Virginize ECU using RSW bootstrap')
 	parser.add_argument('--mtos',  help='Mini Test Operating System', action='store_true')
-	parser.add_argument('--mtos-payload', help='BIN file to use for MTOS (full dump)')
+	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader', default='hello', choices=['hello', 'dump', 'payload', 'loader'])
+	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode) or second stage (loader mode)')
 	parser.add_argument('--mtos-key', help='Key to use for Siemens access level', type=lambda x: int(x,0))
 	args = parser.parse_args()
 
@@ -435,7 +436,13 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		rsw_handler(ecu, mode='virginize', bin_file=args.rsw_virginize)
 
 	if (args.mtos):
-		mtos_handler(ecu, args.mtos_payload, args.mtos_key)
+		mtos_address = args.address_start if args.address_start is not None else 0x000000
+		if args.address_stop is not None and args.address_start is not None:
+			mtos_length = args.address_stop - args.address_start
+		else:
+			mtos_length = 0x40
+		mtos_handler(ecu, args.mtos_key, mode=args.mtos_mode,
+			payload_filename=args.mtos_payload, address=mtos_address, length=mtos_length)
 	bus.close()
 
 def packet2hex (packet: RawPacket) -> str:

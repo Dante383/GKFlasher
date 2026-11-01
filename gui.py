@@ -24,6 +24,7 @@ from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.smartra import calculate_smartra_pin
 from flasher.rsw import rsw_handler
+from flasher.mtos import mtos_handler
 
 BUS_NAMES = {Bus.KLINE: 'K-Line', Bus.CANBUS: 'CAN bus'}
 
@@ -265,6 +266,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.rswCALBtn.clicked.connect(lambda: self.click_handler(self.rsw_flash_cal))
 		self.rswFullBtn.clicked.connect(lambda: self.click_handler(self.rsw_flash_full))
 		self.rswVirginizeBtn.clicked.connect(lambda: self.click_handler(self.rsw_virginize))
+
+		self.mtosFileBtn.clicked.connect(self.handler_select_mtos_file)
+		self.mtosRunBtn.clicked.connect(lambda: self.click_handler(self.run_mtos))
 
 	def click_handler (self, callback):
 		worker = Worker(callback)
@@ -1601,6 +1605,74 @@ class Ui(QtWidgets.QMainWindow):
 
 	def rsw_virginize(self, progress_callback=None, log_callback=None):
 		self.run_rsw('virginize', log_callback=log_callback, progress_callback=progress_callback)
+
+	# ==========================================================
+	# MTOS
+	# ==========================================================
+
+	def handler_select_mtos_file (self):
+		filename, _ = QFileDialog.getOpenFileName(
+			self,
+			"Select MTOS payload BIN",
+			"",
+			"BIN Files (*.bin);;All Files (*)"
+		)
+
+		if filename:
+			self.mtosFileInput.setText(filename)
+
+	def run_mtos (self, progress_callback=None, log_callback=None):
+
+		log_callback = self.get_rsw_logger(log_callback)
+
+		def parse_hex (text, default):
+			text = text.strip()
+			if not text:
+				return default
+			try:
+				return int(text, 0)
+			except ValueError:
+				log_callback.emit('[!] Invalid number {!r}, falling back to 0x{:X}'.format(text, default))
+				return default
+
+		mode = self.mtosModeBox.currentText()
+
+		key_text = self.mtosKeyInput.text().strip()
+		if not key_text:
+			log_callback.emit('[!] MTOS key is required (e.g. 0x2d381c78)')
+			return
+
+		try:
+			mtos_key = int(key_text, 0)
+		except ValueError:
+			log_callback.emit('[!] Invalid MTOS key: {}'.format(key_text))
+			return
+
+		filename = self.mtosFileInput.text().strip()
+		if mode in ('payload', 'loader') and not filename:
+			log_callback.emit('[!] {} mode requires a payload file'.format(mode))
+			return
+
+		address = parse_hex(self.mtosAddressInput.text(), 0x000000)
+		length = parse_hex(self.mtosLengthInput.text(), 0x40)
+
+		ecu = self.initialize_ecu(log_callback)
+
+		if ecu == False:
+			self._close_bus(log_callback)
+			return
+
+		try:
+			mtos_handler(
+				ecu, mtos_key, mode=mode, payload_filename=filename or None,
+				address=address, length=length,
+				log_callback=log_callback, progress_callback=progress_callback
+			)
+		except Exception as e:
+			log_callback.emit('[!] MTOS failed: {}'.format(str(e)))
+		finally:
+			# the 0xFA routine tears the diagnostic session down, so just drop the bus
+			self._close_bus(log_callback)
 
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'

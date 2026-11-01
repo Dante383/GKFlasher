@@ -683,14 +683,92 @@
     <attribute name="title">
      <string>MTOS</string>
     </attribute>
+    <widget class="QLabel" name="mtosModeLabel">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>13</y>
+       <width>40</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="text">
+      <string>Mode:</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="mtosModeBox">
+     <property name="geometry">
+      <rect>
+       <x>55</x>
+       <y>10</y>
+       <width>160</width>
+       <height>23</height>
+      </rect>
+     </property>
+     <item>
+      <property name="text">
+       <string>hello</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>dump</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>payload</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>loader</string>
+      </property>
+     </item>
+    </widget>
+    <widget class="QLabel" name="mtosKeyLabel">
+     <property name="geometry">
+      <rect>
+       <x>235</x>
+       <y>13</y>
+       <width>30</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="text">
+      <string>Key:</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="mtosKeyInput">
+     <property name="geometry">
+      <rect>
+       <x>270</x>
+       <y>10</y>
+       <width>220</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>0x2d381c78</string>
+     </property>
+    </widget>
     <widget class="QPushButton" name="mtosFileBtn">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>10</y>
+       <y>42</y>
        <width>80</width>
        <height>23</height>
       </rect>
+     </property>
+     <property name="toolTip">
+      <string>Second-stage payload for loader mode, or raw body for payload mode</string>
      </property>
      <property name="text">
       <string>Select file..</string>
@@ -703,36 +781,84 @@
      <property name="geometry">
       <rect>
        <x>100</x>
-       <y>10</y>
+       <y>42</y>
        <width>661</width>
        <height>22</height>
       </rect>
      </property>
+     <property name="placeholderText">
+      <string>Payload / second-stage BIN (payload and loader modes)</string>
+     </property>
     </widget>
-    <widget class="QPushButton" name="mtosUploadBtn">
+    <widget class="QLabel" name="mtosAddressLabel">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>40</y>
+       <y>78</y>
+       <width>90</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="text">
+      <string>Dump address:</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="mtosAddressInput">
+     <property name="geometry">
+      <rect>
+       <x>105</x>
+       <y>75</y>
+       <width>120</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>0x000000</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="mtosLengthLabel">
+     <property name="geometry">
+      <rect>
+       <x>245</x>
+       <y>78</y>
+       <width>50</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="text">
+      <string>Length:</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="mtosLengthInput">
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>75</y>
+       <width>120</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="placeholderText">
+      <string>0x40</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="mtosRunBtn">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>110</y>
        <width>231</width>
        <height>23</height>
       </rect>
      </property>
      <property name="text">
-      <string>Upload MTOS</string>
-     </property>
-    </widget>
-    <widget class="QPushButton" name="mtosExecBtn">
-     <property name="geometry">
-      <rect>
-       <x>10</x>
-       <y>70</y>
-       <width>231</width>
-       <height>23</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>Execute MTOS</string>
+      <string>Run MTOS</string>
      </property>
     </widget>
    </widget>
