@@ -2,7 +2,7 @@
 
 CLI flashing tool for SIMK41/SIMK43/SIM2K based vehicles. This project is a result of research gathered by black-box reverse engineering.
 
-It can read & write ecu calibration data / program code, correct EEPROM checksums, clear adaptive values and program the immobilizer. It also provides BSL support for your ECU.
+It can read & write ecu calibration data / program code, correct EEPROM checksums, clear adaptive values and program the immobilizer. It also provides BSL support for your ECU ([docs/bsl.md](docs/bsl.md)).
 
 This project is supported by [OpenGK.org](https://opengk.org/)
 
@@ -119,7 +119,9 @@ This behaviour is followed by default by GKFlasher's --read command.
 
 `--sie-to-bin {input filename}` - Convert SIE to BIN after (Chip-off) Flashing
 
-`--mtos` - Mini Test Operating System - upload and execute a small routine in ECU RAM. See [docs/mtos.md](docs/mtos.md). Use with `--mtos-key`, `--mtos-mode {hello,dump,payload,loader}`, `--mtos-payload {file}`.
+`--bsl` - Bootstrap loader, with the ECU in boot mode: read/write the whole external flash (boot sectors included) or read the internal ROM, on the K-line interface. See [docs/bsl.md](docs/bsl.md). Use with `--bsl-mode {hwinfo,read,readint,write}`, `--bsl-image {file}`, `--bsl-baudrate`, `--bsl-driver {auto,i4,v6}`.
+
+`--mtos` - Mini Test Operating System - upload and execute a small routine in ECU RAM. See [docs/mtos.md](docs/mtos.md). Use with `--mtos-key`, `--mtos-mode {hello,dump,payload,loader,probe,read,fullflash}`, `--mtos-payload {file}`.
 
 `--rsw-boot1 {input filename}` - Flash Boot1 using RSW bootstrap
 

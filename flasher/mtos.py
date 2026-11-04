@@ -5,6 +5,7 @@ from gkbus.channel import KLineTiming
 from gkbus.protocol import kwp2000
 
 from . import mtos_kernel
+from .kernel import KERNEL_ASSET, KERNEL_STARTED, Kernel, KernelError, KernelLink, enter, identification, load_asset, read_partial
 from .ecu import ECU, enable_security_access
 from .mtos_asm import (
 	build_blob,
@@ -18,7 +19,6 @@ from .mtos_asm import (
 	payload_loader,
 	STAGE2_ADDRESS,
 )
-from .mtos_kernel import KernelError, read_partial
 from ecu_definitions import AccessLevel, Routine
 
 #: modes that run the BSL kernel - see mtos_kernel
@@ -192,14 +192,14 @@ def launch_kernel (ecu: ECU, signature: bytes, log_callback=None):
 
 	The firmware never comes back from this - the session has to end with the
 	kernel's software reset (or a power cycle)'''
-	stage2 = payload_bsl_kernel_shim(mtos_kernel.load_asset(mtos_kernel.KERNEL_ASSET))
+	stage2 = payload_bsl_kernel_shim(load_asset(KERNEL_ASSET))
 	blob = build_blob(payload_loader(STAGE2_ADDRESS), signature)
 	upload_blob(ecu, blob, log_callback=log_callback)
 
 	log('[*] Starting the loader, sending it the BSL kernel ({} bytes)'.format(len(stage2)), log_callback)
 	channel = execute(ecu, raw=True)
-	mtos_kernel.enter(channel, log_callback)
-	link = mtos_kernel.KernelLink(channel)
+	enter(channel, log_callback)
+	link = KernelLink(channel)
 	# the loader sends nothing: whatever is here is KWP left over, and would break the echo check
 	stale = link.drain(quiet=0.1, limit=1.0)
 	if stale:
@@ -208,8 +208,8 @@ def launch_kernel (ecu: ECU, signature: bytes, log_callback=None):
 
 	# 0x03 once it runs. Anything in front of it is what's left of the KWP exchange
 	started = link.read(16, 0.3)
-	kernel = mtos_kernel.Kernel(link, log_callback=log_callback)
-	if started[-1:] == bytes([mtos_kernel.KERNEL_STARTED]) and kernel.test_comm():
+	kernel = Kernel(link, log_callback=log_callback)
+	if started[-1:] == bytes([KERNEL_STARTED]) and kernel.test_comm():
 		log('[+] BSL kernel running', log_callback)
 		return channel
 	log('[!] Kernel start not seen ({}), looking for it'.format(started.hex() or 'nothing'), log_callback)
@@ -262,7 +262,7 @@ def attach_session (bus, mode: str, image_filename: str | None = None, output_fi
 	try:
 		image = mtos_kernel.load_image(image_filename, log_callback) if mode == 'fullflash' else None
 		channel.set_baudrate(baudrate)
-		mtos_kernel.enter(channel, log_callback)
+		enter(channel, log_callback)
 		mtos_kernel.attach(channel, log_callback=log_callback)
 	except (KernelError, OSError) as e:
 		log('[!] {}'.format(e), log_callback)
@@ -315,7 +315,7 @@ def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
 		except (KernelError, OSError) as e:
 			log('[!] {}'.format(e), log_callback)
 			return
-		log('[*] Image {}: {}'.format(payload_filename, mtos_kernel.identification(image)), log_callback)
+		log('[*] Image {}: {}'.format(payload_filename, identification(image)), log_callback)
 
 	ecu.bus._stop_keepalive()
 	siemens_unlock(ecu, mtos_key, log_callback=log_callback)

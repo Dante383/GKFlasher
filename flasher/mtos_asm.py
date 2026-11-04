@@ -42,6 +42,8 @@ MTOS execution contract (reverse engineered from ca663056, validator @0x003460):
 
 import struct
 
+from .kernel import DRIVER_ADDRESS, DRIVER_ENTRY
+
 MTOS_BASE = 0xC000  # where the blob is uploaded
 MTOS_ENTRY = 0xC014  # firmware entry point (calls 0xC014)
 MTOS_HEADER_LEN = MTOS_ENTRY - MTOS_BASE  # 0x14
@@ -74,10 +76,8 @@ KERNEL_CP = 0xF200
 KERNEL_STACK_LIMIT = 0xF300
 KERNEL_STACK_TOP = 0xF600
 
-# The stock SIMK4x I4 flash driver (assets/simk4x_driver_i4_a29fx00bx.bin) is
-# linked to run at 0xF600, entry point 0xF640
-DRIVER_ADDRESS = 0xF600
-DRIVER_ENTRY = 0xF640
+# in the stock SIMK4x I4 flash driver (assets/simk4x_driver_i4_a29fx00bx.bin), at
+# DRIVER_ADDRESS (kernel.py)
 _DRIVER_ERASE_POLL = 0xF706   # exts r2,#1 ; mov r5,[r1] - the erase completion poll
 _DRIVER_PAD = 0xF630          # 16 bytes of 0xFF padding in front of the entry point
 

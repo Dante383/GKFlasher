@@ -1,12 +1,13 @@
 import os, sys
 from datetime import datetime
+from functools import partial
 
 import plyer
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot, QTimer
 from plyer import notification
-import gkbus, yaml, traceback, bsl, logging
+import gkbus, yaml, traceback, logging
 from gkbus.device import Bus, DeviceABC, discover
 from gkbus.exceptions import GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
@@ -20,10 +21,12 @@ from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, AccessLevel
 from gkflasher import strip
 from _version import __version__
-from flasher.lineswap import generate_sie, generate_bin
+from flasher.lineswap import generate_sie, generate_bin, set_gui_log_handler as set_lineswap_log_handler
 from flasher.smartra import calculate_smartra_pin
 from flasher.rsw import rsw_handler
 from flasher.mtos import mtos_handler
+from flasher import bsl
+from flasher.kernel import KERNEL_TIMING
 
 BUS_NAMES = {Bus.KLINE: 'K-Line', Bus.CANBUS: 'CAN bus'}
 
@@ -71,7 +74,7 @@ class Progress(object):
 
 		# ==========================================
 		# DIRECT PERCENTAGE MODE
-		# Used by rsw.py and bsl.py
+		# Used by rsw.py
 		# ==========================================
 
 		if self.max_value == 100:
@@ -105,7 +108,6 @@ class WorkerSignals(QObject):
     result = pyqtSignal(object)
     progress = pyqtSignal(tuple)
     log = pyqtSignal(str)
-    log2 = pyqtSignal(str)
 
 class Worker(QRunnable):
     def __init__(self, fn, *args, **kwargs):
@@ -120,9 +122,6 @@ class Worker(QRunnable):
         # Add the callback to our kwargs
         self.kwargs['progress_callback'] = self.signals.progress
         self.kwargs['log_callback'] = self.signals.log
-        # Add log_callback2 only if the function supports it (bsl only)
-        if 'log_callback2' in fn.__code__.co_varnames:
-            self.kwargs['log_callback2'] = self.signals.log2
 
     @pyqtSlot()
     def run(self):
@@ -172,8 +171,8 @@ class Ui(QtWidgets.QMainWindow):
 		self.update_baudrate_state()
 		self.log_signal.connect(self.log)  # Connect the signal to the `log` method
 
-		# Configure bsl logging for GUI
-		bsl.set_gui_log_handler(self.log) # Pass the `self.log` method from the GUI class
+		# bin <-> sie conversion messages
+		set_lineswap_log_handler(self.log_signal.emit)
 
 		# Connect the signals
 		self.request_pin_signal1.connect(self.request_pin_from_user1)
@@ -255,10 +254,10 @@ class Ui(QtWidgets.QMainWindow):
 		self.writeVinBtn.clicked.connect(lambda: self.click_handler(self.write_vin))
 		self.vinToPinBtn.clicked.connect(lambda: self.click_handler(self.vin_to_pin))
 
-		self.bslHwInfoBtn.clicked.connect(lambda: self.click_handler(self.bslHwInfo))
-		self.bslReadIntRomBtn.clicked.connect(lambda: self.click_handler(self.bslReadIntRom))
-		self.bslReadExtFlashBtn.clicked.connect(lambda: self.click_handler(self.bslReadExtFlash))
-		self.bslWriteExtFlashBtn.clicked.connect(lambda: self.click_handler(self.bslWriteExtFlash))
+		self.bslHwInfoBtn.clicked.connect(lambda: self.click_handler(partial(self.run_bsl, 'hwinfo')))
+		self.bslReadIntRomBtn.clicked.connect(lambda: self.click_handler(partial(self.run_bsl, 'readint')))
+		self.bslReadExtFlashBtn.clicked.connect(lambda: self.click_handler(partial(self.run_bsl, 'read')))
+		self.bslWriteExtFlashBtn.clicked.connect(self.handler_bsl_write)
 
 		self.rswBSWBtn.clicked.connect(lambda: self.click_handler(self.rsw_flash_bsw))
 		self.rswASWBtn.clicked.connect(lambda: self.click_handler(self.rsw_flash_asw))
@@ -272,7 +271,6 @@ class Ui(QtWidgets.QMainWindow):
 	def click_handler (self, callback):
 		worker = Worker(callback)
 		worker.signals.log.connect(self.log)
-		worker.signals.log2.connect(self.log2)
 		worker.signals.progress.connect(self.progress_callback)
 		worker.signals.error.connect(self.handle_exception)
 		self.thread_manager.start(worker)
@@ -303,9 +301,6 @@ class Ui(QtWidgets.QMainWindow):
 		self.logOutput.append(text)
 		self.logOutput.setReadOnly(True)
 
-	def log2 (self, text):
-		self.bslOutput.setPlainText(text)
-		self.bslOutput.setReadOnly(True)
 
 
 
@@ -1403,105 +1398,72 @@ class Ui(QtWidgets.QMainWindow):
 			except ValueError:
 				print('[!] Something went wrong. Try again')
 
-	def get_or_generate_file_path(self) -> str:
-		# Retrieve the file path from the QLineEdit
-		user_file_path = self.bslFileInput.text().strip()
+	def handler_bsl_write (self):
+		if not self.bslFileInput.text().strip():
+			self.log('[!] Select the whole flash image to write')
+			return
+		confirmed = QMessageBox.warning(
+			self,
+			'BSL write',
+			'This rewrites the whole external flash, the boot sectors included.\n\n'
+			'The flash is read and saved first (GKFlasher Files folder). Then every sector that differs from the image '
+			'is erased and rewritten, and the whole flash verified.\n\n'
+			'If it fails, run the write again: BSL doesn\'t depend on what\'s in the flash. Continue?',
+			QMessageBox.Yes | QMessageBox.No,
+			QMessageBox.No
+		) == QMessageBox.Yes
+		if confirmed:
+			self.click_handler(partial(self.run_bsl, 'write', confirmed=True))
 
-		if not user_file_path:
-			# Placeholder parameters for file naming
-			calibration = "calibration"  # Replace with actual logic
-			description = "description"  # Replace with actual logic
-			hw_rev_c = "revC"            # Replace with actual logic
-			hw_rev_d = "revD"            # Replace with actual logic
-
-			# Generate the default file name using parameters and current date/time
-			output_filename = "{}_{}_{}_{}_{}.bin".format(
-				description, calibration, hw_rev_c, hw_rev_d,
-				datetime.now().strftime('%Y-%m-%d_%H%M')
-			)
-
-			# Construct the full file path based on the platform
-			if os.name == 'nt':
-				user_file_path = os.path.join(home, output_filename)
-			else:  # For non-Windows platforms
-				user_file_path = os.path.join(home, output_filename)
-
-			# Update the QLineEdit for user visibility, looks janky in the gui, missing chars prob due to signalling.
-			#self.bslFileInput.setText(user_file_path)
-
-		return user_file_path
-
-	def bslHwInfo(self, progress_callback=None, log_callback=None, log_callback2=None):
-		try:		
-			# BSL arguments
-			args = [
-				"57600",      # Baud rate
-				"-hwinfo"
-			]
-			# Pass the Progress object
-			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
-
-		except Exception as e:
-			log_callback.emit(f"An error occurred: {str(e)}")
-
-	def bslReadIntRom(self, progress_callback=None, log_callback=None, log_callback2=None):
+	def run_bsl (self, mode, progress_callback=None, log_callback=None, confirmed=False):
 		try:
-			# Retrieve the file path from the QLineEdit
-			user_file_path = self.get_or_generate_file_path()
-			
-			# BSL arguments
-			args = [
-				"57600",      # Baud rate
-				"-readint",   # Command
-				"0x8000",     # Size in hex
-				#user_file_path  # Use the dynamically retrieved/generated file path
-			]
+			device, bus_type = self.get_selected_interface()
+		except IndexError:
+			log_callback.emit('[!] Interface not found!')
+			return
+		if bus_type != Bus.KLINE:
+			log_callback.emit('[!] BSL runs on the K-line: select a K-line interface')
+			return
 
-			#log_callback.emit(f"Calling BSL with arguments: {args}")
-			
-			# Pass the Progress object
-			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
+		filename = self.bslFileInput.text().strip() or None
+		if mode == 'write' and not (filename and confirmed):
+			return
+		stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+		if mode == 'write':
+			output_filename = os.path.join(home, 'bsl_backup_{}.bin'.format(stamp))
+		elif mode == 'read':
+			output_filename = filename or os.path.join(home, 'bsl_read_{}.bin'.format(stamp))
+		elif mode == 'readint':
+			output_filename = filename or os.path.join(home, 'bsl_irom_{}.bin'.format(stamp))
+		else:
+			output_filename = None
 
-		except Exception as e:
-			log_callback.emit(f"An error occurred: {str(e)}")
+		def confirm (message):
+			log_callback.emit('[*] {} Confirmed before starting'.format(message))
+			return True
 
-	def bslReadExtFlash(self, progress_callback=None, log_callback=None, log_callback2=None):
+		driver = self.bslDriverBox.currentText().lower()
+		baudrate = int(self.bslBaudrateBox.currentText())
+
+		self._close_bus(log_callback)
+		self.device = device
+		log_callback.emit('[*] Interface {} ({})'.format(device.description(), BUS_NAMES[bus_type]))
+		channel = None
 		try:
-			# Retrieve the file path from the QLineEdit
-			user_file_path = self.get_or_generate_file_path()
-			
-			# BSL arguments
-			args = [
-				"57600",     # Baud rate
-				"-readextflash",  # Command
-				"0x80000",    # Size in hex
-				#user_file_path  # Use the dynamically retrieved/generated file path
-			]
-			
-			# Pass the Progress object
-			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
-
+			channel = device.kline(baudrate=baudrate, timing=KERNEL_TIMING)
+			channel.open()
+			bsl.bsl_handler(channel, mode, image_filename=filename if mode == 'write' else None,
+				output_filename=output_filename, driver=driver, confirm=confirm,
+				log_callback=log_callback, progress_callback=progress_callback)
 		except Exception as e:
-			log_callback.emit(f"An error occurred: {str(e)}")
-
-	def bslWriteExtFlash(self, progress_callback=None, log_callback=None, log_callback2=None):
-		try:
-			# Retrieve the file path from the QLineEdit
-			user_file_path = self.get_or_generate_file_path()
-			
-			# BSL arguments
-			args = [
-				"57600",     # Baud rate
-				"-writeextflash",  # Command
-				user_file_path  # Use the dynamically retrieved/generated file path
-			]
-			
-			# Pass the Progress object
-			bsl.execute_bsl(args, progress_callback=Progress(progress_callback, 100),log_callback2=log_callback2)
-
-		except Exception as e:
-			log_callback.emit(f"An error occurred: {str(e)}")
-
+			log_callback.emit('[!] BSL failed: {}'.format(str(e)))
+		finally:
+			if channel is not None:
+				try:
+					channel.close()
+				except GkbusException:
+					pass
+			self._close_bus(log_callback)
 
 	def bin_to_sie_conversion (self):
 		filename = self.checksumFileInput.text()

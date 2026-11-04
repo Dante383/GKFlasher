@@ -319,7 +319,7 @@ flash twice (the backup and the verify).
 
 1. The usual MTOS sequence runs the built-in [loader](#the-loader-protocol-second-stage).
    Its second stage is a short prologue plus the **stock SIMK4x BSL kernel**
-   (`assets/simk4x_kernel.bin`, the same one `bsl.py` uses), copied to `0xE000` in XRAM.
+   (`assets/simk4x_kernel.bin`, the same one [BSL](bsl.md) uses), copied to `0xE000` in XRAM.
    The prologue moves the stack and context pointer out of the firmware's RAM, then
    jumps into the kernel. The firmware never gets the CPU back.
 2. The kernel greets with `0x03` and speaks the BSL protocol over the K-line, at the
@@ -345,9 +345,10 @@ The kernel doesn't service it while it sends, so every reply has to fit well ins
 the watchdog period. That's why reads are split into blocks: `0x80` bytes at 10400 baud,
 more at higher rates.
 
-The kernel protocol is `bsl.py`'s, but GKFlasher checks every byte the kernel sends
-back before it sends the next one. With the firmware itself being rewritten, a
-parameter byte the kernel takes for a command can't just be logged and ignored.
+The kernel code (`flasher/kernel.py`) is shared with BSL. GKFlasher checks every byte
+the kernel sends back before it sends the next one. With the firmware itself being
+rewritten, a parameter byte the kernel takes for a command can't just be logged and
+ignored.
 
 ### Safety
 
@@ -384,11 +385,11 @@ parameter byte the kernel takes for a command can't just be logged and ignored.
 If a reply doesn't arrive, or doesn't match what was expected, GKFlasher resyncs:
 
 1. It waits for the line to go quiet.
-2. It sends `F0 FA 00`, then zeros one byte at a time, until the kernel answers.
+2. It sends `F0 F9 00`, then zeros one byte at a time, until the kernel answers.
 3. It confirms the kernel is back in its command loop.
 
 A kernel left waiting for the parameters of a register-call command takes those first
-bytes as the call address, `0x00FAF0`. GKFlasher keeps a `rets` there (the *trap*).
+bytes as the call address, `0x00F9F0`. GKFlasher keeps a `rets` there (the *trap*).
 This means a call cut off between its command byte and its address, for example when
 the host dies, just returns. The trap is armed before the driver is used and re-armed
 after every resync. Leftover programming or erasing from such a cut-off command would
@@ -400,7 +401,7 @@ address. That's unlikely, but if it happens, the ECU may need BSL.
 
 ### Recovery
 
-If the ECU no longer boots, use BSL (`bsl.py`) to write back the backup
+If the ECU no longer boots, use [BSL](bsl.md) (`--bsl --bsl-mode write`) to write back the backup
 `fullflash` saved, or any good full image.
 
 ### Verified on hardware

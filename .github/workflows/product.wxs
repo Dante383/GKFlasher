@@ -43,7 +43,6 @@
                         <File Id="ApplicationFile21" Source="dist\gui\python312.dll" />
                         <File Id="ApplicationFile22" Source="dist\gui\select.pyd" />
                         <File Id="ApplicationFile23" Source="dist\gui\unicodedata.pyd" />
-                        <File Id="ApplicationFile24" Source="bsl.py" />
                         <File Id="ApplicationFile25" Source="dist\gui\_sqlite3.pyd" />
                         <File Id="ApplicationFile26" Source="dist\gui\sqlite3.dll" />
                         <File Id="ApplicationFile27" Source="dist\gui\libusb-1.0.dll" />
@@ -61,6 +60,10 @@
                             <File Id="ApplicationFile36" Source="flasher\smartra.py" />
                             <File Id="ApplicationFile37" Source="flasher\mtos.py" />
                             <File Id="ApplicationFile38" Source="flasher\rsw.py" />
+                            <File Id="ApplicationFile56" Source="flasher\mtos_asm.py" />
+                            <File Id="ApplicationFile57" Source="flasher\mtos_kernel.py" />
+                            <File Id="ApplicationFile58" Source="flasher\kernel.py" />
+                            <File Id="ApplicationFile59" Source="flasher\bsl.py" />
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">

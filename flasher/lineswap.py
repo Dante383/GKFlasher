@@ -2,7 +2,7 @@ import os
 import logging
 
 # Logger configuration
-logger = logging.getLogger("bsl")
+logger = logging.getLogger("lineswap")
 logger.setLevel(logging.DEBUG)
 
 class GuiLogHandler(logging.Handler, logging.Formatter):

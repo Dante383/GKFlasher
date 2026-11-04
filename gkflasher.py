@@ -14,6 +14,8 @@ from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.rsw import rsw_handler
 from flasher.mtos import mtos_handler, attach_session, KERNEL_MODES
+from flasher import bsl
+from flasher.kernel import KERNEL_TIMING
 from _version import __version__
 
 def strip (string):
@@ -204,6 +206,14 @@ def load_arguments ():
 	parser.add_argument('--mtos-key', help='Key to use for Siemens access level', type=lambda x: int(x,0))
 	parser.add_argument('--mtos-attach', help='Pick up the BSL kernel a failed probe/read/fullflash left running (ECU still powered). '
 		'Use the same --desired-baudrate as that session', action='store_true')
+	parser.add_argument('--bsl', help='Bootstrap loader: ECU in boot mode, on the K-line interface', action='store_true')
+	parser.add_argument('--bsl-mode', help='BSL mode: hwinfo (CPU and flash chip), read (external flash), readint (internal ROM), '
+		'write (whole external flash incl. boot sectors, changed sectors only)', default='hwinfo', choices=bsl.MODES)
+	parser.add_argument('--bsl-image', help='Whole flash image to write (write mode)')
+	parser.add_argument('--bsl-baudrate', help='Baudrate (default: {})'.format(bsl.DEFAULT_BAUDRATE), type=int, default=bsl.DEFAULT_BAUDRATE)
+	parser.add_argument('--bsl-driver', help='Flash driver: i4 (SIMK43 2.0) or v6. Default: detect it', default='auto', choices=bsl.DRIVER_CHOICES)
+	parser.add_argument('--bsl-rom-size', help='Internal ROM size to read (readint mode, default: 0x{:X})'.format(bsl.INTERNAL_ROM_SIZE),
+		type=lambda x: int(x,0), default=bsl.INTERNAL_ROM_SIZE)
 	args = parser.parse_args()
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
@@ -453,6 +463,36 @@ def mtos_attach (bus, args) -> None:
 	attach_session(bus, args.mtos_mode, image_filename=args.mtos_payload, output_filename=args.output,
 		baudrate=baudrate, attach_hint=mtos_attach_hint(args))
 
+def bsl_main (args) -> int:
+	'''
+	BSL over the bare K-line, no KWP2000 session
+
+	:return: exit code
+	'''
+	interface = args.interface or GKFlasher_config['kline']['interface']
+	device = select_device(interface, Bus.KLINE)
+	print('[*] Interface: {}'.format(device.description()))
+	channel = None
+	try:
+		channel = device.kline(baudrate=args.bsl_baudrate, timing=KERNEL_TIMING)
+		channel.open()
+		finished = bsl.bsl_handler(channel, args.bsl_mode, image_filename=args.bsl_image, output_filename=args.output,
+			driver=args.bsl_driver, rom_size=args.bsl_rom_size)
+		return 0 if finished else 1
+	except GkbusException as e:
+		print('[!] K-line interface: {}'.format(e))
+		return 1
+	except KeyboardInterrupt:
+		print('\n[!] Interrupted')
+		return 1
+	finally:
+		try:
+			if channel is not None:
+				channel.close()
+			device.close()
+		except GkbusException as e:
+			print('[!] Couldn\'t close the interface: {}'.format(e))
+
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
 	data = ' '.join([hex(x)[2:].zfill(2) for x in packet.data])
@@ -474,6 +514,11 @@ if __name__ == '__main__':
 	if (args.sie_to_bin):
 		generate_bin(filename=args.sie_to_bin)
 		sys.exit()
+
+	if args.bsl:
+		code = bsl_main(args)
+		sys.stdout.flush()
+		os._exit(code)
 	
 	print('[*] Selected protocol: {}. Initializing..'.format(GKFlasher_config['protocol']))
 	try:
