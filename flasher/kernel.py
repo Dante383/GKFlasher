@@ -702,25 +702,35 @@ def read_flash (flash: Flash, output_filename: str) -> str:
 	return save(output_filename, data, flash.kernel.log_callback)
 
 
-def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, order: tuple | None = None,
-                 boot_sectors: tuple = ()) -> bool:
+def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, order=None,
+                 boot_sectors=()) -> bool:
 	'''
 	Backup, then every sector that differs from `image` in `order` (by default the one
 	with the reset vector last), then a full verify. False if nothing needed writing or
 	the user said no.
 
-	:param boot_sectors: sectors the ECU can't start without, the user is warned about them
+	:param order: sector numbers in write order, or a function of (current flash, image)
+		that returns them
+	:param boot_sectors: sectors the ECU can't start without, the user is warned about
+		them. Or a function of (current flash, image) that returns them
 	'''
 	flash.check_writable()
 	sectors = flash.chip.sectors
 	if len(image) != flash.chip.size:
 		raise KernelError('The image is {} bytes, the {} is {}'.format(len(image), flash.chip.name, flash.chip.size))
-	if order is None:
-		order = tuple(number for number, _, _ in sectors[1:]) + (0,)
 
 	flash.log('[*] Reading the whole flash first')
 	current = flash.read('Backup')
 	save(backup_filename, current, flash.kernel.log_callback)
+
+	if order is None:
+		order = tuple(number for number, _, _ in sectors[1:]) + (0,)
+	elif callable(order):
+		order = tuple(order(current, image))
+	if callable(boot_sectors):
+		boot_sectors = boot_sectors(current, image)
+	if sorted(order) != [number for number, _, _ in sectors]:
+		raise KernelError('The write order {} isn\'t every sector once'.format(order))
 
 	changed = flash.changed_sectors(current, image)
 	flash.log('[*] ECU: {}, image: {}'.format(identification(current), identification(image)))

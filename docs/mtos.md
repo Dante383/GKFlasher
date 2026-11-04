@@ -405,10 +405,14 @@ ignored.
   anything. Keep that file: it's what you'd recover with.
 - **Only what differs is written.** If the flash already matches the image, nothing is
   written.
-- **Boot sectors last.** The write order is SA4–SA10, SA1, SA2, SA3, then SA0. SA0
-  (boot1: the reset vector and the MTOS/KWP boot code) and SA3 (boot2) go last, SA0
-  very last. Until then, a reset still boots the old boot code. The confirmation prompt
-  says when a boot sector is included.
+- **Boot code last.** SA0 holds the reset vector and the boot code. Up to `ca663056`
+  that's all of it; `ca663057` jumps from SA0 to the rest of its boot code (boot2) in
+  SA3. GKFlasher reads that from the reset vectors of the flash and the image. Data
+  and program sectors go first, SA4–SA10, SA1, SA2, then the image's boot2 if it has
+  one, then SA0. Sectors that only the ECU's current boot code needs come after SA0:
+  going back from `ca663057` to `ca663056`, the order ends SA0, SA3. That way a reset
+  boots either the old or the new boot code at every point except while SA0 itself is
+  written. The confirmation prompt says when a boot sector is included.
 - **Every sector is verified** after it's written, with up to 3 attempts per sector. At the
   end the whole flash is read back and compared to the image. Any sector that differs
   is rewritten, up to twice.
@@ -461,10 +465,13 @@ booted from the new boot sector and answered KWP2000 and MTOS again. A fresh rea
 matched the image byte for byte, and the firmware's own view (`dump` mode) agrees with
 the kernel's reads. A full read takes about a minute at 125000 baud.
 
+An upgrade from `ca663056` to `ca663057`, which replaces the bootloader, has also been
+done with `fullflash`.
+
 Not verified yet:
 
 - J2534 adapters. FTDI is the reference.
-- Upgrading across bootloader versions (`ca663056` to `ca663057`).
+- Going back from `ca663057` to `ca663056`.
 
 Run `probe`, then `read`, before the first `fullflash` on a new ECU or adapter. Also
 compare the read with the image you're about to write. Sectors with per-ECU data, such

@@ -38,11 +38,42 @@ ADDRSEL1_DRIVER = 0x4008
 
 MTOS_DRIVER = replace(DRIVER_I4, patch=patch_driver_watchdog)
 
-# boot1 (SA0) holds the reset vector and the MTOS/KWP boot code, boot2 (SA3) what it
-# jumps to: they go last, boot1 the very last, so for as long as possible a reset still
-# boots the old boot code
-WRITE_ORDER = (4, 5, 6, 7, 8, 9, 10, 1, 2, 3, 0)
-BOOT_SECTORS = (0, 3)
+# SA0 holds the reset vector and the boot code - all of it up to ca663056. ca663057
+# moved most of it to boot2 in SA3, where its reset vector jumps; on older firmware SA3
+# is data, or blank. The boot code a full flash leaves behind goes last, SA0 the very
+# last, so for as long as possible a reset still boots the old boot code
+DATA_ORDER = (4, 5, 6, 7, 8, 9, 10, 1, 2, 3)
+
+
+def reset_target (flash: bytes) -> int | None:
+	'''Where the reset vector's jmps goes, as a flash offset. None without a jmps'''
+	if flash[0] != 0xFA:
+		return None
+	return (flash[1] << 16 | flash[3] << 8 | flash[2]) & (FLASH_SIZE - 1)
+
+
+def boot_sectors (flash: bytes) -> set:
+	'''SA0, and the sector the reset vector jumps to'''
+	target = reset_target(flash)
+	return {0} | {number for number, offset, size in SECTORS
+		if target is not None and offset <= target < offset + size}
+
+
+def write_order (current: bytes, image: bytes) -> tuple:
+	'''
+	The image's boot code last, SA0 the very last of it. Sectors that only the ECU's
+	current boot code needs (ca663057's boot2 when going back to ca663056) come after
+	SA0: until then the old boot code is whole, after it the new one is
+	'''
+	new = boot_sectors(image) - {0}
+	old = boot_sectors(current) - new - {0}
+	data = tuple(number for number in DATA_ORDER if number not in new | old)
+	return data + tuple(sorted(new)) + (0,) + tuple(sorted(old))
+
+
+def warn_sectors (current: bytes, image: bytes) -> tuple:
+	'''The boot sectors of both the ECU's current flash and the image'''
+	return tuple(sorted(boot_sectors(current) | boot_sectors(image)))
 
 
 def load_image (filename: str, log_callback=None) -> bytes:
@@ -61,16 +92,13 @@ def load_image (filename: str, log_callback=None) -> bytes:
 		log('[!] Ignoring {} trailing byte(s) past 0x{:X} in {}'.format(len(data) - FLASH_SIZE, FLASH_SIZE, filename), log_callback)
 	image = data[:FLASH_SIZE]
 
-	# reset vector: jmps seg,addr to something that isn't erased
-	if image[0] != 0xFA:
+	# reset vector: jmps seg,addr to something that isn't erased. That's also the boot
+	# code being there: ca663057 jumps to boot2 in SA3, older firmware stays in SA0
+	target = reset_target(image)
+	if target is None:
 		raise KernelError('No jmps at the reset vector ({}), not a SIMK43 flash image'.format(image[:4].hex()))
-	target = (image[1] << 16 | image[3] << 8 | image[2]) & (FLASH_SIZE - 1)
 	if image[target:target + 4] == b'\xff' * 4:
 		raise KernelError('The reset vector jumps to erased flash (0x{:05X})'.format(target))
-	for number in BOOT_SECTORS:
-		_, offset, size = SECTORS[number]
-		if image[offset:offset + size].count(0xFF) == size:
-			raise KernelError('Boot sector SA{} is blank in the image'.format(number))
 	if image[0x10040:0x10044] != b'ca66':
 		raise KernelError('No ca66 identification at 0x10040, not a SIMK43 2.0 image')
 	return image
@@ -134,11 +162,11 @@ def read (kernel: Kernel, output_filename: str, signature: bytes | None = None, 
 
 def full_flash (kernel: Kernel, image: bytes, backup_filename: str, confirm, signature: bytes | None = None, allow_blank: bool = False) -> bool:
 	'''
-	Backup, then every sector that differs from `image` (boot sectors last), then a
-	full verify. False if nothing needed writing or the user said no
+	Backup, then every sector that differs from `image` (boot code last, see
+	write_order), then a full verify. False if nothing needed writing or the user said no
 	'''
 	flash = prepare(kernel, signature, allow_blank=allow_blank)
-	return write_flash(flash, image, backup_filename, confirm, order=WRITE_ORDER, boot_sectors=BOOT_SECTORS)
+	return write_flash(flash, image, backup_filename, confirm, order=write_order, boot_sectors=warn_sectors)
 
 
 def run_session (channel, mode: str, image: bytes | None = None, output_filename: str | None = None,
