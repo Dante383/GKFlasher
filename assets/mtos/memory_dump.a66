@@ -1,0 +1,33 @@
+; MTOS payload: sends LENGTH bytes of memory, starting at START, over the
+; K-line, then returns. The bytes must lie inside one 16 KB page.
+; payload_memory_dump() in flasher/mtos_asm.py, run by --mtos-mode dump,
+; sets START and LENGTH. See docs/mtos.md.
+
+$MOD167
+$INCLUDE (REG167.INC)
+
+START   EQU     8100H           ; 24-bit address of the first byte
+LENGTH  EQU     40H
+
+MTOS    SECTION CODE AT 0C014H
+Main    PROC    FAR
+        BCLR    S0TIE           ; no transmit interrupt: we poll the UART
+        MOV     R4, #POF START  ; R4 = offset inside START's 16 KB page
+        MOV     R5, #LENGTH     ; R5 = bytes left
+Loop:   SRVWDT                  ; keep the watchdog from resetting the ECU
+        EXTP    #PAG START, #1  ; the next memory access uses START's page
+        MOVB    RL0, [R4]
+        MOVB    S0TBUF, RL0     ; send it...
+Tx1:    JNB     S0TIR, Tx1      ; ...wait until the UART has taken it
+        BCLR    S0TIR
+        ADD     R4, #1
+        SUB     R5, #1
+        JMPR    cc_NE, Loop
+        MOVB    S0TBUF, #0      ; dummy byte: the last real one has gone out
+Tx2:    JNB     S0TIR, Tx2      ; once the UART takes it
+        BCLR    S0TIR
+        BSET    S0TIE
+        RET
+Main    ENDP
+MTOS    ENDS
+        END

@@ -1,0 +1,28 @@
+; Stage 2 for loader.a66: sends AA 55 C2 "OK" over the K-line and returns
+; to the loader. Assemble it with "openc166 stage2_hello.a66" and run the
+; .bin with --mtos-mode loader. See docs/mtos.md.
+
+$MOD167
+$INCLUDE (REG167.INC)
+
+STAGE2  SECTION CODE AT 0E000H  ; where loader.a66 puts it
+Main    PROC    FAR             ; the loader uses a far call
+        MOVB    S0TBUF, #0AAH
+Tx1:    JNB     S0TIR, Tx1
+        BCLR    S0TIR
+        MOVB    S0TBUF, #55H
+Tx2:    JNB     S0TIR, Tx2
+        BCLR    S0TIR
+        MOVB    S0TBUF, #0C2H
+Tx3:    JNB     S0TIR, Tx3
+        BCLR    S0TIR
+        MOVB    S0TBUF, #'O'
+Tx4:    JNB     S0TIR, Tx4
+        BCLR    S0TIR
+        MOVB    S0TBUF, #'K'
+Tx5:    JNB     S0TIR, Tx5
+        BCLR    S0TIR
+        RET
+Main    ENDP
+STAGE2  ENDS
+        END

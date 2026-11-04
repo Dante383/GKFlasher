@@ -75,6 +75,23 @@
                             <File Id="ApplicationFile43" Source="assets\simk4x_driver_v6_a29fx00bx.bin" />
                             <File Id="ApplicationFile44" Source="assets\simk43_rsw_fl2.bin" />
                         </Component>
+                        <Directory Id="MTOSDIR" Name="mtos">
+                            <!-- MTOS payload sources, assembled at runtime by openc166 -->
+                            <Component Id="ApplicationFilesJ" Guid="{07A5D055-DA34-401F-BBBC-094C3AC31004}">
+                                <File Id="ApplicationFile60" Source="assets\mtos\bsl_shim.a66" />
+                                <File Id="ApplicationFile61" Source="assets\mtos\driver_patch.a66" />
+                                <File Id="ApplicationFile62" Source="assets\mtos\kline_hello.a66" />
+                                <File Id="ApplicationFile63" Source="assets\mtos\loader.a66" />
+                                <File Id="ApplicationFile64" Source="assets\mtos\marker.a66" />
+                                <File Id="ApplicationFile65" Source="assets\mtos\memory_dump.a66" />
+                                <File Id="ApplicationFile66" Source="assets\mtos\stage2_hello.a66" />
+                            </Component>
+                        </Directory>
+                    </Directory>
+                    <Directory Id="OPENC166DIR" Name="openc166">
+                        <Component Id="ApplicationFilesK" Guid="{9D80F2C0-2FC5-4028-8999-C25C77253535}">
+                            <File Id="ApplicationFile67" Source="dist\gui\openc166\openc166.dll" />
+                        </Component>
                     </Directory>
                     <Directory Id="GKBUSDIR" Name="gkbus">
                         <Directory Id="GKBUSDEVICEDIR" Name="device">
@@ -157,6 +174,8 @@
             <ComponentRef Id="ApplicationFilesG" />
             <ComponentRef Id="ApplicationFilesH" />
             <ComponentRef Id="ApplicationFilesI" />
+            <ComponentRef Id="ApplicationFilesJ" />
+            <ComponentRef Id="ApplicationFilesK" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
 

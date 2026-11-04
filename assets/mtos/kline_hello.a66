@@ -1,0 +1,35 @@
+; MTOS payload: proof of I/O. Sends "MTOS" over the K-line, then returns.
+; payload_kline_hello() in flasher/mtos_asm.py, run by --mtos-mode hello.
+; See docs/mtos.md.
+;
+; The K-line is the ASC0 UART. To send a byte, write it to S0TBUF, wait
+; until the UART sets S0TIR (it has taken the byte), then clear S0TIR.
+
+$MOD167
+$INCLUDE (REG167.INC)
+
+MTOS    SECTION CODE AT 0C014H
+Main    PROC    FAR
+        BCLR    S0TIE           ; no transmit interrupt: we poll the UART
+        MOVB    S0TBUF, #'M'
+Tx1:    JNB     S0TIR, Tx1
+        BCLR    S0TIR
+        MOVB    S0TBUF, #'T'
+Tx2:    JNB     S0TIR, Tx2
+        BCLR    S0TIR
+        MOVB    S0TBUF, #'O'
+Tx3:    JNB     S0TIR, Tx3
+        BCLR    S0TIR
+        MOVB    S0TBUF, #'S'
+Tx4:    JNB     S0TIR, Tx4
+        BCLR    S0TIR
+        ; S0TIR only means the UART has started on the byte. Once it takes
+        ; this dummy byte, the 'S' has gone out completely.
+        MOVB    S0TBUF, #0
+Tx5:    JNB     S0TIR, Tx5
+        BCLR    S0TIR
+        BSET    S0TIE           ; give the UART back to the firmware
+        RET
+Main    ENDP
+MTOS    ENDS
+        END

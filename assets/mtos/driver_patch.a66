@@ -1,0 +1,26 @@
+; Patch for the stock SIMK4x I4 flash driver, which runs at 0F600H: makes
+; its erase loop service the watchdog. The loop's two instructions at
+; 0F706H move into a helper in unused space at 0F630H, and 0F706H calls
+; the helper instead. patch_driver_watchdog() in flasher/mtos_asm.py writes
+; these bytes over assets/simk4x_driver_i4_a29fx00bx.bin. The binary runs
+; from 0F630H to 0F709H; the bytes in between are 0FFH and belong to the
+; driver, not to the patch.
+
+$MOD167
+
+PAD     SECTION CODE AT 0F630H  ; unused space in front of the driver's entry
+Helper  PROC    NEAR
+        SRVWDT
+        EXTS    R2, #1          ; the two instructions moved from 0F706H
+        MOV     R5, [R1]
+        RET
+Helper  ENDP
+PAD     ENDS
+
+ERASE   SECTION CODE AT 0F706H  ; in the driver's erase loop
+Poll    PROC    NEAR
+        CALLR   Helper
+        NOP                     ; fills the rest of the 4 bytes
+Poll    ENDP
+ERASE   ENDS
+        END

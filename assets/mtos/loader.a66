@@ -1,0 +1,51 @@
+; MTOS payload: a K-line loader. MTOS uploads are slow and small, so this
+; loader receives the real program ("stage 2") over the K-line instead:
+;
+;   host -> ECU: the length in bytes, low byte first, then the program
+;
+; It copies the program to STAGE2, calls it there with a far call (the
+; program ends with RETS), and returns to the firmware.
+; payload_loader() in flasher/mtos_asm.py sets STAGE2. See docs/mtos.md.
+
+$MOD167
+$INCLUDE (REG167.INC)
+
+STAGE2  EQU     0E000H          ; free RAM (XRAM) for the program
+
+MTOS    SECTION CODE AT 0C014H
+Main    PROC    FAR
+        BCLR    S0RIE           ; received bytes come to us, not to the firmware
+        BCLR    S0TIE           ; and the program may transmit
+        MOVB    RL0, S0RBUF     ; drop a byte that may still be waiting
+        BCLR    S0RIR
+        ; Receiving: wait until the UART sets S0RIR, read S0RBUF, clear
+        ; S0RIR. SRVWDT keeps the watchdog from resetting the ECU however
+        ; long the host takes.
+Rx1:    SRVWDT
+        JNB     S0RIR, Rx1
+        MOVB    RL0, S0RBUF
+        BCLR    S0RIR
+        MOVBZ   R6, RL0         ; R6 = low byte of the length
+Rx2:    SRVWDT
+        JNB     S0RIR, Rx2
+        MOVB    RL0, S0RBUF
+        BCLR    S0RIR
+        MOVBZ   R7, RL0
+        SHL     R7, #8
+        ADD     R6, R7          ; R6 = length
+        MOV     R4, #STAGE2     ; R4 = where the next byte goes
+Rx3:    SRVWDT
+        JNB     S0RIR, Rx3
+        MOVB    RL0, S0RBUF
+        BCLR    S0RIR
+        MOVB    [R4], RL0
+        ADD     R4, #1
+        SUB     R6, #1
+        JMPR    cc_NE, Rx3
+        CALLS   SEG STAGE2, SOF STAGE2
+        BSET    S0RIE           ; give the UART back to the firmware
+        BSET    S0TIE
+        RET
+Main    ENDP
+MTOS    ENDS
+        END

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
 
 hiddenimports = []
 hiddenimports += collect_submodules('crcmod')
@@ -15,7 +15,8 @@ hiddenimports += collect_submodules('can')
 a = Analysis(
     ['..\\..\\gui.py'],
     pathex=[],
-    binaries=[],
+    # openc166 (assembles the MTOS payloads) loads openc166.dll from its package dir
+    binaries=collect_dynamic_libs('openc166'),
     datas=[('..\\..\\flasher', 'flasher'),('..\\..\\assets', 'assets'),('..\\..\\gkflasher.yml', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],

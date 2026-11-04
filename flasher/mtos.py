@@ -10,6 +10,7 @@ from .ecu import ECU, enable_security_access
 from .mtos_asm import (
 	build_blob,
 	crc16_mtos,
+	KLINE_HELLO,
 	MTOS_BASE,
 	MTOS_SIGNATURE_ADDRESS,
 	MTOS_SIGNATURE_LENGTH,
@@ -132,20 +133,21 @@ def listen (channel, duration: float = 2.0, idle: float = 0.4) -> bytes:
 # modes
 # ---------------------------------------------------------------------------
 
-def run_hello (ecu: ECU, signature: bytes, message: bytes = b'MTOS', log_callback=None) -> bytes:
-	'''Safest self-test: upload a payload that sends `message` over the K-line
+def run_hello (ecu: ECU, signature: bytes, log_callback=None) -> bytes:
+	'''Safest self-test: upload a payload that sends KLINE_HELLO over the K-line
 	and run it. Proves upload + CRC validation + execution + I/O in one shot.'''
-	blob = build_blob(payload_kline_hello(message), signature)
+	body = payload_kline_hello()
+	blob = build_blob(body, signature)
 	upload_blob(ecu, blob, log_callback=log_callback)
-	log('[*] MTOS checksum: 0x{:04X}'.format(crc16_mtos(payload_kline_hello(message))), log_callback)
+	log('[*] MTOS checksum: 0x{:04X}'.format(crc16_mtos(body)), log_callback)
 	log('[*] Executing, listening on K-line', log_callback)
 	channel = execute(ecu, raw=True)
 	out = listen(channel)
 	log('[*] Received: {} ({})'.format(out.hex(), out), log_callback)
-	if message in out:
-		log('[+] SUCCESS: payload executed and echoed {!r}'.format(message), log_callback)
+	if KLINE_HELLO in out:
+		log('[+] SUCCESS: payload executed and echoed {!r}'.format(KLINE_HELLO), log_callback)
 	else:
-		log('[!] did not see {!r} in the response'.format(message), log_callback)
+		log('[!] did not see {!r} in the response'.format(KLINE_HELLO), log_callback)
 	return out
 
 

@@ -139,7 +139,7 @@ def crc16_mtos(data, crc=0x544D):
 ```
 
 Recommended CRC range: start `0xC014` (first code byte), end = last code byte.
-The builder sets this for you.
+`build_blob()` sets this for you.
 
 ---
 
@@ -168,21 +168,21 @@ runs the firmware is blocked, so nothing services it.** Any loop that waits for 
 (e.g. receiving bytes) or simply runs for more than a few milliseconds (e.g. a long
 dump) **must** service the watchdog itself, or the ECU silently resets mid-payload.
 
-Service it with the protected `SRVWDT` instruction — in this assembler, `Asm.srvwdt()`
-(raw bytes `A7 58 A7 A7`, as used by the firmware itself at `0x000634` etc.). Call it
-every iteration of any wait/long loop; it is cheap and harmless to call often. The
-built-in `kline_recv_reg` and `payload_memory_dump` already do this for you.
+Service it with the protected `SRVWDT` instruction (raw bytes `A7 58 A7 A7`, as used
+by the firmware itself at `0x000634` etc.). Execute it every iteration of any
+wait/long loop; it is cheap and harmless to do often. The receive loops in
+`loader.a66` and the loop in `memory_dump.a66` already do this.
 
 A short, straight-line payload (a handful of bytes out, then `rets`) does not need it.
 
 ### Flush the last transmitted byte
 
 `S0TIC.7` (`TIR`) is set when `S0TBUF` is copied into the shift register — **not** when
-the byte has finished leaving the wire. A payload that `rets` immediately after its
-last `kline_send` loses that last byte, because the firmware takeover clobbers the
-still-shifting byte. Before returning, send one throwaway byte and wait for its `TIR`:
-that guarantees the previous (real) byte has been shifted out. `Asm.kline_flush()`
-does exactly this; the ready-made transmit payloads already call it.
+the byte has finished leaving the wire. A payload that `rets` immediately after
+writing its last byte to `S0TBUF` loses that byte, because the firmware takeover
+clobbers the still-shifting byte. Before returning, send one throwaway byte and wait
+for its `TIR`: that guarantees the previous (real) byte has been shifted out. The
+ready-made transmit payloads (`kline_hello.a66`, `memory_dump.a66`) end this way.
 
 ### Memory you can use
 
@@ -205,7 +205,7 @@ The UART is already configured for the current diagnostic baud. Just poll it:
 
 - **Transmit a byte:** clear `S0TIC.6` first so the firmware's TX interrupt-enable
   doesn't fight you. Write the byte to `S0TBUF`, poll `S0TIC.7` until set, clear it.
-  After the last byte, `kline_flush()` (see above). Restore `S0TIC.6` on exit.
+  After the last byte, send the throwaway byte (see above). Restore `S0TIC.6` on exit.
 - **Receive a byte:** clear `S0RIC.6`, then poll `S0RIC.7` until set — **servicing the
   watchdog every iteration** because the host may take a long time — read `S0RBUF`,
   clear the flag. Restore `S0RIC.6` on exit. Host RX works during takeover as-is; the
@@ -213,27 +213,70 @@ The UART is already configured for the current diagnostic baud. Just poll it:
 
 ---
 
-## Authoring payloads with the in-repo builder
+## Authoring payloads
 
-`flasher/mtos_asm.py` is a tiny, dependency-free C167 assembler + blob builder. It
-hand-encodes just the opcodes these payloads need (every encoding is annotated with
-the firmware address it was verified against) and fills in the header + CRC for you.
+Payloads are Keil A166 assembly. The ready-made ones live in `assets/mtos/` and make
+a good starting point:
+
+| Source | Used for |
+|--------|----------|
+| `marker.a66` | `payload_marker()`, proof of execution without I/O |
+| `kline_hello.a66` | `hello` mode |
+| `memory_dump.a66` | `dump` mode |
+| `loader.a66` | `loader` mode, and starting the BSL kernel |
+| `stage2_hello.a66` | sample second stage for `loader` mode |
+| `bsl_shim.a66` | the second stage in front of the BSL kernel (full flash) |
+| `driver_patch.a66` | the flash driver's watchdog patch (full flash) |
+
+GKFlasher assembles them at runtime with [openc166](https://github.com/Dante383/openc166),
+an open-source assembler compatible with Keil A166 (`pip install -r requirements.txt`
+installs it). A166 can't set a symbol from its command line, so GKFlasher fills in
+runtime values (the dump range, the loader's target) by replacing the value on the
+symbol's `EQU` line. The sources stay plain A166 and give the same bytes with Keil.
+
+Your own payload goes in a `SECTION CODE AT 0C014H` (`0E000H` for a loader second
+stage), inside a `PROC FAR` so that `RET` assembles as `RETS`:
+
+```asm
+$MOD167
+$INCLUDE (REG167.INC)
+
+MTOS    SECTION CODE AT 0C014H  ; MTOS calls 0C014H
+Main    PROC    FAR             ; with a far call, so RET becomes RETS
+        BCLR    S0TIE           ; no transmit interrupt: we poll the UART
+        MOVB    S0TBUF, #'H'
+Tx1:    JNB     S0TIR, Tx1      ; wait until the UART has taken it
+        BCLR    S0TIR
+        MOVB    S0TBUF, #0      ; dummy byte: 'H' has gone out
+Tx2:    JNB     S0TIR, Tx2      ; once the UART takes it
+        BCLR    S0TIR
+        BSET    S0TIE           ; give the UART back to the firmware
+        RET
+Main    ENDP
+MTOS    ENDS
+        END
+```
+
+Assemble it to a raw binary and run it in `payload` mode (or `loader` mode, for a
+second stage). GKFlasher adds the MTOS header:
+
+```bash
+openc166 hi.a66         # writes hi.bin
+python gkflasher.py -p kline -i j2534:openport --mtos --mtos-mode payload \
+    --mtos-payload hi.bin --mtos-key 0x2d381c78
+```
+
+Or from Python:
 
 ```python
-from flasher.mtos_asm import Asm, build_blob, payload_memory_dump
+import openc166
+from flasher.mtos_asm import build_blob, payload_memory_dump
 
-# Option A: use a ready-made payload generator
+# Option A: a ready-made payload
 body = payload_memory_dump(0x000000, 0x40)
 
-# Option B: hand-assemble your own body (code starts at 0xC014)
-a = Asm()
-a.bclr(0xFF6C, 6)            # own the TX path (clear S0TIC.6)
-a.kline_send_imm(ord('H'))
-a.kline_send_imm(ord('i'))
-a.kline_flush()             # make sure the last byte fully leaves the wire
-a.bset(0xFF6C, 6)           # restore
-a.rets()
-body = a.assemble()
+# Option B: your own source (code starts at 0xC014)
+body = openc166.assemble(open('hi.a66').read(), file_name='hi.a66').image().data
 
 # Wrap it in the MTOS header. `signature` is the 6 bytes read from the ECU @0x3FE8.
 blob = build_blob(body, signature)
@@ -242,15 +285,12 @@ blob = build_blob(body, signature)
 `build_blob()` computes the CRC, sets the CRC range to the body, writes the `MT`
 magic, and drops in the signature. The result is what gets written to `0xC000`.
 
-Run the module directly to see the reference payloads and self-tests:
+Run the module to see the reference payloads and the self-tests, which check the
+ready-made payloads against the bytes verified on the ECU:
 
 ```bash
-python flasher/mtos_asm.py
+python -m flasher.mtos_asm
 ```
-
-> The assembler only knows the handful of instructions used here. If you need an
-> opcode it doesn't have, add it (with a firmware citation) or emit raw bytes with
-> `Asm.db(...)`.
 
 ---
 
@@ -269,7 +309,16 @@ loader as the MTOS payload, which then pulls a **second stage** over the K-line:
 
 So the second stage follows the **same convention** as a top-level payload (code
 that ends with `rets`), it just lives at `0xE000` instead of `0xC014`. Build it the
-same way, minus the MTOS header:
+same way, minus the MTOS header. `assets/mtos/stage2_hello.a66` is an example:
+
+```bash
+openc166 assets/mtos/stage2_hello.a66 -o stage2_hello.bin
+python gkflasher.py -p kline -i j2534:openport --mtos --mtos-mode loader \
+    --mtos-payload stage2_hello.bin --mtos-key 0x2d381c78
+```
+
+Code that only uses relative jumps, like the ready-made payloads, runs at any
+address, so a top-level payload works as a second stage too:
 
 ```python
 from flasher.mtos_asm import payload_memory_dump
@@ -278,8 +327,8 @@ stage2 = payload_memory_dump(0x000000, 0x200)   # raw body, no header
 ```
 
 Because the loader's own epilogue runs after the stage returns, a second stage does
-not strictly need its own `kline_flush()` — but using the ready-made generators (which
-flush anyway) is the safe default. Verified end to end on the bench: a 256-byte memory
+not strictly need its own throwaway byte — but ending with one (as `memory_dump.a66`
+does) is the safe default. Verified end to end on the bench: a 256-byte memory
 dump streamed as a second stage and executed from `0xE000` returns byte-for-byte the
 same data as reading flash directly.
 
@@ -431,7 +480,7 @@ as the emulated EEPROM records in SA2, get the image's contents.
   fired. Your routine waited in a loop or ran longer than a few milliseconds without
   calling `srvwdt`. Service the watchdog in every wait/long loop (see above).
 - **Last byte of a transmit/dump is missing:** you returned before it finished
-  shifting out. Add `kline_flush()` before `rets` (the built-in payloads do).
+  shifting out. Send a throwaway byte before `rets` (the built-in payloads do).
 - **Loader receives nothing / hangs:** confirm you send the u16 length first, then the
   body; the loader waits (watchdog-serviced) for exactly that many bytes.
 - **Routine ran but output looks wrong:** the header may have failed validation (bad

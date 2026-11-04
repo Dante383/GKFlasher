@@ -1,0 +1,18 @@
+; MTOS payload: proof of execution. Writes MARKER into RAM at TARGET and
+; returns. Read TARGET back afterwards to see that the code ran.
+; payload_marker() in flasher/mtos_asm.py sets MARKER and TARGET.
+; See docs/mtos.md for how MTOS payloads are run.
+
+$MOD167
+
+MARKER  EQU     0BEEFH
+TARGET  EQU     0C002H          ; a header word that MTOS does not use
+
+MTOS    SECTION CODE AT 0C014H  ; MTOS calls 0C014H
+Main    PROC    FAR             ; with a far call, so RET below becomes RETS
+        MOV     R4, #MARKER
+        MOV     TARGET, R4
+        RET
+Main    ENDP
+MTOS    ENDS
+        END

@@ -1,0 +1,25 @@
+; Stage 2 for loader.a66: the start of a program that hands the ECU over to
+; the stock SIMK4x BSL kernel (assets/simk4x_kernel.bin), which
+; payload_bsl_kernel_shim() in flasher/mtos_asm.py appends right after these
+; bytes. It never returns. See docs/mtos.md.
+
+$MOD167
+$INCLUDE (REG167.INC)
+
+STAGE2  SECTION CODE AT 0E000H  ; where loader.a66 puts it
+Shim    PROC    FAR
+        BCLR    IEN             ; interrupts off for good
+        NOP                     ; an interrupt may still come right after BCLR
+        MOV     WDTCON, #0001H  ; longest watchdog period
+        SRVWDT                  ; restart the watchdog with it
+        MOV     STKOV, #0F200H  ; widen the stack limits first, so that
+        MOV     STKUN, #0FDFEH  ; moving SP cannot trigger a stack trap
+        MOV     SP, #0F600H     ; system stack 0F300H..0F5FFH
+        NOP                     ; do not use SP right after writing it
+        MOV     STKOV, #0F300H
+        MOV     STKUN, #0F600H
+        MOV     CP, #0F200H     ; register bank at 0F200H
+        NOP                     ; nor a register right after changing CP
+Shim    ENDP                    ; the BSL kernel follows
+STAGE2  ENDS
+        END

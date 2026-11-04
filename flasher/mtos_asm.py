@@ -8,9 +8,8 @@ StartRoutineByLocalIdentifier(0xFA). This module provides:
   * crc16_mtos()  - the exact checksum the firmware validates the blob with
   * build_blob()  - wrap a body of machine code in the MTOS header the
                     firmware expects (signature, 'MT' magic, CRC, CRC range)
-  * Asm           - a tiny C167 assembler (only the opcodes we need, every one
-                    taken from verified ca663056 firmware disassembly)
-  * ready-made payload/loader generators
+  * ready-made payload/loader generators, assembled with openc166 from the
+    Keil A166 sources in assets/mtos
 
 MTOS execution contract (reverse engineered from ca663056, validator @0x003460):
 
@@ -30,7 +29,7 @@ MTOS execution contract (reverse engineered from ca663056, validator @0x003460):
   has exclusive use of the ASC0 UART (= the K-line).
 
   Entry rules:
-    * terminate with rets (Asm.rets())
+    * terminate with rets (RET inside a PROC FAR)
     * DPP0 is left at 0x24 by the validator; DPP3 stays 3. Use the 0xC000-0xFFFF
       window and SFRs directly; use EXTP for anything else.
     * preserve r0 (stack pointer); save/restore GPRs you clobber
@@ -40,9 +39,10 @@ MTOS execution contract (reverse engineered from ca663056, validator @0x003460):
   live from the ECU (ReadMemoryByAddress 0x3FE8, 6 bytes) rather than hardcoding.
 """
 
+import re
 import struct
 
-from .kernel import DRIVER_ADDRESS, DRIVER_ENTRY
+from .kernel import DRIVER_ADDRESS, DRIVER_ENTRY, resource_path
 
 MTOS_BASE = 0xC000  # where the blob is uploaded
 MTOS_ENTRY = 0xC014  # firmware entry point (calls 0xC014)
@@ -52,34 +52,9 @@ MTOS_SIGNATURE_LENGTH = 6
 CRC_SEED = 0x544D  # the 'MT' word; firmware seeds the CRC with it
 CRC_POLY = 0xA001
 
-# ASC0 (K-line) SFRs
-S0TBUF = 0xFEB0
-S0RBUF = 0xFEB2
-S0TIC = 0xFF6C
-S0RIC = 0xFF6E
-
-# A convenient, known-executable scratch area for a second stage (XRAM 0xE000-0xEEFF)
+# A convenient, known-executable scratch area for a second stage (XRAM 0xE000-0xEEFF).
+# bsl_shim.a66 and stage2_hello.a66 are assembled for it
 STAGE2_ADDRESS = 0xE000
-
-# CPU SFRs the BSL kernel shim sets up
-CP = 0xFE10
-SP = 0xFE12
-STKOV = 0xFE14
-STKUN = 0xFE16
-PSW = 0xFF10
-WDTCON = 0xFFAE
-
-# Where the BSL kernel's register bank and system stack go. The flash driver
-# lives at 0xF600-0xF7F1 and the kernel's data buffer at 0xFC00-0xFDFF, both
-# fixed by the stock binaries, so these stay below them
-KERNEL_CP = 0xF200
-KERNEL_STACK_LIMIT = 0xF300
-KERNEL_STACK_TOP = 0xF600
-
-# in the stock SIMK4x I4 flash driver (assets/simk4x_driver_i4_a29fx00bx.bin), at
-# DRIVER_ADDRESS (kernel.py)
-_DRIVER_ERASE_POLL = 0xF706   # exts r2,#1 ; mov r5,[r1] - the erase completion poll
-_DRIVER_PAD = 0xF630          # 16 bytes of 0xFF padding in front of the entry point
 
 
 def crc16_mtos(data: bytes, seed: int = CRC_SEED) -> int:
@@ -128,250 +103,53 @@ def build_blob(body: bytes, signature: bytes,
 
 
 # ---------------------------------------------------------------------------
-# Tiny C167 assembler. Only the instructions we need; every encoding is
-# annotated with the ca663056 address it was verified against.
+# Ready-made payloads, written as Keil A166 source in assets/mtos and assembled
+# with openc166. Each MTOS payload returns the body (code from 0xC014); wrap
+# it with build_blob(body, signature).
 # ---------------------------------------------------------------------------
 
-def _rw(reg):  # word register field for e6/f2/f6: 0xF0 | n
-	return 0xF0 | (reg & 0x0F)
+MTOS_SOURCES = 'assets/mtos'
+
+#: what kline_hello.a66 sends
+KLINE_HELLO = b'MTOS'
+
+# the stock I4 flash driver's erase poll, which driver_patch.a66 moves into its helper
+_DRIVER_POLL = bytes.fromhex('dc02a851')   # exts r2,#1 ; mov r5,[r1]
 
 
-def _rb_code(name):
-	"""Byte-register code: RL0=0, RH0=1, RL1=2, RH1=3, ... RL7=14, RH7=15."""
-	num = int(name[2:])
-	return num * 2 + (0 if name[1] == 'L' else 1)
+def _assemble(name: str, **values: int):
+	'''Assemble assets/mtos/<name>.a66 with openc166 and return its openc166.Result.
+
+	Keil A166 can't set a symbol from outside, so each of `values` goes into the
+	source instead, in place of the value on that symbol's EQU line: START=0x86000
+	turns `START EQU 8100H` into `START EQU 086000H`. Raises
+	openc166.AssemblyError if the source has errors'''
+	# only MTOS needs the assembler, so the rest of GKFlasher runs without it
+	import openc166
+
+	path = resource_path('{}/{}.a66'.format(MTOS_SOURCES, name))
+	with open(path, 'rb') as file:
+		source = file.read().decode('ascii')
+	for symbol, value in values.items():
+		if value < 0:
+			raise ValueError('{} must not be negative'.format(symbol))
+		source, count = re.subn(r'(?im)^({}\s+EQU\s+)\S+'.format(re.escape(symbol)),
+			lambda match: '{}0{:X}H'.format(match.group(1), value), source)
+		if count != 1:
+			raise ValueError('{} has no {} EQU line'.format(path, symbol))
+	result = openc166.assemble(source, file_name=path)
+	if not result.ok:
+		raise openc166.AssemblyError(result)
+	return result
 
 
-def _rbf(name):  # byte-register field for f3/f7/47/e7-reg: 0xF0 | code
-	return 0xF0 | _rb_code(name)
+def _code(name: str, address: int, **values: int) -> bytes:
+	'''The machine code of assets/mtos/<name>.a66, which has to start at `address`'''
+	image = _assemble(name, **values).image()
+	if image.base != address:
+		raise ValueError('{}.a66 starts at 0x{:X}, not 0x{:X}'.format(name, image.base, address))
+	return image.data
 
-
-def _bitoff(addr):
-	"""Bit-offset byte used by JB/JNB/BSET/BCLR/BFLDL."""
-	if 0xFD00 <= addr <= 0xFDFF:
-		return (addr - 0xFD00) // 2            # bit-addressable RAM: 0x00..0x7F
-	if 0xFF00 <= addr <= 0xFFDF:
-		return 0x80 + (addr - 0xFF00) // 2     # SFR: 0x80..0xEF
-	raise ValueError('address 0x%X is not bit-addressable' % addr)
-
-
-def _sfr_short(addr):
-	"""Short reg address for SFRs (0xFE00-0xFFFF), used by e7 immediate form."""
-	if not (0xFE00 <= addr <= 0xFFFF):
-		raise ValueError('0x%X not an SFR' % addr)
-	return (addr - 0xFE00) // 2
-
-
-class Asm:
-	"""Two-pass assembler. All instructions are fixed size, so labels resolve
-	trivially. Jump targets are given as label names."""
-
-	def __init__(self):
-		self._items = []      # list of dicts: {'size', 'bytes'|'jump'}
-		self._labels = {}     # name -> item index
-
-	# -- label / emit helpers --
-	def label(self, name):
-		if name in self._labels:
-			raise ValueError('duplicate label %r' % name)
-		self._labels[name] = len(self._items)
-		return self
-
-	def _emit(self, *bytes_):
-		self._items.append({'size': len(bytes_), 'bytes': bytes(bytes_), 'jump': None})
-		return self
-
-	def _emit_jump(self, opbytes, target, size, kind):
-		self._items.append({'size': size, 'bytes': None,
-		                    'jump': {'op': bytes(opbytes), 'target': target, 'kind': kind}})
-		return self
-
-	# -- data moves (verified: e6 @0a2208-ish, f0 @0e0f04, f2 @0a2c50, f6 @0ac322) --
-	def mov_imm(self, reg, imm16):            # mov Rw,#imm16   e6 Fn lo hi
-		return self._emit(0xE6, _rw(reg), imm16 & 0xFF, (imm16 >> 8) & 0xFF)
-
-	def mov_rr(self, dst, src):               # mov Rw,Rw       f0 nm
-		return self._emit(0xF0, ((dst & 0xF) << 4) | (src & 0xF))
-
-	def mov_mem_reg(self, addr, reg):         # mov mem16,Rw    f6 Fn lo hi
-		return self._emit(0xF6, _rw(reg), addr & 0xFF, (addr >> 8) & 0xFF)
-
-	def mov_reg_mem(self, reg, addr):         # mov Rw,mem16    f2 Fn lo hi
-		return self._emit(0xF2, _rw(reg), addr & 0xFF, (addr >> 8) & 0xFF)
-
-	def movb_mem_rb(self, addr, rb):          # movb mem16,RLn  f7 Fn lo hi (@0a9214)
-		return self._emit(0xF7, _rbf(rb), addr & 0xFF, (addr >> 8) & 0xFF)
-
-	def movb_rb_mem(self, rb, addr):          # movb RLn,mem16  f3 Fn lo hi (@0a9300)
-		return self._emit(0xF3, _rbf(rb), addr & 0xFF, (addr >> 8) & 0xFF)
-
-	def movb_mem_imm(self, addr, imm8):       # movb SFR,#imm8  e7 short imm 00 (@0a91f0)
-		return self._emit(0xE7, _sfr_short(addr), imm8 & 0xFF, 0x00)
-
-	def mov_sfr_imm(self, addr, imm16):       # mov SFR,#imm16  e6 short lo hi (e6d70192 = mov WDTCON,#0x9201)
-		short = _sfr_short(addr)
-		if short >= 0xF0:
-			raise ValueError('0x%X is in the GPR range of the short address space' % addr)
-		return self._emit(0xE6, short, imm16 & 0xFF, (imm16 >> 8) & 0xFF)
-
-	def movb_ind_rb(self, ptr_reg, rb):       # movb [Rw],RLn   b9 (code<<4|rw) (@0a2bda)
-		return self._emit(0xB9, (_rb_code(rb) << 4) | (ptr_reg & 0xF))
-
-	def movb_rb_ind(self, rb, ptr_reg):       # movb RLn,[Rw]   a9 (code<<4|rw) (@0e0f36)
-		return self._emit(0xA9, (_rb_code(rb) << 4) | (ptr_reg & 0xF))
-
-	def movbz(self, dst, rb):                 # movbz Rw,RLn    c0 (code<<4|rw) (@0e0f54)
-		return self._emit(0xC0, (_rb_code(rb) << 4) | (dst & 0xF))
-
-	# -- arithmetic (verified: 08 @0a2bd8, 28 @0a2c4e, 00 @0e29b0, 5c @0e0f6a) --
-	def add_imm(self, reg, imm16):            # add Rw,#imm16   06 Fn lo hi (@0a91c4)
-		return self._emit(0x06, _rw(reg), imm16 & 0xFF, (imm16 >> 8) & 0xFF)
-
-	def add_short(self, reg, data3):          # add Rw,#data3   08 (reg<<4|data) (@0a2bd8)
-		return self._emit(0x08, ((reg & 0xF) << 4) | (data3 & 0x7))
-
-	def add_rr(self, dst, src):               # add Rw,Rw       00 (dst<<4|src) (@0e29b0)
-		return self._emit(0x00, ((dst & 0xF) << 4) | (src & 0xF))
-
-	def sub_short(self, reg, data3):          # sub Rw,#data3   28 (reg<<4|data) (@0a2c4e)
-		return self._emit(0x28, ((reg & 0xF) << 4) | (data3 & 0x7))
-
-	def shl_imm(self, reg, count):            # shl Rw,#data4   5c (count<<4|reg) (@0e0f6a)
-		return self._emit(0x5C, ((count & 0xF) << 4) | (reg & 0xF))
-
-	# -- bit ops on SFRs (verified: bclr 6e b7 @0037f4, bset 7f e6 @0ac2d2) --
-	def bset(self, addr, bit):                # bset addr.bit   (bit<<4|0xF) bitoff
-		return self._emit(((bit & 0xF) << 4) | 0x0F, _bitoff(addr))
-
-	def bclr(self, addr, bit):                # bclr addr.bit   (bit<<4|0xE) bitoff
-		return self._emit(((bit & 0xF) << 4) | 0x0E, _bitoff(addr))
-
-	# -- control flow --
-	def rets(self):                           # rets            db 00 (@0e0ffc)
-		return self._emit(0xDB, 0x00)
-
-	def ret(self):                            # ret             cb 00 (BSL kernel @fb50)
-		return self._emit(0xCB, 0x00)
-
-	def nop(self):                            # nop             cc 00
-		return self._emit(0xCC, 0x00)
-
-	def db(self, *byte_values):               # raw bytes escape hatch
-		"""Emit raw machine-code bytes verbatim, for opcodes this assembler does
-		not model. You are responsible for their correctness and (even) size."""
-		return self._emit(*[b & 0xFF for b in byte_values])
-
-	def srvwdt(self):                         # srvwdt          a7 58 a7 a7 (@000634,0006c2,0008e2,000a58)
-		# Protected 4-byte instruction that reloads the watchdog timer. The
-		# firmware is blocked while our payload runs, so nothing else services
-		# the watchdog; any loop that waits for host bytes MUST call this or the
-		# C167 resets mid-payload (verified: long polls went silent until this
-		# was sprinkled into the wait loop).
-		return self._emit(0xA7, 0x58, 0xA7, 0xA7)
-
-	def extp(self, page, rng=1):              # extp #pag,#rng  d7 (0x40|(rng-1)<<4) lo hi (@0a2c42)
-		return self._emit(0xD7, 0x40 | ((rng - 1) << 4), page & 0xFF, (page >> 8) & 0xFF)
-
-	def jmpi(self, ptr_reg):                  # jmpi cc_UC,[Rw] 9c (0|reg) (@0a91ee)
-		return self._emit(0x9C, ptr_reg & 0x0F)
-
-	def calli(self, ptr_reg):                 # calli cc_UC,[Rw] ab (0|reg) (std C166 opcode)
-		return self._emit(0xAB, ptr_reg & 0x0F)
-
-	def calls(self, segment, addr):           # calls seg,addr  da ss lo hi (@0a2bec)
-		return self._emit(0xDA, segment & 0xFF, addr & 0xFF, (addr >> 8) & 0xFF)
-
-	# jmpr cc,rel8  ->  (cc<<4|0xD) rel   (@0034a0: 8d ee for cc_C)
-	_CC = {'UC': 0x0, 'Z': 0x2, 'EQ': 0x2, 'NZ': 0x3, 'NE': 0x3,
-	       'C': 0x8, 'ULT': 0x8, 'NC': 0x9, 'UGE': 0x9}
-
-	def jmpr(self, cc, target):
-		op = ((self._CC[cc] & 0xF) << 4) | 0x0D
-		return self._emit_jump([op], target, 2, 'rel8')
-
-	def jb(self, addr, bit, target):          # jb addr.bit,rel  8a bitoff rel (bit<<4) (@0a91dc)
-		return self._emit_jump([0x8A, _bitoff(addr), (bit & 0xF) << 4], target, 4, 'jb')
-
-	def jnb(self, addr, bit, target):         # jnb addr.bit,rel 9a bitoff rel (bit<<4) (@001988)
-		return self._emit_jump([0x9A, _bitoff(addr), (bit & 0xF) << 4], target, 4, 'jb')
-
-	# -- convenience macros --
-	def kline_send_reg(self, rb):
-		"""Transmit the byte in `rb` over the K-line (ASC0), polled."""
-		lbl = '__tx%d' % len(self._items)
-		self.movb_mem_rb(S0TBUF, rb)
-		self.label(lbl)
-		self.jnb(S0TIC, 7, lbl)   # wait until TIR set (buffer -> shift register)
-		self.bclr(S0TIC, 7)       # clear for next byte
-		return self
-
-	def kline_send_imm(self, imm8):
-		lbl = '__txi%d' % len(self._items)
-		self.movb_mem_imm(S0TBUF, imm8)
-		self.label(lbl)
-		self.jnb(S0TIC, 7, lbl)
-		self.bclr(S0TIC, 7)
-		return self
-
-	def kline_recv_reg(self, rb):
-		"""Receive one byte from the K-line (ASC0) into `rb`, polled.
-
-		The wait loop services the watchdog every iteration, so it is safe to
-		block here for an arbitrarily long time waiting for the host - which is
-		exactly what a loader must do. Without srvwdt the C167 watchdog resets
-		the ECU mid-payload.
-		"""
-		lbl = '__rx%d' % len(self._items)
-		self.label(lbl)
-		self.srvwdt()             # keep the watchdog happy while we wait
-		self.jnb(S0RIC, 7, lbl)   # wait until RIR set (byte received)
-		self.movb_rb_mem(rb, S0RBUF)
-		self.bclr(S0RIC, 7)
-		return self
-
-	def kline_flush(self):
-		"""Make sure the last transmitted byte has fully left the shift register
-		before returning to the firmware.
-
-		S0TIC.7 (TIR) only signals that S0TBUF was copied into the shift
-		register, not that transmission finished. A payload that `rets` straight
-		after its last kline_send loses that last byte, because the firmware
-		takeover clobbers the still-shifting byte. Sending one dummy byte and
-		waiting for its TIR guarantees the previous (real) byte has been shifted
-		out completely; the dummy itself is expendable.
-		"""
-		return self.kline_send_imm(0x00)
-
-	# -- assemble --
-	def assemble(self, base=MTOS_ENTRY):
-		offsets, off = [], 0
-		for it in self._items:
-			offsets.append(off)
-			off += it['size']
-		out = bytearray()
-		for idx, it in enumerate(self._items):
-			if it['bytes'] is not None:
-				out += it['bytes']
-				continue
-			j = it['jump']
-			tgt_idx = self._labels[j['target']]
-			tgt_off = offsets[tgt_idx]
-			self_off = offsets[idx]
-			rel = (tgt_off - (self_off + it['size'])) // 2
-			if not -128 <= rel <= 127:
-				raise ValueError('jump out of rel8 range to %r' % j['target'])
-			rel &= 0xFF
-			if j['kind'] == 'rel8':            # op rel
-				out += bytes([j['op'][0], rel])
-			else:                               # jb/jnb: op bitoff rel (bit<<4)
-				out += bytes([j['op'][0], j['op'][1], rel, j['op'][2]])
-		return bytes(out)
-
-
-# ---------------------------------------------------------------------------
-# Ready-made payloads. Each returns the body (code from 0xC014); wrap with
-# build_blob(body, signature).
-# ---------------------------------------------------------------------------
 
 def payload_marker(marker: int = 0xBEEF, address: int = 0xC002) -> bytes:
 	"""Proof-of-execution with no I/O: write `marker` to RAM and return.
@@ -379,23 +157,12 @@ def payload_marker(marker: int = 0xBEEF, address: int = 0xC002) -> bytes:
 	Verify by reading `address` back with ReadMemoryByAddress; it changes from
 	the uploaded header value to `marker`.
 	"""
-	a = Asm()
-	a.mov_imm(4, marker)
-	a.mov_mem_reg(address, 4)   # 0xC002 reaches via DPP3==3
-	a.rets()
-	return a.assemble()
+	return _code('marker', MTOS_ENTRY, MARKER=marker, TARGET=address)
 
 
-def payload_kline_hello(message: bytes = b'MTOS') -> bytes:
-	"""Proof-of-I/O: send `message` over the K-line, then return."""
-	a = Asm()
-	a.bclr(S0TIC, 6)            # disable firmware ASC0 TX interrupt while we poll
-	for byte in message:
-		a.kline_send_imm(byte)
-	a.kline_flush()            # let the last real byte finish before we rets
-	a.bset(S0TIC, 6)           # restore
-	a.rets()
-	return a.assemble()
+def payload_kline_hello() -> bytes:
+	"""Proof-of-I/O: send KLINE_HELLO over the K-line, then return."""
+	return _code('kline_hello', MTOS_ENTRY)
 
 
 def payload_memory_dump(address: int, length: int) -> bytes:
@@ -403,27 +170,11 @@ def payload_memory_dump(address: int, length: int) -> bytes:
 	`address` out of the K-line, then return."""
 	if length <= 0 or length > 0xFFFF:
 		raise ValueError('length must be 1..0xFFFF')
-	page = address >> 14
-	offset = address & 0x3FFF
-	if offset + length > 0x4000:
+	if not 0 <= address <= 0xFFFFFF:
+		raise ValueError('address must be 24-bit')
+	if (address & 0x3FFF) + length > 0x4000:
 		raise ValueError('dump must stay within one 16KB page for this sample')
-
-	a = Asm()
-	a.bclr(S0TIC, 6)           # own the TX path; leave global interrupts (watchdog) alone
-	a.mov_imm(4, offset)       # r4 = read pointer within page
-	a.mov_imm(5, length)       # r5 = remaining
-	a.label('loop')
-	a.srvwdt()                 # service the watchdog each byte so long dumps don't reset the ECU
-	a.extp(page, 1)            # next access uses this page
-	a.movb_rb_ind('RL0', 4)    # RL0 = [r4]
-	a.kline_send_reg('RL0')
-	a.add_short(4, 1)
-	a.sub_short(5, 1)
-	a.jmpr('NE', 'loop')
-	a.kline_flush()            # ensure the final byte is fully shifted out before returning
-	a.bset(S0TIC, 6)
-	a.rets()
-	return a.assemble()
+	return _code('memory_dump', MTOS_ENTRY, START=address, LENGTH=length)
 
 
 def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
@@ -452,39 +203,14 @@ def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
 	"""
 	if not (0xC000 <= stage2_address <= 0xFBFF):
 		raise ValueError('stage2 must sit in the DPP3 window (0xC000-0xFBFF)')
-
-	a = Asm()
-	a.bclr(S0RIC, 6)           # divert incoming K-line bytes from the KWP stack to us
-	a.bclr(S0TIC, 6)           # own the TX path too (stage 2 may transmit)
-	# drop any byte the pre-hook left pending so the first recv is a real one
-	a.movb_rb_mem('RL0', S0RBUF)
-	a.bclr(S0RIC, 7)
-	# count = low | (high << 8)  -> r6
-	a.kline_recv_reg('RL0')
-	a.movbz(6, 'RL0')
-	a.kline_recv_reg('RL0')
-	a.movbz(7, 'RL0')
-	a.shl_imm(7, 8)
-	a.add_rr(6, 7)             # r6 = total count
-	a.mov_imm(4, stage2_address)  # r4 = destination pointer
-	a.label('rx')
-	a.kline_recv_reg('RL0')
-	a.movb_ind_rb(4, 'RL0')    # [r4] = RL0
-	a.add_short(4, 1)
-	a.sub_short(6, 1)
-	a.jmpr('NE', 'rx')
-	a.calls(0, stage2_address)  # run the second stage (far call); it rets back here
-	a.bset(S0RIC, 6)           # restore firmware interrupts
-	a.bset(S0TIC, 6)
-	a.rets()
-	return a.assemble()
+	return _code('loader', MTOS_ENTRY, STAGE2=stage2_address)
 
 
 def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
 	"""Second stage for the loader that turns the halted firmware into a BSL
-	session: a short prologue followed by the stock SIMK4x BSL kernel
-	(assets/simk4x_kernel.bin), which then talks the usual BSL protocol over the
-	K-line at the current ASC0 baudrate.
+	session: a short prologue (bsl_shim.a66) followed by the stock SIMK4x BSL
+	kernel (assets/simk4x_kernel.bin), which then talks the usual BSL protocol
+	over the K-line at the current ASC0 baudrate.
 
 	The kernel is position independent (relative jumps only, and its CALL
 	command builds the return address from a pushed IP), so it runs in place
@@ -507,31 +233,10 @@ def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
 	if not kernel or len(kernel) % 2:
 		raise ValueError('kernel must be a non-empty, even number of bytes')
 
-	a = Asm()
-	a.bclr(PSW, 11)            # IEN = 0
-	a.nop()                    # an interrupt may still slip in right after the bclr
-	a.mov_sfr_imm(WDTCON, 0x0001)
-	a.srvwdt()                 # reload with the new period
-	a.mov_sfr_imm(STKOV, 0xF200)
-	a.mov_sfr_imm(STKUN, 0xFDFE)
-	a.mov_sfr_imm(SP, KERNEL_STACK_TOP)
-	a.nop()                    # don't use SP right after writing it
-	a.mov_sfr_imm(STKOV, KERNEL_STACK_LIMIT)
-	a.mov_sfr_imm(STKUN, KERNEL_STACK_TOP)
-	a.mov_sfr_imm(CP, KERNEL_CP)
-	a.nop()                    # nor a GPR right after changing CP
-	stage2 = a.assemble(base=STAGE2_ADDRESS) + bytes(kernel)
+	stage2 = _code('bsl_shim', STAGE2_ADDRESS) + bytes(kernel)
 	if STAGE2_ADDRESS + len(stage2) > 0xEF00:
 		raise ValueError('second stage does not fit the XRAM scratch area')
 	return stage2
-
-
-def _callr(source, target):
-	"""callr rel8 at `source` to `target` (bb rel, rel = words from the next instruction)"""
-	rel = (target - (source + 2)) // 2
-	if not -128 <= rel <= 127:
-		raise ValueError('callr out of range')
-	return bytes([0xBB, rel & 0xFF])
 
 
 def patch_driver_watchdog(driver: bytes) -> bytes:
@@ -539,8 +244,9 @@ def patch_driver_watchdog(driver: bytes) -> bytes:
 
 	In the BSL the watchdog is never started, so the driver's erase completion
 	poll (up to several seconds) never services it. Once the firmware has
-	started it there is no way to stop it, so the poll's flash read at 0xF706
-	becomes a call to a helper placed in the unused padding at 0xF630:
+	started it there is no way to stop it, so driver_patch.a66 turns the poll's
+	flash read at 0xF706 into a call to a helper placed in the unused padding
+	at 0xF630:
 
 	    0xF630  srvwdt
 	            exts r2,#1
@@ -551,42 +257,32 @@ def patch_driver_watchdog(driver: bytes) -> bytes:
 
 	Programming polls a word at a time and needs no help. Refuses anything
 	that isn't the expected driver."""
+	patch = _assemble('driver_patch')
+	pad = patch.sections['PAD'].address - DRIVER_ADDRESS
+	poll = patch.sections['ERASE'].address - DRIVER_ADDRESS
 	data = bytearray(driver)
-	poll = _DRIVER_ERASE_POLL - DRIVER_ADDRESS
-	pad = _DRIVER_PAD - DRIVER_ADDRESS
-	moved = bytes.fromhex('dc02a851')   # exts r2,#1 ; mov r5,[r1]
-	if data[poll:poll + 4] != moved or data[pad:pad + 16] != b'\xff' * 16:
+	if (data[poll:poll + len(_DRIVER_POLL)] != _DRIVER_POLL
+			or set(data[pad:DRIVER_ENTRY - DRIVER_ADDRESS]) != {0xFF}):
 		raise ValueError('unexpected flash driver, refusing to patch it')
 
-	helper = Asm()
-	helper.srvwdt()
-	helper.db(*moved)
-	helper.ret()
-	helper = helper.assemble(base=_DRIVER_PAD)
-
-	data[pad:pad + len(helper)] = helper
-	data[poll:poll + 4] = _callr(_DRIVER_ERASE_POLL, _DRIVER_PAD) + bytes([0xCC, 0x00])
+	for chunk in patch.chunks:
+		offset = chunk.address - DRIVER_ADDRESS
+		data[offset:offset + len(chunk.data)] = chunk.data
 	return bytes(data)
 
 
-def payload_stage2_hello(message: bytes = b'OK') -> bytes:
-	"""Sample stage-2 payload for the loader: frame `message` on the K-line.
+def payload_stage2_hello() -> bytes:
+	"""Sample stage-2 payload for the loader: frame "OK" on the K-line.
 
-	Emits AA 55 C2 <message> so the host can spot it unambiguously, then rets
-	back to the loader. Because it only touches ASC0 SFRs and uses relative
-	jumps, it is position independent and runs correctly at `STAGE2_ADDRESS`.
+	Emits AA 55 C2 'OK' so the host can spot it unambiguously, then rets back
+	to the loader. Because it only touches ASC0 SFRs and uses relative jumps,
+	it is position independent and runs correctly at `STAGE2_ADDRESS`.
 	"""
-	a = Asm()
-	for byte in (0xAA, 0x55, 0xC2):
-		a.kline_send_imm(byte)
-	for byte in message:
-		a.kline_send_imm(byte)
-	a.rets()
-	return a.assemble()
+	return _code('stage2_hello', STAGE2_ADDRESS)
 
 
 if __name__ == '__main__':
-	# Offline self-tests (no hardware).
+	# Offline self-tests (no hardware): python -m flasher.mtos_asm
 	assert payload_marker() == bytes.fromhex('e6f4efbe' 'f6f402c0' 'db00'), \
 		payload_marker().hex()
 	# CRC sanity: seed with 'MT', empty-ish vectors
@@ -604,20 +300,36 @@ if __name__ == '__main__':
 	assert struct.unpack_from('<I', blob, 4)[0] == MTOS_ENTRY
 	assert struct.unpack_from('<I', blob, 8)[0] == MTOS_ENTRY + len(body) - 1
 	print('marker   :', payload_marker().hex())
-	print('hello    :', payload_kline_hello(b'MTOS').hex())
+	print('hello    :', payload_kline_hello().hex())
 	print('dump 0x40:', payload_memory_dump(0x000000, 0x40).hex())
 	print('loader   :', payload_loader().hex())
 	print('blob     :', blob.hex())
 
-	# encodings checked against ca663056 (mov WDTCON,#0x9201 / mov ADDRSEL1,#0x1008)
-	assert Asm().mov_sfr_imm(WDTCON, 0x9201).assemble() == bytes.fromhex('e6d70192')
-	assert Asm().mov_sfr_imm(0xFE18, 0x1008).assemble() == bytes.fromhex('e60c0810')
-	assert Asm().bclr(PSW, 11).assemble() == bytes.fromhex('be88')
-	assert _callr(0xF706, 0xF630) == bytes.fromhex('bb94')
+	# the bytes of the bench-tested payloads, from before openc166 assembled them
+	assert payload_marker(0x1234, 0xC004) == bytes.fromhex('e6f43412' 'f6f404c0' 'db00')
+	assert payload_kline_hello() == bytes.fromhex(
+		'6eb6' 'e7584d00' '9ab6fe70' '7eb6' 'e7585400' '9ab6fe70' '7eb6' 'e7584f00' '9ab6fe70' '7eb6'
+		'e7585300' '9ab6fe70' '7eb6' 'e7580000' '9ab6fe70' '7eb6' '6fb6' 'db00')
+	dump = '6eb6{}{}a758a7a7d740{}a904f7f0b0fe9ab6fe707eb6084128513df3e75800009ab6fe707eb66fb6db00'
+	assert payload_memory_dump(0x86000, 0x200) == bytes.fromhex(dump.format('e6f40020', 'e6f50002', '2100'))
+	# like Keil A166, MOV takes the short #data4 form when the value fits: mov r4,#0
+	assert payload_memory_dump(0xFFC000, 0x4000) == bytes.fromhex(dump.format('e004', 'e6f50040', 'ff03'))
+	loader = ('6eb76eb6f3f0b2fe7eb7a758a7a79ab7fc70f3f0b2fe7eb7c006a758a7a79ab7fc70f3f0b2fe7eb7c007'
+		'5c870067e6f400{0}a758a7a79ab7fc70f3f0b2fe7eb7b904084128613df5da0000{0}6fb76fb6db00')
+	assert payload_loader() == bytes.fromhex(loader.format('e0'))
+	assert payload_loader(0xC800) == bytes.fromhex(loader.format('c8'))
+	assert payload_stage2_hello() == bytes.fromhex(
+		'e758aa00' '9ab6fe70' '7eb6' 'e7585500' '9ab6fe70' '7eb6' 'e758c200' '9ab6fe70' '7eb6'
+		'e7584f00' '9ab6fe70' '7eb6' 'e7584b00' '9ab6fe70' '7eb6' 'db00')
 	shim = payload_bsl_kernel_shim(b'\xcc\x00')
-	assert shim.startswith(bytes.fromhex('be88cc00' 'e6d70100' 'a758a7a7'))
-	assert shim.endswith(bytes.fromhex('e60800f2' 'cc00' 'cc00')) and len(shim) % 2 == 0
+	assert shim == bytes.fromhex('be88cc00' 'e6d70100' 'a758a7a7' 'e60a00f2' 'e60bfefd' 'e60900f6' 'cc00'
+		'e60a00f3' 'e60b00f6' 'e60800f2' 'cc00' 'cc00'), shim.hex()
 	print('shim     :', shim[:-2].hex())
+	try:
+		_assemble('kline_hello', START=0)
+		raise AssertionError('replaced a symbol the source does not have')
+	except ValueError:
+		pass
 
 	import os
 	driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'simk4x_driver_i4_a29fx00bx.bin')
