@@ -1,22 +1,28 @@
 import struct
 import time
 
-from gkbus.exceptions import TimeoutException
+from gkbus.channel import KLineTiming
 from gkbus.protocol import kwp2000
 
-from .ecu import ECU
+from . import mtos_kernel
+from .ecu import ECU, enable_security_access
 from .mtos_asm import (
 	build_blob,
 	crc16_mtos,
 	MTOS_BASE,
 	MTOS_SIGNATURE_ADDRESS,
 	MTOS_SIGNATURE_LENGTH,
+	payload_bsl_kernel_shim,
 	payload_kline_hello,
 	payload_memory_dump,
 	payload_loader,
 	STAGE2_ADDRESS,
 )
+from .mtos_kernel import KernelError, read_partial
 from ecu_definitions import AccessLevel, Routine
+
+#: modes that run the BSL kernel - see mtos_kernel
+KERNEL_MODES = ('probe', 'read', 'fullflash')
 
 
 def log (message, log_callback=None):
@@ -100,7 +106,7 @@ def _consume_pending (channel, length: int = PENDING_FRAME_LENGTH, timeout: floa
 	collected = bytearray()
 	deadline = time.time() + timeout
 	while len(collected) < length and time.time() < deadline:
-		collected += channel._read(length - len(collected), 0.2)
+		collected += read_partial(channel, length - len(collected), 0.2)
 	return bytes(collected)
 
 
@@ -113,7 +119,7 @@ def listen (channel, duration: float = 2.0, idle: float = 0.4) -> bytes:
 	deadline = time.time() + duration
 	last = time.time()
 	while time.time() < deadline:
-		chunk = channel._read(256, 0.1)
+		chunk = read_partial(channel, 256, 0.1)
 		if chunk:
 			collected += chunk
 			last = time.time()
@@ -179,16 +185,137 @@ def run_loader (ecu: ECU, signature: bytes, stage2: bytes, log_callback=None) ->
 	return out
 
 
+def launch_kernel (ecu: ECU, signature: bytes, log_callback=None):
+	'''Turn the ECU over to the BSL kernel: the loader, then the kernel as its
+	second stage (mtos_asm.payload_bsl_kernel_shim). Returns the channel, with
+	the kernel answering at the session's baudrate and kernel timing set.
+
+	The firmware never comes back from this - the session has to end with the
+	kernel's software reset (or a power cycle)'''
+	stage2 = payload_bsl_kernel_shim(mtos_kernel.load_asset(mtos_kernel.KERNEL_ASSET))
+	blob = build_blob(payload_loader(STAGE2_ADDRESS), signature)
+	upload_blob(ecu, blob, log_callback=log_callback)
+
+	log('[*] Starting the loader, sending it the BSL kernel ({} bytes)'.format(len(stage2)), log_callback)
+	channel = execute(ecu, raw=True)
+	mtos_kernel.enter(channel, log_callback)
+	link = mtos_kernel.KernelLink(channel)
+	# the loader sends nothing: whatever is here is KWP left over, and would break the echo check
+	stale = link.drain(quiet=0.1, limit=1.0)
+	if stale:
+		log('[*] Dropped {} stale byte(s): {}'.format(len(stale), stale.hex()), log_callback)
+	link.send(struct.pack('<H', len(stage2)) + stage2)
+
+	# 0x03 once it runs. Anything in front of it is what's left of the KWP exchange
+	started = link.read(16, 0.3)
+	kernel = mtos_kernel.Kernel(link, log_callback=log_callback)
+	if started[-1:] == bytes([mtos_kernel.KERNEL_STARTED]) and kernel.test_comm():
+		log('[+] BSL kernel running', log_callback)
+		return channel
+	log('[!] Kernel start not seen ({}), looking for it'.format(started.hex() or 'nothing'), log_callback)
+	if not kernel.resync():
+		raise KernelError('The kernel didn\'t start. Switch the ECU off and on again - the flash wasn\'t touched')
+	log('[+] BSL kernel running', log_callback)
+	return channel
+
+
+def check_after_reset (bus, ecu: ECU | None = None, log_callback=None) -> bool:
+	'''Whether the ECU answers KWP2000 again after the kernel's software reset,
+	with the calibration it identifies with if `ecu` is known'''
+	channel = bus.transport.channel
+	channel.set_baudrate(10400)
+	channel.set_timing(KLineTiming())
+	log('[*] Waiting for the ECU to boot', log_callback)
+	time.sleep(2)
+	for attempt in range(3):
+		try:
+			channel.reset_buffers()
+			bus.init(kwp2000.commands.StartCommunication())
+			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
+			break
+		except IOError as e:
+			if attempt == 2:
+				log('[!] The ECU doesn\'t answer KWP2000 ({}). Try switching it off and on again'.format(e or type(e).__name__), log_callback)
+				return False
+			time.sleep(2)
+	log('[+] The ECU is up and answering', log_callback)
+	if ecu is not None:
+		try:
+			enable_security_access(bus)
+			log('[*] Calibration: {}, {}'.format(ecu.get_calibration(), ecu.get_calibration_description()), log_callback)
+		except IOError as e:
+			log('[!] Couldn\'t read the calibration: {}'.format(e or type(e).__name__), log_callback)
+	return True
+
+
+def cli_confirm (message: str) -> bool:
+	return input('[?] {} [y/n]: '.format(message)).strip().lower() == 'y'
+
+
+def attach_session (bus, mode: str, image_filename: str | None = None, output_filename: str | None = None,
+                    baudrate: int = 10400, confirm=cli_confirm, attach_hint: str | None = None,
+                    log_callback=None, progress_callback=None) -> bool:
+	'''Pick up a BSL kernel an earlier session left running (the ECU still
+	powered, at that session's baudrate) and run `mode` on it. No KWP2000 on
+	the way in, the firmware isn't running'''
+	channel = bus.transport.channel
+	try:
+		image = mtos_kernel.load_image(image_filename, log_callback) if mode == 'fullflash' else None
+		channel.set_baudrate(baudrate)
+		mtos_kernel.enter(channel, log_callback)
+		mtos_kernel.attach(channel, log_callback=log_callback)
+	except (KernelError, OSError) as e:
+		log('[!] {}'.format(e), log_callback)
+		return False
+	reset = mtos_kernel.run_session(
+		channel, mode, image=image, output_filename=output_filename, attached=True, confirm=confirm,
+		attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback,
+	)
+	if reset:
+		check_after_reset(bus, log_callback=log_callback)
+	return reset
+
+
+def kernel_session (ecu: ECU, signature: bytes, mode: str, image: bytes | None = None, output_filename: str | None = None,
+                    confirm=None, attach_hint: str | None = None, log_callback=None, progress_callback=None) -> bool:
+	try:
+		channel = launch_kernel(ecu, signature, log_callback=log_callback)
+	except KernelError as e:
+		log('[!] {}'.format(e), log_callback)
+		return False
+	reset = mtos_kernel.run_session(
+		channel, mode, image=image, output_filename=output_filename, signature=signature, confirm=confirm,
+		attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback,
+	)
+	if reset:
+		check_after_reset(ecu.bus, ecu, log_callback=log_callback)
+	return reset
+
+
 # ---------------------------------------------------------------------------
 # entry point
 # ---------------------------------------------------------------------------
 
 def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
                   payload_filename: str = None, address: int = 0x000000, length: int = 0x40,
+                  output_filename: str | None = None, confirm_callback=cli_confirm, attach_hint: str | None = None,
                   log_callback=None, progress_callback=None):
 	if mtos_key is None:
 		log('[!] MTOS requires a key (e.g. 0x2d381c78)', log_callback)
 		return
+
+	image = None
+	if mode == 'fullflash':
+		if not payload_filename:
+			log('[!] fullflash mode requires a full 512 KB flash image', log_callback)
+			return
+		# a bad file is better caught before the firmware is gone
+		try:
+			image = mtos_kernel.load_image(payload_filename, log_callback)
+		except (KernelError, OSError) as e:
+			log('[!] {}'.format(e), log_callback)
+			return
+		log('[*] Image {}: {}'.format(payload_filename, mtos_kernel.identification(image)), log_callback)
 
 	ecu.bus._stop_keepalive()
 	siemens_unlock(ecu, mtos_key, log_callback=log_callback)
@@ -197,7 +324,10 @@ def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
 	log('[*] MTOS signature @0x{:04X}: {} ({})'.format(
 		MTOS_SIGNATURE_ADDRESS, signature.hex(), signature.decode('latin-1')), log_callback)
 
-	if mode == 'hello':
+	if mode in KERNEL_MODES:
+		kernel_session(ecu, signature, mode, image=image, output_filename=output_filename, confirm=confirm_callback,
+			attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback)
+	elif mode == 'hello':
 		run_hello(ecu, signature, log_callback=log_callback)
 	elif mode == 'dump':
 		run_dump(ecu, signature, address, length, log_callback=log_callback)

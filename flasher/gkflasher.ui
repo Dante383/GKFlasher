@@ -728,6 +728,21 @@
        <string>loader</string>
       </property>
      </item>
+     <item>
+      <property name="text">
+       <string>probe</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>read</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>fullflash</string>
+      </property>
+     </item>
     </widget>
     <widget class="QLabel" name="mtosKeyLabel">
      <property name="geometry">

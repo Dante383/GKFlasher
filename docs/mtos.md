@@ -46,6 +46,9 @@ reference bench ECU it is `0x2d381c78`.
 | `dump`   | Streams a block of ECU memory out of the K-line. Range comes from `-s/--address-start` and `-e/--address-stop` (defaults to `0x000000`+`0x40`). Sample stays within one 16 KB page. |
 | `payload`| Uploads a raw body you authored (`--mtos-payload file.bin`, code starting at `0xC014`), runs it, and listens on the K-line. |
 | `loader` | Uploads the built-in K-line loader, then streams `--mtos-payload` to it as a second stage and runs that. Lets you run code larger than the MTOS RAM budget. |
+| `probe`  | Starts the BSL kernel over MTOS and does everything a full flash does before the first erase, then resets the ECU. Writes nothing to the flash. See [Full flash](#full-flash-bsl-kernel-over-mtos). |
+| `read`   | Starts the BSL kernel and reads the whole 512 KB external flash to `-o` (or `mtos_read_<time>.bin`). |
+| `fullflash` | Starts the BSL kernel and rewrites the whole flash, **boot sectors included**, from `--mtos-payload` (a 512 KB image). Backs up first. |
 
 > There is deliberately no "write a value to RAM and read it back" self-test mode.
 > `StartRoutine(0xFA)` ends the KWP session once your code returns, and the ensuing
@@ -73,13 +76,15 @@ The **MTOS** tab exposes the same flow:
 
 | GUI field | CLI equivalent |
 |-----------|----------------|
-| **Mode** (`hello` / `dump` / `payload` / `loader`) | `--mtos-mode` |
+| **Mode** (`hello` / `dump` / `payload` / `loader` / `probe` / `read` / `fullflash`) | `--mtos-mode` |
 | **Key** | `--mtos-key` |
-| **Select file** / file box | `--mtos-payload` (payload and loader modes) |
+| **Select file** / file box | `--mtos-payload` (payload, loader and fullflash modes), `-o` (read mode) |
 | **Dump address** / **Length** | `-s` / `-e` (dump mode; default `0x000000`+`0x40`) |
 | **Run MTOS** | runs the selected mode |
 
 Output and the received K-line bytes appear in the log pane, same as the CLI.
+`fullflash` asks for confirmation in a dialog before the kernel starts. Picking a
+session back up (`--mtos-attach`) is CLI only.
 
 ---
 
@@ -277,6 +282,143 @@ not strictly need its own `kline_flush()` — but using the ready-made generator
 flush anyway) is the safe default. Verified end to end on the bench: a 256-byte memory
 dump streamed as a second stage and executed from `0xE000` returns byte-for-byte the
 same data as reading flash directly.
+
+---
+
+## Full flash (BSL kernel over MTOS)
+
+`probe`, `read` and `fullflash` turn MTOS into a whole-flash tool. They rewrite all
+512 KB of the external flash, **including the boot sectors**, from a running ECU over
+the normal K-line, without opening the case for BSL. Use them to move an ECU to a
+firmware with a different bootloader, such as `ca663056` (or lower) to `ca663057`.
+KWP2000 flashing can't do that: it only writes the program and calibration areas.
+
+> ⚠️ A full flash can brick the ECU. If it fails or loses power while the boot sectors
+> are being written, the ECU won't boot until it's recovered over BSL. Read the
+> [safety](#safety) notes first, and use a bench supply.
+
+```bash
+# 1. Dry run: everything up to the first erase, then the ECU is reset. Nothing is written
+python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
+    --desired-baudrate 0x05 --mtos-mode probe
+
+# 2. Read the whole flash
+python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
+    --desired-baudrate 0x05 --mtos-mode read -o flash.bin
+
+# 3. Full flash. Backs up to -o (or mtos_backup_<time>.bin) and asks before erasing anything
+python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
+    --desired-baudrate 0x05 --mtos-mode fullflash --mtos-payload image.bin
+```
+
+`--desired-baudrate 0x05` runs the session, and so the kernel, at 125000 baud. At
+the default 10400 baud a full read takes about 10 minutes, and a full flash reads the
+flash twice (the backup and the verify).
+
+### How it works
+
+1. The usual MTOS sequence runs the built-in [loader](#the-loader-protocol-second-stage).
+   Its second stage is a short prologue plus the **stock SIMK4x BSL kernel**
+   (`assets/simk4x_kernel.bin`, the same one `bsl.py` uses), copied to `0xE000` in XRAM.
+   The prologue moves the stack and context pointer out of the firmware's RAM, then
+   jumps into the kernel. The firmware never gets the CPU back.
+2. The kernel greets with `0x03` and speaks the BSL protocol over the K-line, at the
+   diagnostic session's baudrate.
+3. GKFlasher sets `ADDRSEL1` to `0x4008`, putting the flash write strobe where the BSL
+   flash driver expects it. It then uploads the stock **I4 flash driver**
+   (`assets/simk4x_driver_i4_a29fx00bx.bin`) to `0xF600` and reads it back.
+4. Before anything is erased, it checks that the read path is the flash the firmware
+   runs from: `0x800000` (the driver's view) must match `0x080000`, and the MTOS
+   signature must be at `0x803FE8`. It also reads the chip IDs through the driver,
+   which proves the write path. Only AM29F400BB and M29F400BB are accepted.
+5. `fullflash` reads the whole flash and saves it as a backup. It lists the sectors
+   that differ from the image and asks for confirmation. It then erases, programs and
+   verifies only those sectors, and finally verifies the whole flash.
+6. The kernel software-resets the ECU, and GKFlasher checks that it talks KWP2000 again.
+
+Unlike in BSL, the **watchdog is running and can't be stopped**, because `DISWDT` only
+works before `EINIT`. The prologue sets the longest watchdog period (about 335 ms). The
+kernel services the watchdog while it waits for a byte. The driver is patched to
+service it in its erase poll (`mtos_asm.patch_driver_watchdog`); programming polls a
+word at a time and doesn't need it.
+The kernel doesn't service it while it sends, so every reply has to fit well inside
+the watchdog period. That's why reads are split into blocks: `0x80` bytes at 10400 baud,
+more at higher rates.
+
+The kernel protocol is `bsl.py`'s, but GKFlasher checks every byte the kernel sends
+back before it sends the next one. With the firmware itself being rewritten, a
+parameter byte the kernel takes for a command can't just be logged and ignored.
+
+### Safety
+
+- **Backup first.** `fullflash` always reads and saves the whole flash before it erases
+  anything. Keep that file: it's what you'd recover with.
+- **Only what differs is written.** If the flash already matches the image, nothing is
+  written.
+- **Boot sectors last.** The write order is SA4–SA10, SA1, SA2, SA3, then SA0. SA0
+  (boot1: the reset vector and the MTOS/KWP boot code) and SA3 (boot2) go last, SA0
+  very last. Until then, a reset still boots the old boot code. The confirmation prompt
+  says when a boot sector is included.
+- **Every sector is verified** after it's written, with up to 3 attempts per sector. At the
+  end the whole flash is read back and compared to the image. Any sector that differs
+  is rewritten, up to twice.
+- **Ctrl+C** stops at the next safe point, never inside a sector write. A second
+  Ctrl+C stops right away, even mid-command.
+- **If it fails before the flash was touched,** the ECU is reset, or you're told to
+  power cycle it.
+- **If it fails after the flash was touched,** the kernel is **left running**. The ECU
+  is not reset into a half-written flash. Keep the ECU powered and run the command
+  GKFlasher prints, which is the same command with `--mtos-attach`:
+
+  ```bash
+  python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-mode fullflash \
+      --mtos-attach --mtos-payload image.bin --desired-baudrate 0x05
+  ```
+
+  This finds the kernel again (no KWP2000, no key) and runs the mode again from the
+  start, including a new backup. Use the **same `--desired-baudrate`** as the session
+  that left the kernel running. Attach works with `probe`, `read` and `fullflash`.
+
+### Getting back in sync, and what can still go wrong
+
+If a reply doesn't arrive, or doesn't match what was expected, GKFlasher resyncs:
+
+1. It waits for the line to go quiet.
+2. It sends `F0 FA 00`, then zeros one byte at a time, until the kernel answers.
+3. It confirms the kernel is back in its command loop.
+
+A kernel left waiting for the parameters of a register-call command takes those first
+bytes as the call address, `0x00FAF0`. GKFlasher keeps a `rets` there (the *trap*).
+This means a call cut off between its command byte and its address, for example when
+the host dies, just returns. The trap is armed before the driver is used and re-armed
+after every resync. Leftover programming or erasing from such a cut-off command would
+show up in the final full verify.
+
+What remains is a call whose **address arrived partly**, from corrupted bytes on the
+line or the host dying in the middle of a write. The kernel may then call an arbitrary
+address. That's unlikely, but if it happens, the ECU may need BSL.
+
+### Recovery
+
+If the ECU no longer boots, use BSL (`bsl.py`) to write back the backup
+`fullflash` saved, or any good full image.
+
+### Verified on hardware
+
+On the bench (SIMK43 2.0 `ca663056`, ST M29F400BB, FTDI K-line adapter, 125000 baud),
+`probe`, `read` and a `fullflash` that rewrote SA2, SA3 and SA0 all passed. The ECU
+booted from the new boot sector and answered KWP2000 and MTOS again. A fresh read
+matched the image byte for byte, and the firmware's own view (`dump` mode) agrees with
+the kernel's reads. A full read takes about a minute at 125000 baud.
+
+Not verified yet:
+
+- J2534 adapters. FTDI is the reference.
+- Upgrading across bootloader versions (`ca663056` to `ca663057`).
+
+Run `probe`, then `read`, before the first `fullflash` on a new ECU or adapter. Also
+compare the read with the image you're about to write. Sectors with per-ECU data, such
+as the emulated EEPROM records in SA2, get the image's contents.
 
 ---
 

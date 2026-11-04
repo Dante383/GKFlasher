@@ -2,19 +2,18 @@ import argparse, time, yaml, logging, sys, os, traceback
 from datetime import datetime
 from alive_progress import alive_bar
 from gkbus.device import Bus, DeviceABC, discover, find_device
-from gkbus.channel import KLineTiming
 from gkbus.exceptions import DeviceException, GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
-from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, ECUIdentificationException, DesiredBaudrate
+from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, negotiate_timing, release_timing, ECUIdentificationException, DesiredBaudrate
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, ReprogrammingStatus, AccessLevel
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.rsw import rsw_handler
-from flasher.mtos import mtos_handler
+from flasher.mtos import mtos_handler, attach_session, KERNEL_MODES
 from _version import __version__
 
 def strip (string):
@@ -198,9 +197,13 @@ def load_arguments ():
 	parser.add_argument('--rsw-full', help='Flash full image set using RSW bootstrap')
 	parser.add_argument('--rsw-virginize', help='Virginize ECU using RSW bootstrap')
 	parser.add_argument('--mtos',  help='Mini Test Operating System', action='store_true')
-	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader', default='hello', choices=['hello', 'dump', 'payload', 'loader'])
-	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode) or second stage (loader mode)')
+	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader, '
+		'probe/read/fullflash (BSL kernel: dry run, whole flash read, whole flash write incl. boot sectors)',
+		default='hello', choices=['hello', 'dump', 'payload', 'loader', 'probe', 'read', 'fullflash'])
+	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode), second stage (loader mode) or full 512 KB image (fullflash mode)')
 	parser.add_argument('--mtos-key', help='Key to use for Siemens access level', type=lambda x: int(x,0))
+	parser.add_argument('--mtos-attach', help='Pick up the BSL kernel a failed probe/read/fullflash left running (ECU still powered). '
+		'Use the same --desired-baudrate as that session', action='store_true')
 	args = parser.parse_args()
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
@@ -327,26 +330,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	bus.transport.set_timeout(12)
 
 	print('[*] Set timing parameters to maximum')
-	try:
-		available_timing = bus.execute(
-			kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
-		).get_data()
-
-		bus.execute(
-			kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(
-				*available_timing[1:]
-			)
-		)
-
-		# the ECU advertises p3min=0 but drops requests that arrive too soon after its response
-		# (measured on a SIMK43 bench: 7 ms fails, 10 ms works), so keep a margin floor. this is
-		# what actually speeds bulk reads up: the host now waits this long before each request
-		# instead of KLineTiming's safe 60 ms default. 20 ms gives ~2x margin over the measured
-		# edge and still cuts a 254-byte read at 125000 baud from ~140 ms to ~50 ms. honor the
-		# ECU's own p3min if it asks for more. no-op on adapters that time the bus themselves
-		ecu_p3min = available_timing[3]  # p2min p2max >p3min< p3max p4min
-		bus.transport.channel.set_timing(KLineTiming(p3_min=max(ecu_p3min, 20)))
-	except kwp2000.Kwp2000NegativeResponseException:
+	if not negotiate_timing(bus):
 		print('[!] Not supported on this ECU!')
 
 	# this stays for now instead of the method built in the ECU class
@@ -442,8 +426,32 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		else:
 			mtos_length = 0x40
 		mtos_handler(ecu, args.mtos_key, mode=args.mtos_mode,
-			payload_filename=args.mtos_payload, address=mtos_address, length=mtos_length)
+			payload_filename=args.mtos_payload, address=mtos_address, length=mtos_length,
+			output_filename=args.output, attach_hint=mtos_attach_hint(args))
 	bus.close()
+
+def mtos_attach_hint (args) -> str:
+	'''
+	The command that picks a kernel left running by this session back up
+	'''
+	command = 'python gkflasher.py -p {} -i {} --mtos --mtos-mode {} --mtos-attach'.format(
+		GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']]['interface'], args.mtos_mode)
+	if args.mtos_payload:
+		command += ' --mtos-payload {}'.format(args.mtos_payload)
+	if args.desired_baudrate:
+		command += ' --desired-baudrate 0x{:02X}'.format(args.desired_baudrate)
+	return command
+
+def mtos_attach (bus, args) -> None:
+	if args.mtos_mode not in KERNEL_MODES:
+		print('[!] --mtos-attach works with --mtos-mode {}'.format(', '.join(KERNEL_MODES)))
+		return
+	if args.mtos_mode == 'fullflash' and not args.mtos_payload:
+		print('[!] fullflash mode requires --mtos-payload (the full 512 KB image)')
+		return
+	baudrate = BAUDRATES.get(args.desired_baudrate, 10400) if args.desired_baudrate else 10400
+	attach_session(bus, args.mtos_mode, image_filename=args.mtos_payload, output_filename=args.output,
+		baudrate=baudrate, attach_hint=mtos_attach_hint(args))
 
 def packet2hex (packet: RawPacket) -> str:
 	direction = 'Incoming' if packet.direction == PacketDirection.INCOMING else 'Outgoing'
@@ -475,7 +483,10 @@ if __name__ == '__main__':
 		sys.exit(1)
 
 	try:
-		main(bus, args)
+		if args.mtos and args.mtos_attach:
+			mtos_attach(bus, args)
+		else:
+			main(bus, args)
 	except KeyboardInterrupt:
 		pass
 	except Exception:
@@ -484,6 +495,8 @@ if __name__ == '__main__':
 		print('[*] Dumping buffer:\n')
 		print('\n'.join([packet2hex(packet) for packet in bus.transport.buffer_dump()]))
 		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
+	if not args.mtos:
+		release_timing(bus)
 	bus.close()
 	device.close()
 	os._exit(0)

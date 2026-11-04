@@ -1,6 +1,7 @@
 import logging
 from typing import Self
 from gkbus.protocol import kwp2000
+from gkbus.channel import KLineChannel, KLineTiming
 from gkbus.exceptions import TimeoutException
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier, AccessLevel
 from dataclasses import dataclass
@@ -61,6 +62,61 @@ def enable_security_access (bus: kwp2000.Kwp2000Protocol):
 	key = calculate_key(int.from_bytes(seed, 'big')).to_bytes(2, 'big')
 
 	bus.execute(kwp2000.commands.SecurityAccess().send_key(key))
+
+# the SIMK43 advertises p3min=0 in the flash session but drops requests that arrive too soon
+# after its response (measured on a bench: 7 ms fails, 10 ms works), so keep a margin floor.
+# 20 ms gives ~2x headroom and still cuts a 254-byte read at 125000 baud from ~140 ms to ~50 ms
+P3_MIN_FLOOR_MS = 20.0
+
+def negotiate_timing (bus: kwp2000.Kwp2000Protocol) -> bool:
+	'''
+	Switch the ECU to the fastest timing it allows and shorten the host's pause before each
+	request to match - that's what speeds bulk reads up. Lasts until the next
+	StartDiagnosticSession: the ECU and gkbus both go back to default timing then, so call this
+	again after returning to the flash session. Flash session only - in the default session
+	the SIMK43 offers different limits, and using them broke communication on the bench
+
+	:return: False if the ECU doesn't support it, timing stays at the defaults
+	'''
+	try:
+		limits = bus.execute(
+			kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
+		).get_data()[1:]
+		if len(limits) != 5:
+			return False
+		bus.execute(
+			kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(*limits)
+		)
+	except kwp2000.Kwp2000NegativeResponseException:
+		return False
+
+	channel = getattr(bus.transport, 'channel', None)
+	if isinstance(channel, KLineChannel):
+		# p2min p2max >p3min< p3max p4min, 0.5 ms per bit: the flash session's default p3min
+		# of 0x6e is the 55 ms the SIMK43 was measured to need
+		ecu_p3min = limits[2] / 2
+		channel.set_timing(KLineTiming(p3_min=max(ecu_p3min, P3_MIN_FLOOR_MS)))
+	return True
+
+def release_timing (bus: kwp2000.Kwp2000Protocol) -> None:
+	'''
+	Undo negotiate_timing before letting go of the ECU. Negotiating also raises P3max - how long
+	the session outlives the last request - from 5 s to ~63 s, and a session left at a higher
+	baudrate ignores the next 10400 baud init that long (each try restarts the countdown).
+	Does nothing unless timing was negotiated, errors are ignored. Never call it while MTOS code
+	is running - it would take the request for its own input
+	'''
+	channel = getattr(bus.transport, 'channel', None)
+	if not isinstance(channel, KLineChannel) or channel.get_timing() == channel.default_timing:
+		return
+	timeout = bus.transport.get_timeout()
+	bus.transport.set_timeout(1)
+	try:
+		bus.execute(kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_default_values())
+	except (IOError, kwp2000.Kwp2000Exception):
+		pass
+	finally:
+		bus.transport.set_timeout(timeout)
 
 @dataclass
 class DesiredBaudrate:
@@ -183,9 +239,18 @@ class ECU:
 		except TimeoutException:
 			logger.error('Received a timeout while trying to escalate privileges. This might indicate that something went wrong with the patch and the ECU is now being restarted by watchdog.')
 		finally:
-			self.bus.execute(kwp2000.commands.StartDiagnosticSession(self.diagnostic_session_type, self.desired_baudrate.index))
+			self._restore_session()
 
 		return False
+
+	def _restore_session (self) -> None:
+		'''
+		Back to the ECU's own diagnostic session after a detour to the default one. The session
+		change dropped the negotiated timing, so negotiate it again to keep bulk reads fast
+		'''
+		self.bus.execute(kwp2000.commands.StartDiagnosticSession(self.diagnostic_session_type, self.desired_baudrate.index))
+		if self.diagnostic_session_type == kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING:
+			negotiate_timing(self.bus)
 
 	def security_access (self, access_level: AccessLevel = AccessLevel.HYUNDAI_0x1) -> bool:
 		if access_level == AccessLevel.HYUNDAI_0x1:
@@ -234,7 +299,7 @@ class ECU:
 	def clear_adaptive_values (self):
 		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, self.desired_baudrate.index))
 		self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(self.diagnostic_session_type, self.desired_baudrate.index))
+		self._restore_session()
 
 class ECUIdentificationException (Exception):
 	pass

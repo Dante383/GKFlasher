@@ -59,6 +59,28 @@ S0RIC = 0xFF6E
 # A convenient, known-executable scratch area for a second stage (XRAM 0xE000-0xEEFF)
 STAGE2_ADDRESS = 0xE000
 
+# CPU SFRs the BSL kernel shim sets up
+CP = 0xFE10
+SP = 0xFE12
+STKOV = 0xFE14
+STKUN = 0xFE16
+PSW = 0xFF10
+WDTCON = 0xFFAE
+
+# Where the BSL kernel's register bank and system stack go. The flash driver
+# lives at 0xF600-0xF7F1 and the kernel's data buffer at 0xFC00-0xFDFF, both
+# fixed by the stock binaries, so these stay below them
+KERNEL_CP = 0xF200
+KERNEL_STACK_LIMIT = 0xF300
+KERNEL_STACK_TOP = 0xF600
+
+# The stock SIMK4x I4 flash driver (assets/simk4x_driver_i4_a29fx00bx.bin) is
+# linked to run at 0xF600, entry point 0xF640
+DRIVER_ADDRESS = 0xF600
+DRIVER_ENTRY = 0xF640
+_DRIVER_ERASE_POLL = 0xF706   # exts r2,#1 ; mov r5,[r1] - the erase completion poll
+_DRIVER_PAD = 0xF630          # 16 bytes of 0xFF padding in front of the entry point
+
 
 def crc16_mtos(data: bytes, seed: int = CRC_SEED) -> int:
 	"""Reproduce the firmware CRC routine at 0x000E32 byte-for-byte.
@@ -186,6 +208,12 @@ class Asm:
 	def movb_mem_imm(self, addr, imm8):       # movb SFR,#imm8  e7 short imm 00 (@0a91f0)
 		return self._emit(0xE7, _sfr_short(addr), imm8 & 0xFF, 0x00)
 
+	def mov_sfr_imm(self, addr, imm16):       # mov SFR,#imm16  e6 short lo hi (e6d70192 = mov WDTCON,#0x9201)
+		short = _sfr_short(addr)
+		if short >= 0xF0:
+			raise ValueError('0x%X is in the GPR range of the short address space' % addr)
+		return self._emit(0xE6, short, imm16 & 0xFF, (imm16 >> 8) & 0xFF)
+
 	def movb_ind_rb(self, ptr_reg, rb):       # movb [Rw],RLn   b9 (code<<4|rw) (@0a2bda)
 		return self._emit(0xB9, (_rb_code(rb) << 4) | (ptr_reg & 0xF))
 
@@ -221,6 +249,9 @@ class Asm:
 	# -- control flow --
 	def rets(self):                           # rets            db 00 (@0e0ffc)
 		return self._emit(0xDB, 0x00)
+
+	def ret(self):                            # ret             cb 00 (BSL kernel @fb50)
+		return self._emit(0xCB, 0x00)
 
 	def nop(self):                            # nop             cc 00
 		return self._emit(0xCC, 0x00)
@@ -449,6 +480,95 @@ def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
 	return a.assemble()
 
 
+def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
+	"""Second stage for the loader that turns the halted firmware into a BSL
+	session: a short prologue followed by the stock SIMK4x BSL kernel
+	(assets/simk4x_kernel.bin), which then talks the usual BSL protocol over the
+	K-line at the current ASC0 baudrate.
+
+	The kernel is position independent (relative jumps only, and its CALL
+	command builds the return address from a pushed IP), so it runs in place
+	right behind the prologue. The prologue gives it the environment the boot
+	ROM would have given it, minus the parts the running firmware already
+	set up (SYSCON, BUSCON0/1 - locked or fine as they are):
+
+	  * interrupts off for good - the firmware never gets the CPU back, the
+	    session ends with the kernel's software reset (C_SWRESET)
+	  * longest watchdog period (WDTCON 0x0001, ~335-420 ms). The kernel
+	    services it while waiting for host bytes, not while transmitting, so
+	    the host keeps every reply below that
+	  * system stack at 0xF300-0xF5FF and register bank at 0xF200, clear of
+	    the flash driver (0xF600) and the data buffer (0xFC00). The bounds are
+	    widened first so the switch can't trip a stack trap
+	  * DPP3 is 3 at runtime, which the kernel's CALL relies on
+
+	Never returns to the loader. Size stays even so the kernel stays aligned.
+	"""
+	if not kernel or len(kernel) % 2:
+		raise ValueError('kernel must be a non-empty, even number of bytes')
+
+	a = Asm()
+	a.bclr(PSW, 11)            # IEN = 0
+	a.nop()                    # an interrupt may still slip in right after the bclr
+	a.mov_sfr_imm(WDTCON, 0x0001)
+	a.srvwdt()                 # reload with the new period
+	a.mov_sfr_imm(STKOV, 0xF200)
+	a.mov_sfr_imm(STKUN, 0xFDFE)
+	a.mov_sfr_imm(SP, KERNEL_STACK_TOP)
+	a.nop()                    # don't use SP right after writing it
+	a.mov_sfr_imm(STKOV, KERNEL_STACK_LIMIT)
+	a.mov_sfr_imm(STKUN, KERNEL_STACK_TOP)
+	a.mov_sfr_imm(CP, KERNEL_CP)
+	a.nop()                    # nor a GPR right after changing CP
+	stage2 = a.assemble(base=STAGE2_ADDRESS) + bytes(kernel)
+	if STAGE2_ADDRESS + len(stage2) > 0xEF00:
+		raise ValueError('second stage does not fit the XRAM scratch area')
+	return stage2
+
+
+def _callr(source, target):
+	"""callr rel8 at `source` to `target` (bb rel, rel = words from the next instruction)"""
+	rel = (target - (source + 2)) // 2
+	if not -128 <= rel <= 127:
+		raise ValueError('callr out of range')
+	return bytes([0xBB, rel & 0xFF])
+
+
+def patch_driver_watchdog(driver: bytes) -> bytes:
+	"""Make the stock I4 flash driver service the watchdog while erasing.
+
+	In the BSL the watchdog is never started, so the driver's erase completion
+	poll (up to several seconds) never services it. Once the firmware has
+	started it there is no way to stop it, so the poll's flash read at 0xF706
+	becomes a call to a helper placed in the unused padding at 0xF630:
+
+	    0xF630  srvwdt
+	            exts r2,#1
+	            mov r5,[r1]      ; the two instructions moved here
+	            ret
+	    0xF706  callr 0xF630
+	            nop
+
+	Programming polls a word at a time and needs no help. Refuses anything
+	that isn't the expected driver."""
+	data = bytearray(driver)
+	poll = _DRIVER_ERASE_POLL - DRIVER_ADDRESS
+	pad = _DRIVER_PAD - DRIVER_ADDRESS
+	moved = bytes.fromhex('dc02a851')   # exts r2,#1 ; mov r5,[r1]
+	if data[poll:poll + 4] != moved or data[pad:pad + 16] != b'\xff' * 16:
+		raise ValueError('unexpected flash driver, refusing to patch it')
+
+	helper = Asm()
+	helper.srvwdt()
+	helper.db(*moved)
+	helper.ret()
+	helper = helper.assemble(base=_DRIVER_PAD)
+
+	data[pad:pad + len(helper)] = helper
+	data[poll:poll + 4] = _callr(_DRIVER_ERASE_POLL, _DRIVER_PAD) + bytes([0xCC, 0x00])
+	return bytes(data)
+
+
 def payload_stage2_hello(message: bytes = b'OK') -> bytes:
 	"""Sample stage-2 payload for the loader: frame `message` on the K-line.
 
@@ -488,4 +608,28 @@ if __name__ == '__main__':
 	print('dump 0x40:', payload_memory_dump(0x000000, 0x40).hex())
 	print('loader   :', payload_loader().hex())
 	print('blob     :', blob.hex())
+
+	# encodings checked against ca663056 (mov WDTCON,#0x9201 / mov ADDRSEL1,#0x1008)
+	assert Asm().mov_sfr_imm(WDTCON, 0x9201).assemble() == bytes.fromhex('e6d70192')
+	assert Asm().mov_sfr_imm(0xFE18, 0x1008).assemble() == bytes.fromhex('e60c0810')
+	assert Asm().bclr(PSW, 11).assemble() == bytes.fromhex('be88')
+	assert _callr(0xF706, 0xF630) == bytes.fromhex('bb94')
+	shim = payload_bsl_kernel_shim(b'\xcc\x00')
+	assert shim.startswith(bytes.fromhex('be88cc00' 'e6d70100' 'a758a7a7'))
+	assert shim.endswith(bytes.fromhex('e60800f2' 'cc00' 'cc00')) and len(shim) % 2 == 0
+	print('shim     :', shim[:-2].hex())
+
+	import os
+	driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'simk4x_driver_i4_a29fx00bx.bin')
+	if os.path.exists(driver_path):
+		driver = open(driver_path, 'rb').read()
+		patched = patch_driver_watchdog(driver)
+		assert patched[0x106:0x10A] == bytes.fromhex('bb94cc00')
+		assert patched[0x30:0x40] == bytes.fromhex('a758a7a7dc02a851cb00') + b'\xff' * 6
+		assert sum(a != b for a, b in zip(driver, patched)) <= 14 and len(patched) == len(driver)
+		try:
+			patch_driver_watchdog(patched)
+			raise AssertionError('patched twice')
+		except ValueError:
+			pass
 	print('all self-tests passed')

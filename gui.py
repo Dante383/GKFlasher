@@ -13,8 +13,7 @@ from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, 
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
-from gkbus.channel import KLineTiming
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, ECUIdentificationException, ECU, DesiredBaudrate
+from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, negotiate_timing, release_timing, ECUIdentificationException, ECU, DesiredBaudrate
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
@@ -268,7 +267,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.rswVirginizeBtn.clicked.connect(lambda: self.click_handler(self.rsw_virginize))
 
 		self.mtosFileBtn.clicked.connect(self.handler_select_mtos_file)
-		self.mtosRunBtn.clicked.connect(lambda: self.click_handler(self.run_mtos))
+		self.mtosRunBtn.clicked.connect(self.handler_run_mtos)
 
 	def click_handler (self, callback):
 		worker = Worker(callback)
@@ -462,26 +461,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.bus.transport.set_timeout(12)
 
 		log_callback.emit('[*] Set timing parameters to maximum')
-		try:
-			available_timing = self.bus.execute(
-				kwp2000.commands.AccessTimingParameters().read_limits_of_possible_timing_parameters()
-			).get_data()
-
-			self.bus.execute(
-				kwp2000.commands.AccessTimingParameters().set_timing_parameters_to_given_values(
-					*available_timing[1:]
-				)
-			)
-
-			# the ECU advertises p3min=0 but drops requests that arrive too soon after its response
-			# (measured on a SIMK43 bench: 7 ms fails, 10 ms works), so keep a margin floor. this is
-			# what actually speeds bulk reads up: the host now waits this long before each request
-			# instead of KLineTiming's safe 60 ms default. 20 ms gives ~2x margin over the measured
-			# edge and still cuts a 254-byte read at 125000 baud from ~140 ms to ~50 ms. honor the
-			# ECU's own p3min if it asks for more. no-op on adapters that time the bus themselves
-			ecu_p3min = available_timing[3]  # p2min p2max >p3min< p3max p4min
-			self.bus.transport.channel.set_timing(KLineTiming(p3_min=max(ecu_p3min, 20)))
-		except kwp2000.Kwp2000NegativeResponseException:
+		if not negotiate_timing(self.bus):
 			log_callback.emit('[!] Not supported on this ECU!')
 
 		log_callback.emit('[*] Security Access')
@@ -517,6 +497,7 @@ class Ui(QtWidgets.QMainWindow):
 		return False
 
 	def disconnect_ecu (self, ecu: ECU) -> None:
+		release_timing(ecu.bus)
 		try:
 			ecu.bus.execute(StopCommunication())
 		except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, AttributeError):
@@ -1611,17 +1592,42 @@ class Ui(QtWidgets.QMainWindow):
 	# ==========================================================
 
 	def handler_select_mtos_file (self):
-		filename, _ = QFileDialog.getOpenFileName(
-			self,
-			"Select MTOS payload BIN",
-			"",
-			"BIN Files (*.bin);;All Files (*)"
-		)
+		if self.mtosModeBox.currentText() == 'read':
+			filename, _ = QFileDialog.getSaveFileName(self, "Save the flash read as", "", "BIN Files (*.bin);;All Files (*)")
+		else:
+			filename, _ = QFileDialog.getOpenFileName(
+				self,
+				"Select MTOS payload BIN or full flash image",
+				"",
+				"BIN Files (*.bin);;All Files (*)"
+			)
 
 		if filename:
 			self.mtosFileInput.setText(filename)
 
-	def run_mtos (self, progress_callback=None, log_callback=None):
+	def handler_run_mtos (self):
+		confirmed = False
+		if self.mtosModeBox.currentText() == 'fullflash':
+			if not self.mtosFileInput.text().strip():
+				self.log('[!] fullflash mode requires a full 512 KB flash image')
+				return
+			confirmed = QMessageBox.warning(
+				self,
+				'MTOS full flash',
+				'This rewrites the whole flash, the bootloader included.\n\n'
+				'The flash is read and saved first. Then every sector that differs from the image is erased '
+				'and rewritten, the boot sectors last. If it fails or the ECU loses power while those are written, '
+				'the ECU won\'t start until it\'s recovered over BSL.\n\n'
+				'Keep the ECU powered until GKFlasher says it\'s done. Continue?',
+				QMessageBox.Yes | QMessageBox.No,
+				QMessageBox.No
+			) == QMessageBox.Yes
+			if not confirmed:
+				return
+		self.click_handler(lambda progress_callback, log_callback: self.run_mtos(
+			progress_callback=progress_callback, log_callback=log_callback, confirmed=confirmed))
+
+	def run_mtos (self, progress_callback=None, log_callback=None, confirmed=False):
 
 		log_callback = self.get_rsw_logger(log_callback)
 
@@ -1649,9 +1655,22 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		filename = self.mtosFileInput.text().strip()
-		if mode in ('payload', 'loader') and not filename:
-			log_callback.emit('[!] {} mode requires a payload file'.format(mode))
+		if mode in ('payload', 'loader', 'fullflash') and not filename:
+			log_callback.emit('[!] {} mode requires a {}'.format(
+				mode, 'full 512 KB flash image' if mode == 'fullflash' else 'payload file'))
 			return
+		if mode == 'fullflash' and not confirmed:
+			return
+
+		def confirm (message):
+			log_callback.emit('[*] {} Confirmed before starting'.format(message))
+			return True
+
+		baudrate_index = self.get_desired_baudrate().index
+		attach_hint = 'python gkflasher.py -p kline -i <this adapter> --mtos --mtos-mode {} --mtos-attach{}{}'.format(
+			mode,
+			' --mtos-payload "{}"'.format(filename) if mode == 'fullflash' else '',
+			' --desired-baudrate 0x{:02X}'.format(baudrate_index) if baudrate_index else '')
 
 		address = parse_hex(self.mtosAddressInput.text(), 0x000000)
 		length = parse_hex(self.mtosLengthInput.text(), 0x40)
@@ -1666,6 +1685,8 @@ class Ui(QtWidgets.QMainWindow):
 			mtos_handler(
 				ecu, mtos_key, mode=mode, payload_filename=filename or None,
 				address=address, length=length,
+				output_filename=(filename or None) if mode == 'read' else None,
+				confirm_callback=confirm, attach_hint=attach_hint,
 				log_callback=log_callback, progress_callback=progress_callback
 			)
 		except Exception as e:
