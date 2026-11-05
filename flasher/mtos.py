@@ -58,6 +58,11 @@ def siemens_unlock (ecu: ECU, mtos_key: int, log_callback=None) -> None:
 	seed = ecu.bus.execute(
 		kwp2000.commands.SecurityAccess().request_seed(access_level=AccessLevel.SIEMENS_0xFD.value)
 	).get_data()[1:]
+
+	if (sum(seed) == 0):
+		log('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
+		return
+
 	log('[*] Seed {}, sending key {}'.format(seed.hex(), key.hex()), log_callback)
 	ecu.bus.execute(
 		kwp2000.commands.SecurityAccess().send_key(key, access_level=AccessLevel.SIEMENS_0xFD.value + 1)
