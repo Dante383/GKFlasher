@@ -1,9 +1,21 @@
 import logging
+import re
+from datetime import datetime
 from typing import Self
 from gkbus.protocol import kwp2000
 from gkbus.channel import KLineChannel, KLineTiming
 from gkbus.exceptions import TimeoutException
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier, AccessLevel
+from flasher.rsw import log
+from ecu_definitions import (
+    ECU_IDENTIFICATION_TABLE,
+    IOIdentifier,
+    AccessLevel,
+    KEFICO_LAYOUT,
+    ECU_FAMILY_SIMK,
+    ECU_FAMILY_M797,
+    ECU_FAMILY_UNKNOWN,
+    M797_ECU_IDENTIFICATION_PARAMETERS,
+)
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -30,15 +42,23 @@ kwp_ecu_identification_parameters = [
 	{'value': 0x8F, 'name': 'System supplier specific'},
 ]
 
-def fetch_ecu_identification (bus):
-	values = {}
-	for parameter in kwp_ecu_identification_parameters:
-		try:
-			value = bus.execute(kwp2000.commands.ReadEcuIdentification(parameter['value'])).get_data()
-		except kwp2000.Kwp2000NegativeResponseException:
-			continue
-		values[parameter['value']] = {'name': parameter['name'], 'value': value[1:]}
-	return values
+def read_ecu_identification(bus, identifier: int) -> bytes:
+    """Return an identification payload, accepting an optional echoed identifier."""
+    data = bytes(bus.execute(kwp2000.commands.ReadEcuIdentification(identifier)).get_data())
+    return data[1:] if data and data[0] == identifier else data
+
+def fetch_ecu_identification(bus, parameters=None):
+    if parameters is None:
+        parameters = kwp_ecu_identification_parameters
+    values = {}
+    for parameter in parameters:
+        identifier = parameter['value']
+        try:
+            value = read_ecu_identification(bus, identifier)
+        except kwp2000.Kwp2000NegativeResponseException:
+            continue
+        values[identifier] = {'name': parameter['name'], 'value': value}
+    return values
 
 def calculate_key (concat11_seed):
     key = 0x9360
@@ -316,3 +336,145 @@ def identify_ecu (bus: kwp2000.Kwp2000Protocol) -> ECU:
 			ecu.set_bus(bus)
 			return ecu
 	raise ECUIdentificationException('Failed to identify ECU!')
+
+
+class M797ECU(ECU):
+    """Kefico layout; session and bulk operations are handled by flasher.m797."""
+
+    def __init__(self):
+        super().__init__(**KEFICO_LAYOUT)
+
+
+def _meaningful_identification_payload(response, identifier: int) -> bool:
+    """Reject filler/blank positive responses such as SIMK's all-FF IDs."""
+    data = bytes(response)
+
+    if data and data[0] == identifier:
+        data = data[1:]
+
+    if not data:
+        return False
+
+    # Erased/unimplemented local identifiers observed on SIMK answer with
+    # positive SID but contain only 00/FF (occasionally spaces).
+    meaningful = bytes(
+        value for value in data
+        if value not in (0x00, 0x20, 0xFF)
+    )
+
+    return len(meaningful) >= 2
+
+
+def detect_ecu_family(bus: kwp2000.Kwp2000Protocol) -> str:
+    """
+    Non-destructive early family detection before any SIMK-specific setup.
+
+    M7.9.7 exposes supplier/hardware/software IDs; SIMK exposes boot/program/
+    calibration versions before security unlock. Require multiple meaningful
+    responses so a disconnected ECU cannot be classified as either family.
+    """
+    for family, identifiers in (
+        # SIMK V6 also implements 0x91/0x92, so its version IDs take priority.
+        (ECU_FAMILY_SIMK, (0x8C, 0x8D, 0x8E)),
+        (ECU_FAMILY_M797, (0x91, 0x92, 0x93, 0x94, 0x95)),
+    ):
+        positive_ids = 0
+        for identifier in identifiers:
+            try:
+                response = bus.execute(
+                    kwp2000.commands.ReadEcuIdentification(identifier)
+                ).get_data()
+            except (kwp2000.Kwp2000NegativeResponseException, TimeoutException):
+                continue
+            if _meaningful_identification_payload(response, identifier):
+                positive_ids += 1
+                if positive_ids >= 2:
+                    return family
+
+    # Some SIMK variants also expose memory signatures without security.
+    try:
+        identify_ecu(bus)
+        return ECU_FAMILY_SIMK
+    except (ECUIdentificationException, kwp2000.Kwp2000NegativeResponseException, TimeoutException):
+        return ECU_FAMILY_UNKNOWN
+
+
+def display_m797_identification(bus: kwp2000.Kwp2000Protocol, log_callback=None):
+    log('[*] Reading Kefico/Bosch M7.9.7 ECU Identification', log_callback)
+
+    for parameter_key, parameter in fetch_ecu_identification(bus, M797_ECU_IDENTIFICATION_PARAMETERS).items():
+        value = parameter['value']
+        value_hex = ' '.join('{:02X}'.format(x) for x in value)
+        value_ascii = ''.join(
+            chr(x) if 0x20 <= x <= 0x7E else '.'
+            for x in value
+        ).rstrip()
+
+        log('    [*] [0x{:02X}] {}:'.format(
+            parameter_key,
+            parameter['name']
+        ), log_callback)
+        log('            [HEX]: {}'.format(value_hex), log_callback)
+        log('            [ASCII]: {}'.format(value_ascii), log_callback)
+
+
+
+def display_m797_dtcs(bus: kwp2000.Kwp2000Protocol, log_callback=None):
+    log('[*] Reading Kefico/Bosch M7.9.7 diagnostic trouble codes', log_callback)
+    data = bus.execute(kwp2000.commands.ReadDTCsByStatus(
+        kwp2000.enums.DtcStatus.REQUEST_IDENTIFIED_DTC_AND_STATUS,
+        kwp2000.enums.DtcGroup.ALL,
+    )).get_data()
+    if not data:
+        log('[!] ECU returned an empty DTC response', log_callback)
+        return
+    log('[*] Amount of DTCs: {}'.format(data[0]), log_callback)
+    for offset in range(1, 1 + data[0] * 3, 3):
+        if offset + 3 > len(data):
+            log('[!] DTC response is shorter than expected', log_callback)
+            break
+        dtc = int.from_bytes(data[offset:offset + 2], 'big')
+        status = data[offset + 2]
+        log('[*] DTC: P{:04X}, Status: 0x{:02X}'.format(dtc, status), log_callback)
+
+
+def _sanitize_m797_filename_component(value: str) -> str:
+    value = value.strip().strip('\x00')
+    value = re.sub(r'[<>:"/\\|?*\x00-\x1F]', '_', value)
+    value = re.sub(r'\s+', '_', value)
+    return value.strip(' ._')
+
+
+def _m797_text_identification(bus, identifier: int, name: str) -> str:
+    value = read_ecu_identification(bus, identifier).decode('ascii', errors='ignore').strip(' \t\r\n\x00')
+    if not value:
+        raise RuntimeError('M7.9.7 {} ID 0x{:02X} was blank'.format(name, identifier))
+    return value
+
+
+def get_m797_calibration_id(bus: kwp2000.Kwp2000Protocol) -> str:
+    return _m797_text_identification(bus, 0x90, 'calibration')
+
+
+def get_m797_engine_id(bus: kwp2000.Kwp2000Protocol) -> str:
+    return _m797_text_identification(bus, 0x97, 'engine').title()
+
+
+def make_m797_read_filename(
+        calibration_id: str,
+        engine_id: str | None = None,
+        bus=None
+    ) -> str:
+    parts = [calibration_id or 'UNKNOWN', engine_id or 'M797']
+    for identifier in (0x91, 0x94):
+        value = 'UNKNOWN'
+        if bus is not None:
+            try:
+                data = read_ecu_identification(bus, identifier)
+                value = data.decode('ascii', errors='ignore')
+            except (kwp2000.Kwp2000NegativeResponseException, TimeoutException):
+                pass
+        parts.append(value)
+    parts = [_sanitize_m797_filename_component(value) or 'UNKNOWN' for value in parts]
+    parts.append(datetime.now().strftime('%Y-%m-%d_%H%M'))
+    return '_'.join(parts) + '.bin'

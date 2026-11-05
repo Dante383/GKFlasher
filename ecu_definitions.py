@@ -267,7 +267,9 @@ BAUDRATES = {
 	0x02: 19231,
 	0x03: 39474,
 	0x04: 57692,
-	0x05: 125000
+	0x05: 125000,
+	0x64: 57600,
+	0x82: 108800
 }
 
 class ReprogrammingStatus(WordBitfield):
@@ -328,3 +330,193 @@ class IOIdentifier (Enum):
 	VERSION_CONFIGURATION_TRACTION_CONTROL_SYSTEM = 0x41
 	ADAPTIVE_VALUES = 0x50
 	_OPENGK_PATCH_PRIVILEGE_ESCALATION = 0xBB 
+
+
+# Memory layout
+
+# Selected by ECU family detection, independently of SIMK memory signatures.
+KEFICO_LAYOUT = {
+	'name': 'Kefico/Bosch M7.9.7',
+	'eeprom_size_bytes': 0x80000,
+	'bin_offset': -0x800000,
+	'regions': {
+		'boot': {
+			'read': {'address': 0x800000, 'size': 0x10000},
+			'write': {'address': 0x800000, 'size': 0x10000},
+		},
+		'calibration': {
+			'read': {'address': 0x810000, 'size': 0x10000},
+			'write': {'address': 0x810000, 'size': 0x10000},
+		},
+		'program': {
+			'read': {'address': 0x820000, 'size': 0x60000},
+			'write': {'address': 0x820000, 'size': 0x60000},
+		},
+	},
+}
+
+
+# ECU family and identification records
+
+ECU_FAMILY_SIMK = 'simk'
+ECU_FAMILY_M797 = 'm797'
+ECU_FAMILY_UNKNOWN = 'unknown'
+
+M797_ECU_IDENTIFICATION_PARAMETERS = [
+	{'value': 0x90, 'name': 'Calibration Identifier'},
+	{'value': 0x91, 'name': 'vehicleManufacturerECUHardwareNumber'},
+	{'value': 0x92, 'name': 'systemSupplierECUHardwareNumber'},
+	{'value': 0x93, 'name': 'systemSupplierECUHardwareVersionNumber'},
+	{'value': 0x94, 'name': 'systemSupplierECUSoftwareNumber'},
+	{'value': 0x95, 'name': 'systemSupplierECUSoftwareVersionNumber'},
+	{'value': 0x96, 'name': 'exhaustRegulationOrTypeApprovalNumber'},
+	{'value': 0x97, 'name': 'systemNameOrEngineType'},
+	{'value': 0x98, 'name': 'repairShopCodeOrTesterSerialNumber'},
+	{'value': 0x99, 'name': 'programmingDate'},
+	{'value': 0x9A, 'name': 'calibrationRepairShopCodeOrCalibrationEquipment'},
+	{'value': 0x9B, 'name': 'calibrationDate'},
+	{'value': 0x9C, 'name': 'calibrationEquipmentSoftwareNumber'},
+	{'value': 0x9D, 'name': 'ECUInstallationDate'},
+]
+
+
+# Image, programming and checksum constants
+
+class M797Routine(Enum):
+    VERIFY_FLASH = 0x01
+    ERASE_FLASH = 0x02
+
+
+M797_IMAGE_SIZE = KEFICO_LAYOUT['eeprom_size_bytes']
+M797_FLASH_START = -KEFICO_LAYOUT['bin_offset']
+M797_FLASH_END = M797_FLASH_START + M797_IMAGE_SIZE - 1
+
+M797_FLASH_BLOCK_SIZE = 128
+M797_TRANSFER_SIZE = 240
+M797_RESPONSE_TIMEOUT = 12.0
+M797_MIN_SKIP_SIZE = 0x1000
+
+M797_CHECKSUM_TABLE_OFFSET = 0x1FC20
+M797_CHECKSUM_TABLE_ENTRIES = 32
+M797_CHECKSUM_ENTRY_SIZE = 0x10
+
+# Internal-ROM boot-integrity fields in the 0x808000 descriptor area.
+M797_BOOT_HEADER_CHECKSUM_OFFSET = 0x8038
+M797_BOOT_BOUNDARY_CHECKSUM_OFFSET = 0x803C
+
+M797_DYNAMIC_READ_CHUNK = 0xF0
+M797_XC167_PAGE_SIZE = 0x4000
+
+M797_PROGRAMMING_PROFILES = {
+    'standard': {
+        'name': 'STANDARD',
+        'selector': 0x64,
+        'baudrate': 57600,
+        'write_delay': 0.020,
+    },
+    'fast': {
+        'name': 'FAST',
+        'selector': 0x82,
+        'baudrate': 108800,
+        'write_delay': 0.002,
+    },
+}
+
+# Keep the proven programming order. Verification excludes 0x818000-0x81818F.
+M797_FLASH_REGIONS = tuple(
+    {
+        **KEFICO_LAYOUT['regions'][name]['write'],
+        'bin_offset': KEFICO_LAYOUT['regions'][name]['write']['address'] - M797_FLASH_START,
+        'verify_ranges': verify_ranges or ((0, KEFICO_LAYOUT['regions'][name]['write']['size']),),
+    }
+    for name, verify_ranges in (
+        ('boot', None),
+        ('program', None),
+        ('calibration', ((0x0000, 0x8000), (0x8190, 0x7E70))),
+    )
+)
+
+M797_SECURITY_TABLE = (
+    0x24DE49D0, 0x00000000, 0x00000000, 0x516A6710,
+    0x00000000, 0x3231B5D0, 0x00000000, 0x00000000,
+    0xE6158710, 0xBBB327B0, 0x00FE66F0, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x8B55C990,
+    0x6133BAB0, 0x00000000, 0xF356C350, 0x9135AF30,
+    0x55F377F0, 0x00000000, 0x2055F650, 0x00000000,
+    0x00000000, 0x75379B10, 0x00000000, 0xA34645D0,
+)
+
+
+# Patchless read profiles and RAM layouts
+
+M797_READ_STARTUP_BAUD = 10400
+M797_READ_STARTUP_SELECTOR = 0x14
+M797_READ_DESCRIPTOR_ADDRESS = 0x00E048
+M797_READ_STATE_LID = 0xF0
+M797_READ_DATA_LIDS = tuple(range(0xF1, 0xF5))  # F1..F4 proven batch
+M797_DESCRIPTOR_RELOCATION_DELTA = 0x00E6
+
+# Dynamic-memory address encodings observed in M7.9.7 application code.
+M797_DYNAMIC_ADDRESS_MODES = ('linear', 'c166')
+
+# Probe all firmware using the runtime-known RAM architectures.
+#
+# ORDER MATTERS for the two six-byte c166_four layouts:
+#
+#   base 0x380044 is tried first, then 0x38003A, then 0x380036.
+#
+# The descending-base order is deliberate. A higher-base candidate leaves
+# the F0 descriptor-count word of the known lower-base layouts untouched,
+# so a wrong-layout 21 F0 fails without dereferencing a bogus F0 pointer.
+# The reverse direction is unsafe: the old ADE 0x380036 probe placed its
+# descriptor-page bytes over FCE2N64's real F0 count field at 0x3805DA,
+# which wedged application diagnostics.
+M797_C166_GENERIC_CANDIDATES = (
+    {
+        'name': 'c166_four_8044',
+        'raw_slot_base': 0x380044,
+        'description': 'c166_four base 0x8044 / physical 0x380044',
+    },
+    {
+        'name': 'c166_four_shifted_803A',
+        'raw_slot_base': 0x38003A,
+        'description': 'shifted c166_four base 0x803A / physical 0x38003A',
+    },
+    {
+        'name': 'c166_four_8036',
+        'raw_slot_base': 0x380036,
+        'description': 'c166_four base 0x8036 / physical 0x380036',
+    },
+)
+
+M797_C166_RAW_DATA_LIDS = tuple(range(0xF0, 0xF5))       # F0..F4
+M797_C166_RAW_DESC_LIDS = tuple(range(0xF5, 0xFA))       # F5..F9 storage
+M797_C166_RAW_WINDOW_SIZE = 10 * 6
+M797_C166_TABLE_WINDOW_SIZE = 5 * 6
+M797_C166_DESC_WINDOW_SIZE = 5 * 6
+M797_C166_DESCRIPTOR_TYPE_MEMORY = 0x09
+
+# LCR0N53 / c166_lcr uses a different dynamic-LID structure:
+#
+#   near table base = 0x8014
+#   stride          = 8 bytes
+#   physical RAM    = 0x380014 + (LID * 8)
+#
+# Raw F0..F9 therefore occupy:
+#   0x380794 .. 0x3807E3
+#
+# F0..F4 are used as active table entries and F5..F9 as descriptor storage.
+# Each 40-byte half fits comfortably inside the KWP short-frame payload limit.
+M797_LCR_RAW_SLOT_BASE = 0x380014
+M797_LCR_RAW_DATA_LIDS = tuple(range(0xF0, 0xF5))
+M797_LCR_RAW_DESC_LIDS = tuple(range(0xF5, 0xFA))
+M797_LCR_RAW_WINDOW_START = M797_LCR_RAW_SLOT_BASE + (0xF0 * 8)
+M797_LCR_RAW_WINDOW_SIZE = 10 * 8
+
+M797_LCR_TABLE_WINDOW_START = M797_LCR_RAW_WINDOW_START
+M797_LCR_TABLE_WINDOW_SIZE = 5 * 8
+M797_LCR_DESC_WINDOW_START = (
+    M797_LCR_RAW_WINDOW_START + M797_LCR_TABLE_WINDOW_SIZE
+)
+M797_LCR_DESC_WINDOW_SIZE = 5 * 8
