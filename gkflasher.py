@@ -6,9 +6,37 @@ from gkbus.exceptions import DeviceException, GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
 from flasher.memory import read_memory, write_memory, dynamic_find_end
-from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, negotiate_timing, release_timing, ECUIdentificationException, DesiredBaudrate
+from flasher.ecu import (
+    ECU,
+    identify_ecu,
+    fetch_ecu_identification,
+    enable_security_access,
+    negotiate_timing,
+    release_timing,
+    ECUIdentificationException,
+    DesiredBaudrate,
+    detect_ecu_family,
+    display_m797_identification as cli_m797_id,
+    display_m797_dtcs as cli_m797_read_dtcs,
+    get_m797_calibration_id,
+    get_m797_engine_id,
+    make_m797_read_filename,
+)
 from flasher.checksum import correct_checksum
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, ReprogrammingStatus, AccessLevel
+from flasher.m797 import m797_read, m797_flash, m797_profile_from_selector
+from ecu_definitions import (
+    ECU_IDENTIFICATION_TABLE,
+    KEFICO_LAYOUT,
+    BAUDRATES,
+    Routine,
+    ReprogrammingStatus,
+    AccessLevel,
+    ECU_FAMILY_SIMK,
+    ECU_FAMILY_M797,
+    ECU_FAMILY_UNKNOWN,
+    M797_FLASH_START,
+    M797_FLASH_END,
+)
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
@@ -164,6 +192,94 @@ def cli_read_dtcs (ecu):
 	for dtc, status in dtcs.items():
 		print('[*] DTC: P{} ({})'.format(f"{dtc:04x}", bin(status)))
 
+def cli_choose_ecu_family() -> str | None:
+    print('[!] Unable to identify ECU family automatically.')
+    print('[*] This can happen when an ECU is soft-bricked but its programming bootloader is still alive.')
+    print('    [0] SIMK')
+    print('    [1] Kefico/Bosch M7.9.7')
+
+    try:
+        choice = input('ECU family or any other key to abort: ').strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+
+    if choice == '0':
+        return ECU_FAMILY_SIMK
+    if choice == '1':
+        return ECU_FAMILY_M797
+
+    print('[!] Aborting..')
+    return None
+
+def handle_m797(bus: kwp2000.Kwp2000Protocol, args):
+    """Route Kefico operations before entering the SIMK session/security path."""
+    unsupported = [
+        '--' + name.replace('_', '-')
+        for name in (
+            'flash_program', 'immo', 'clear_adaptive_values', 'logger',
+            'rsw_boot1', 'rsw_boot2', 'rsw_asw', 'rsw_cal', 'rsw_full',
+            'rsw_virginize', 'mtos',
+        )
+        if getattr(args, name, False)
+    ]
+    if unsupported:
+        raise ValueError('Not yet supported on M7.9.7: ' + ', '.join(unsupported))
+
+    read_region = None
+    profile = None
+    if args.read or args.read_calibration or args.read_program:
+        if sum(bool(value) for value in (args.read, args.read_calibration, args.read_program)) > 1:
+            raise ValueError('Select only one read operation')
+        if args.read_calibration or args.read_program:
+            if args.address_start is not None or args.address_stop is not None:
+                raise ValueError('Custom addresses require --read')
+            name = 'calibration' if args.read_calibration else 'program'
+            read_region = KEFICO_LAYOUT['regions'][name]['read']
+        else:
+            start = M797_FLASH_START if args.address_start is None else args.address_start
+            stop = M797_FLASH_END + 1 if args.address_stop is None else args.address_stop
+            if not M797_FLASH_START <= start < stop <= M797_FLASH_END + 1:
+                raise ValueError('Requested read range is outside M7.9.7 external flash')
+            read_region = {'address': start, 'size': stop - start}
+
+    if read_region or args.flash or args.flash_calibration:
+        profile = m797_profile_from_selector(args.desired_baudrate)
+    if args.flash and args.flash_calibration:
+        raise ValueError('Select either --flash or --flash-calibration')
+
+    if (args.flash or args.flash_calibration) and (args.address_start is not None or args.address_stop is not None):
+        raise ValueError('Custom flash addresses are not supported on M7.9.7; use --flash-calibration')
+
+    if args.id:
+        cli_m797_id(bus)
+    if args.read_dtcs:
+        cli_m797_read_dtcs(bus)
+
+    if read_region:
+        calibration_id, engine_id = 'UNKNOWN', None
+        try:
+            calibration_id = get_m797_calibration_id(bus)
+            print('[+] Detected calibration: {}'.format(calibration_id))
+        except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, RuntimeError) as exc:
+            print('[!] Calibration identifier 0x90 unavailable: {}'.format(exc))
+            print('[*] Continuing with calibration-agnostic read probing.')
+        try:
+            engine_id = get_m797_engine_id(bus)
+            print('[+] Detected engine: {}'.format(engine_id))
+        except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, RuntimeError) as exc:
+            print('[!] Engine identifier 0x97 unavailable: {}'.format(exc))
+        output_filename = args.output or make_m797_read_filename(calibration_id, engine_id, bus)
+        m797_read(
+            bus, calibration_id, output_filename, read_profile=profile,
+            address_start=read_region['address'], size=read_region['size'],
+        )
+
+    if args.flash or args.flash_calibration:
+        m797_flash(
+            bus, args.flash_calibration or args.flash, programming_profile=profile,
+            calibration_only=bool(args.flash_calibration),
+        )
+
 def load_config (config_filename):
 	return yaml.safe_load(open('gkflasher.yml'))
 
@@ -172,7 +288,8 @@ def load_arguments ():
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface', help='Linux: can0 for socketCAN. | Windows: gs_usb:0, slcan:COM69, pcan:PCAN_USBBUS1, vector:0 | J2534: j2534, j2534:openport')
 	parser.add_argument('-b', '--baudrate', type=int)
-	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0))
+	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0), help='Desired KWP baudrate selector/index. SIMK: 0x91=10400, 0x92=20000, 0x03=40000, 0x04=60000, 0x05=125000  | M7.9.7: 0x64=57600, 0x82=108800.')
+	parser.add_argument('--ecu-family', choices=['auto', ECU_FAMILY_SIMK, ECU_FAMILY_M797], default='auto', help='Force ECU family selection (auto/simk/m797). Useful for recovery or bypassing family auto-detection.')
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
 	parser.add_argument('--flash-calibration', help='Filename to flash calibration zone from')
 	parser.add_argument('--flash-program', help='Filename to flash program zone from')
@@ -310,8 +427,41 @@ def cli_identify_ecu (bus: kwp2000.Kwp2000Protocol):
 	return ecu
 
 def main(bus: kwp2000.Kwp2000Protocol, args):
+	if args.ecu_family == ECU_FAMILY_M797 and not isinstance(bus.transport, Kwp2000OverKLineTransport):
+		raise ValueError('Kefico/Bosch M7.9.7 requires a K-Line interface')
 	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
 	bus.transport.set_buffer_size(20)
+
+	# Detect the family before issuing ECU-specific session or security commands.
+	if isinstance(bus.transport, Kwp2000OverKLineTransport):
+		if args.ecu_family != 'auto':
+			ecu_family = args.ecu_family
+			print('[*] ECU family forced to {}'.format(ecu_family))
+
+		else:
+			print('[*] Detecting ECU family...')
+
+			ecu_family = detect_ecu_family(bus)
+
+			if ecu_family == ECU_FAMILY_UNKNOWN:
+				# Shared programming operations require a known or explicitly selected family.
+				if args.flash or args.flash_calibration or args.flash_program:
+					ecu_family = cli_choose_ecu_family()
+					if ecu_family is None:
+						return
+				else:
+					print('[!] Unable to identify ECU family. Check the ECU connection and ignition.')
+					return
+
+		if ecu_family == ECU_FAMILY_M797:
+			print('[*] Found! Kefico/Bosch M7.9.7')
+		elif ecu_family == ECU_FAMILY_SIMK:
+			print('[*] Found! Siemens/Continental')
+
+		if ecu_family == ECU_FAMILY_M797:
+			handle_m797(bus, args)
+			return
+
 
 	if args.desired_baudrate and BAUDRATES.get(args.desired_baudrate) != 10400:
 		try:

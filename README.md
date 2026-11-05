@@ -1,6 +1,6 @@
 # GKFlasher
 
-CLI flashing tool for SIMK41/SIMK43/SIM2K based vehicles. This project is a result of research gathered by black-box reverse engineering.
+CLI and GUI flashing tool for SIMK41/SIMK43/SIM2K and Kefico/Bosch M7.9.7 ECUs. This project is a result of research gathered by black-box reverse engineering.
 
 It can read & write ecu calibration data / program code, correct EEPROM checksums, clear adaptive values and program the immobilizer. It also provides BSL support for your ECU ([docs/bsl.md](docs/bsl.md)).
 
@@ -19,8 +19,8 @@ Clone the repository
 
 `git clone https://github.com/Dante383/GKFlasher`
 
-Install Python 3.10 for your specific operating system
-https://www.python.org/downloads/release/python-31011/
+Install Python 3.12 or newer for your operating system. The current gkbus dependency requires Python 3.12.3 for optimal performance.
+https://www.python.org/downloads/release/python-3123/
 
 Install required packages
 
@@ -88,6 +88,8 @@ This behaviour is followed by default by GKFlasher's --read command.
 `-b --baudrate {baudrate}`
 
 `--desired-baudrate {baudrate identifier}` - See ecu_definitions.py
+
+`--ecu-family {auto|simk|m797}` - Select the ECU family for K-Line operations. 
 
 `-i --interface {interface}` - for example `/dev/ttyUSB0` or `COM3` (K-Line), `can0` (SocketCAN), `pcan:PCAN_USBBUS1` (python-can interface:channel) or `j2534:openport` (J2534 adapter, K-Line and CAN; `j2534` for the first installed one). If the interface isn't found, GKFlasher lists the available ones to choose from
 

@@ -14,11 +14,38 @@ from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, 
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, negotiate_timing, release_timing, ECUIdentificationException, ECU, DesiredBaudrate
+from flasher.ecu import (
+    enable_security_access,
+    fetch_ecu_identification,
+    identify_ecu,
+    negotiate_timing,
+    release_timing,
+    ECUIdentificationException,
+    ECU,
+    DesiredBaudrate,
+    M797ECU,
+    detect_ecu_family,
+    get_m797_calibration_id,
+    get_m797_engine_id,
+    make_m797_read_filename,
+    display_m797_identification,
+    display_m797_dtcs,
+)
 from flasher.memory import read_memory, write_memory, dynamic_find_end
 from flasher.checksum import *
 from flasher.immo import immo_status
-from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, AccessLevel
+from ecu_definitions import (
+    ECU_IDENTIFICATION_TABLE,
+    BAUDRATES,
+    Routine,
+    AccessLevel,
+    ECU_FAMILY_M797,
+    ECU_FAMILY_UNKNOWN,
+    M797_IMAGE_SIZE,
+    M797_FLASH_START,
+    M797_PROGRAMMING_PROFILES,
+    M797_RESPONSE_TIMEOUT,
+)
 from gkflasher import strip
 from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin, set_gui_log_handler as set_lineswap_log_handler
@@ -27,6 +54,7 @@ from flasher.rsw import rsw_handler
 from flasher.mtos import mtos_handler
 from flasher import bsl
 from flasher.kernel import KERNEL_TIMING
+from flasher.m797 import m797_read, m797_flash, m797_profile_from_selector
 
 BUS_NAMES = {Bus.KLINE: 'K-Line', Bus.CANBUS: 'CAN bus'}
 
@@ -335,16 +363,15 @@ class Ui(QtWidgets.QMainWindow):
 		self.ecusBox.addItem('ECU (autodetect)', -1)
 		for index, ecu in enumerate(ECU_IDENTIFICATION_TABLE):
 			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu']['name']), index)
+		self.ecusBox.addItem('    [7] KEFICO 1.6 4mbit', ECU_FAMILY_M797)
 
 	def load_baudrates (self):
 		self.baudratesBox.addItem('Desired baudrate (default)', -1)
 		for index, baudrate in BAUDRATES.items():
-			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
-
-	def load_baudrates (self):
-		self.baudratesBox.addItem('Desired baudrate (default)', -1)
-		for index, baudrate in BAUDRATES.items():
-			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
+			label = '{} baud'.format(baudrate)
+			if index in (0x64, 0x82):
+				label += ' (M7.9.7)'
+			self.baudratesBox.addItem(label, index)
 
 	def update_baudrate_state(self):
 		selected = self.interfacesBox.currentData()
@@ -399,6 +426,95 @@ class Ui(QtWidgets.QMainWindow):
 			self.validation_progress += 1
 			self.progressBar.setValue(self.validation_progress)
 
+	def get_m797_profile(self, ecu=None):
+		selected = self.get_desired_baudrate() if ecu is None else ecu.get_desired_baudrate()
+		return m797_profile_from_selector(selected.index)
+
+	def initialize_m797(self, log_callback, supported):
+		log_callback.emit('[*] Found! Kefico/Bosch M7.9.7')
+		if not supported:
+			log_callback.emit('[!] This operation is not supported on Kefico/Bosch M7.9.7.')
+			return False
+		profile = M797_PROGRAMMING_PROFILES[self.get_m797_profile()]
+		ecu = M797ECU().set_bus(self.bus)
+		ecu.set_desired_baudrate(DesiredBaudrate(index=profile['selector'], baudrate=profile['baudrate']))
+		self.bus.transport.set_timeout(M797_RESPONSE_TIMEOUT)
+		log_callback.emit('[*] M7.9.7 bulk speed: {} ({} baud)'.format(profile['name'], profile['baudrate']))
+		return ecu
+
+	def gui_m797_read(self, ecu, address_start, address_stop, full_read,
+			output_filename, log_callback, progress_callback):
+		try:
+			calibration = 'UNKNOWN'
+			engine = None
+			try:
+				calibration = get_m797_calibration_id(ecu.bus)
+				log_callback.emit('[+] Detected calibration: {}'.format(calibration))
+			except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, RuntimeError) as exc:
+				log_callback.emit('[!] Calibration ID unavailable: {}. Continuing with architecture probing.'.format(exc))
+			try:
+				engine = get_m797_engine_id(ecu.bus)
+				log_callback.emit('[+] Detected engine: {}'.format(engine))
+			except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, RuntimeError) as exc:
+				log_callback.emit('[!] Engine ID unavailable: {}'.format(exc))
+			if full_read:
+				address_start = M797_FLASH_START
+				address_stop = address_start + M797_IMAGE_SIZE
+			elif address_stop is None:
+				address_stop = M797_FLASH_START + M797_IMAGE_SIZE
+			output_filename = output_filename or make_m797_read_filename(calibration, engine, ecu.bus)
+			size = address_stop - address_start
+			m797_read(
+				ecu.bus, calibration_id=calibration, output_filename=output_filename,
+				progress_callback=Progress(progress_callback, size),
+				read_profile=self.get_m797_profile(ecu), address_start=address_start, size=size,
+				log_callback=log_callback,
+			)
+			self.send_notification('Reading finished', 'Saved to {}'.format(os.path.abspath(output_filename)))
+		except Exception as exc:
+			log_callback.emit('[!] M7.9.7 read failed: {}'.format(exc))
+			raise
+		finally:
+			self._close_bus(log_callback)
+
+	def gui_m797_flash(self, ecu, input_filename, flash_calibration, flash_program,
+			log_callback, progress_callback):
+		try:
+			if not flash_calibration:
+				log_callback.emit('[!] Program-only flashing is not supported on M7.9.7. Use full flash.')
+				return
+			if os.path.getsize(input_filename) != M797_IMAGE_SIZE:
+				raise ValueError('M7.9.7 requires a complete 512 KiB BIN, including for calibration flashing.')
+			calibration_only = not flash_program
+			rebooted = m797_flash(
+				ecu.bus, input_filename, programming_profile=self.get_m797_profile(ecu),
+				confirm=False, progress_factory=lambda total: Progress(progress_callback, total),
+				calibration_only=calibration_only,
+				log_callback=log_callback,
+			)
+			message = ('Flash verified. ECU rebooted and application responding.' if rebooted
+				else 'Flash verified. Power-cycle the ECU to apply changes.')
+			self.send_notification('Flashing finished', message)
+		except FileNotFoundError:
+			log_callback.emit('[!] Error: File not found.')
+		except Exception as exc:
+			log_callback.emit('[!] M7.9.7 flash failed: {}'.format(exc))
+			raise
+		finally:
+			self._close_bus(log_callback)
+
+	def gui_m797_identification(self, ecu, read_dtcs, log_callback):
+		try:
+			if read_dtcs:
+				display_m797_dtcs(ecu.bus, log_callback=log_callback)
+			else:
+				display_m797_identification(ecu.bus, log_callback=log_callback)
+		except Exception as exc:
+			log_callback.emit('[!] M7.9.7 diagnostics failed: {}'.format(exc))
+			raise
+		finally:
+			self._close_bus(log_callback)
+
 	def _close_bus (self, log_callback) -> None:
 		# the device too, it closes the channel opened in _initialize_ecu()
 		for closeable in (getattr(self, 'bus', None), getattr(self, 'device', None)):
@@ -409,13 +525,17 @@ class Ui(QtWidgets.QMainWindow):
 			except GkbusException as e:
 				log_callback.emit('[!] Failed to close the port. This shouldn\'t affect operation. Please report to OpenGK: {}'.format(str(e)))
 
-	def _initialize_ecu (self, log_callback) -> ECU:
+	def _initialize_ecu (self, log_callback, m797_supported=False) -> ECU:
 		self._close_bus(log_callback)
 
 		try:
 			device, bus_type = self.get_selected_interface()
 		except IndexError:
 			log_callback.emit('[*] Interface not found!')
+			return False
+
+		if self.ecusBox.currentData() == ECU_FAMILY_M797 and bus_type != Bus.KLINE:
+			log_callback.emit('[!] Kefico/Bosch M7.9.7 requires a K-Line interface.')
 			return False
 
 		log_callback.emit('[*] Initializing interface {} ({})'.format(device.description(), BUS_NAMES[bus_type]))
@@ -436,6 +556,24 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.bus = kwp2000.Kwp2000Protocol(transport)
 		self.bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
+
+		# Detect Kefico in the application session, before SIMK setup/security.
+		if bus_type == Bus.KLINE:
+			selected = self.ecusBox.currentData()
+			if selected == ECU_FAMILY_M797:
+				return self.initialize_m797(log_callback, m797_supported)
+			if selected == -1:
+				log_callback.emit('[*] Detecting ECU family...')
+				family = detect_ecu_family(self.bus)
+				if family == ECU_FAMILY_M797:
+					return self.initialize_m797(log_callback, m797_supported)
+				if family == ECU_FAMILY_UNKNOWN:
+					log_callback.emit('[!] Unable to identify ECU family. Check the connection, or select the ECU explicitly for recovery.')
+					return False
+				log_callback.emit('[*] Found! Siemens/Continental')
+			if self.get_desired_baudrate().index in (0x64, 0x82):
+				log_callback.emit('[!] The selected baudrate is for M7.9.7. Select a SIMK baudrate or the default.')
+				return False
 
 		if not self.get_desired_baudrate().index:
 			desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
@@ -481,18 +619,22 @@ class Ui(QtWidgets.QMainWindow):
 		
 		return ecu
 
-	def initialize_ecu (self, log_callback) -> ECU:
+	def initialize_ecu (self, log_callback, m797_supported=False) -> ECU:
 		try:
-			return self._initialize_ecu(log_callback)
+			return self._initialize_ecu(log_callback, m797_supported=m797_supported)
 		except TimeoutException:
 			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
 		except Exception as e:
 			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
 
+		self._close_bus(log_callback)
 		return False
 
 	def disconnect_ecu (self, ecu: ECU) -> None:
 		release_timing(ecu.bus)
+
+		if isinstance(ecu, M797ECU):
+			return self._close_bus(self.log_signal)
 		try:
 			ecu.bus.execute(StopCommunication())
 		except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, AttributeError):
@@ -500,6 +642,9 @@ class Ui(QtWidgets.QMainWindow):
 		ecu.bus.close()
 
 	def gui_read_eeprom (self, ecu: ECU, address_start: int = 0x000000, address_stop: int = None, escalate_privileges: bool = False, output_filename: str = None, log_callback=None, progress_callback=None):
+		if isinstance(ecu, M797ECU):
+			return self.gui_m797_read(ecu, address_start, address_stop, escalate_privileges,
+				output_filename, log_callback, progress_callback)
 		eeprom_size = ecu.get_eeprom_size_bytes()
 
 		if escalate_privileges:
@@ -552,6 +697,9 @@ class Ui(QtWidgets.QMainWindow):
 		self.send_notification('Reading finished', 'Saved to {}'.format(home + "\\" + output_filename))
 
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
+		if isinstance(ecu, M797ECU):
+			return self.gui_m797_flash(ecu, input_filename, flash_calibration, flash_program,
+				log_callback, progress_callback)
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
 
 		try:
@@ -637,7 +785,7 @@ class Ui(QtWidgets.QMainWindow):
 			pass # response is not guaranteed
 
 	def read_calibration_zone (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
@@ -659,7 +807,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def read_program_zone (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
@@ -677,7 +825,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def full_read (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
@@ -696,11 +844,14 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def read_dtcs(self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 
 		if (ecu == False):
 			self._close_bus(log_callback)
 			return
+
+		if isinstance(ecu, M797ECU):
+			return self.gui_m797_identification(ecu, True, log_callback)
 
 		log_callback.emit('[*] Reading diagnostic trouble codes')
 		ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT,
@@ -727,11 +878,14 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def display_ecu_identification (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
 			return
+
+		if isinstance(ecu, M797ECU):
+			return self.gui_m797_identification(ecu, False, log_callback)
 
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
@@ -780,6 +934,37 @@ class Ui(QtWidgets.QMainWindow):
 			self.log('[!] Error: Calibration zone not detected.')
 			return
 		self.log(cks_type['name'])
+
+		if cks_type.get('algorithm') == 'm797':
+			try:
+				corrected, changes = prepare_m797_checksum_correction(
+					payload, self.log
+				)
+			except (ValueError, RuntimeError) as exc:
+				self.log('[!] Error: {}'.format(exc))
+				return
+			dialog_message = '\n'.join(
+				'Current {} checksum: {}, new checksum: {}'.format(
+					field['name'], hex(field['old']), hex(field['new'])
+				)
+				for field in changes
+			)
+			if not changes:
+				dialog_message += '\nImage checksums already correct.'
+			dialog_message += '\nSave?'
+			if QMessageBox.question(
+				self, 'Save checksum to file?',
+				dialog_message,
+				QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+			) == QMessageBox.Yes and changes:
+				self.log('[*] Saving to {}'.format(filename))
+				try:
+					save_m797_checksum_correction(filename, corrected, changes)
+				except (OSError, ValueError) as exc:
+					self.log('[!] Could not save checksum correction: {}'.format(exc))
+					return
+				self.log('[*] Done!')
+			return
 
 		for region in cks_type['regions']:
 			self.log('[*] Calculating checksum for region {}'.format(region['name']))
@@ -857,7 +1042,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.log('[*] Done!')
 
 	def flash_calibration (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
@@ -879,7 +1064,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.disconnect_ecu(ecu)
 
 	def flash_full (self, progress_callback, log_callback):
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, m797_supported=True)
 		
 		if (ecu == False):
 			self._close_bus(log_callback)
