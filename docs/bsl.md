@@ -38,6 +38,7 @@ python gkflasher.py --bsl -i /dev/ttyUSB0 --bsl-mode write --bsl-image image.bin
 | `--bsl-driver` | `auto` (default), `i4` (SIMK43 2.0) or `v6` |
 | `--bsl-rom-size` | How much internal ROM `readint` reads |
 | `-o` | Where `read`/`readint` save, or where `write` saves its backup |
+| `--no-verify` | Skip all read-back verification after a `write`: sectors are programmed but never read back and checked (neither per-sector nor the final whole-flash pass). The GUI has a "Skip verification (write)" checkbox |
 
 In the GUI it's the BSL tab, with the interface selected at the top.
 

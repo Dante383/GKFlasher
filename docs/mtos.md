@@ -81,6 +81,7 @@ The **MTOS** tab exposes the same flow:
 | **Select file** / file box | `--mtos-payload` (payload, loader and fullflash modes), `-o` (read mode) |
 | **Dump address** / **Length** | `-s` / `-e` (dump mode; default `0x000000`+`0x40`) |
 | **Run MTOS** | runs the selected mode |
+| **Skip verification (fullflash)** | `--no-verify` |
 
 Output and the received K-line bytes appear in the log pane, same as the CLI.
 `fullflash` asks for confirmation in a dialog before the kernel starts. Picking a
@@ -373,6 +374,14 @@ python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
 `--desired-baudrate 0x05` runs the session, and so the kernel, at 125000 baud. At
 the default 10400 baud a full read takes about 10 minutes, and a full flash reads the
 flash twice (the backup and the verify).
+
+`--no-verify` skips all read-back verification. Normally each sector is read back and
+checked the moment it's written, and then the whole flash is re-read and checked at the
+end; this drops both, which roughly halves the time a full flash spends on the K-line.
+The sectors are still programmed (and the driver still acknowledges each erase and
+program), but nothing is read back to confirm it took, so a silently bad sector won't be
+caught. The backup read is always taken (it's also what picks the brick-safe boot-sector
+write order) and can't be skipped.
 
 ### How it works
 

@@ -1454,6 +1454,7 @@ class Ui(QtWidgets.QMainWindow):
 			channel.open()
 			bsl.bsl_handler(channel, mode, image_filename=filename if mode == 'write' else None,
 				output_filename=output_filename, driver=driver, confirm=confirm,
+				skip_verify=self.bslSkipVerifyCheck.isChecked(),
 				log_callback=log_callback, progress_callback=progress_callback)
 		except Exception as e:
 			log_callback.emit('[!] BSL failed: {}'.format(str(e)))
@@ -1665,6 +1666,7 @@ class Ui(QtWidgets.QMainWindow):
 				address=address, length=length,
 				output_filename=(filename or None) if mode == 'read' else None,
 				confirm_callback=confirm, warn_check=warn_check, attach_hint=attach_hint,
+				skip_verify=self.mtosSkipVerifyCheck.isChecked(),
 				log_callback=log_callback, progress_callback=progress_callback
 			)
 		except Exception as e:

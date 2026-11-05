@@ -173,18 +173,18 @@ def read (kernel: Kernel, output_filename: str, signature: bytes | None = None, 
 	return read_flash(prepare(kernel, signature, allow_blank=allow_blank, warn_check=warn_check), output_filename)
 
 
-def full_flash (kernel: Kernel, image: bytes, backup_filename: str, confirm, signature: bytes | None = None, allow_blank: bool = False, warn_check=None) -> bool:
+def full_flash (kernel: Kernel, image: bytes, backup_filename: str, confirm, signature: bytes | None = None, allow_blank: bool = False, warn_check=None, skip_verify: bool = False) -> bool:
 	'''
 	Backup, then every sector that differs from `image` (boot code last, see
 	write_order), then a full verify. False if nothing needed writing or the user said no
 	'''
 	flash = prepare(kernel, signature, allow_blank=allow_blank, warn_check=warn_check)
-	return write_flash(flash, image, backup_filename, confirm, order=write_order, boot_sectors=warn_sectors)
+	return write_flash(flash, image, backup_filename, confirm, order=write_order, boot_sectors=warn_sectors, skip_verify=skip_verify)
 
 
 def run_session (channel, mode: str, image: bytes | None = None, output_filename: str | None = None,
                  signature: bytes | None = None, attached: bool = False, confirm=None, warn_check=None,
-                 attach_hint: str | None = None, log_callback=None, progress_callback=None) -> bool:
+                 attach_hint: str | None = None, skip_verify: bool = False, log_callback=None, progress_callback=None) -> bool:
 	'''
 	Run `mode` (probe, read, fullflash) on a kernel that's up and answering on `channel`.
 
@@ -192,6 +192,7 @@ def run_session (channel, mode: str, image: bytes | None = None, output_filename
 	touched. Otherwise the kernel is left running for --mtos-attach.
 
 	:param warn_check: optional callback(warning_message) -> bool for risky conditions
+	:param skip_verify: skip the final whole-flash verify pass after a fullflash
 	:return: whether the ECU was reset
 	'''
 	stamp = time.strftime('%Y%m%d_%H%M%S')
@@ -201,7 +202,7 @@ def run_session (channel, mode: str, image: bytes | None = None, output_filename
 		job = lambda kernel: read(kernel, output_filename or 'mtos_read_{}.bin'.format(stamp), signature, allow_blank=attached, warn_check=warn_check)
 	elif mode == 'fullflash':
 		job = lambda kernel: full_flash(kernel, image, output_filename or 'mtos_backup_{}.bin'.format(stamp),
-			confirm or (lambda message: False), signature, allow_blank=attached, warn_check=warn_check)
+			confirm or (lambda message: False), signature, allow_blank=attached, warn_check=warn_check, skip_verify=skip_verify)
 	else:
 		raise KernelError('Unknown kernel mode {}'.format(mode))
 

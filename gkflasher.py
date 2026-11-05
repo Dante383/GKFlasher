@@ -214,6 +214,10 @@ def load_arguments ():
 	parser.add_argument('--bsl-driver', help='Flash driver: i4 (SIMK43 2.0) or v6. Default: detect it', default='auto', choices=bsl.DRIVER_CHOICES)
 	parser.add_argument('--bsl-rom-size', help='Internal ROM size to read (readint mode, default: 0x{:X})'.format(bsl.INTERNAL_ROM_SIZE),
 		type=lambda x: int(x,0), default=bsl.INTERNAL_ROM_SIZE)
+	parser.add_argument('--no-verify', help='Skip all read-back verification after an MTOS or BSL write. Normally each sector is '
+		'read back and checked right after it\'s written, then the whole flash is re-read and checked at the end; this drops both. '
+		'The sectors are still programmed, this only skips the slow read-back passes over the K-line',
+		action='store_true')
 	args = parser.parse_args()
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
@@ -437,7 +441,7 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			mtos_length = 0x40
 		mtos_handler(ecu, args.mtos_key, mode=args.mtos_mode,
 			payload_filename=args.mtos_payload, address=mtos_address, length=mtos_length,
-			output_filename=args.output, attach_hint=mtos_attach_hint(args))
+			output_filename=args.output, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify)
 	bus.close()
 
 def mtos_attach_hint (args) -> str:
@@ -461,7 +465,7 @@ def mtos_attach (bus, args) -> None:
 		return
 	baudrate = BAUDRATES.get(args.desired_baudrate, 10400) if args.desired_baudrate else 10400
 	attach_session(bus, args.mtos_mode, image_filename=args.mtos_payload, output_filename=args.output,
-		baudrate=baudrate, attach_hint=mtos_attach_hint(args))
+		baudrate=baudrate, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify)
 
 def bsl_main (args) -> int:
 	'''
@@ -477,7 +481,7 @@ def bsl_main (args) -> int:
 		channel = device.kline(baudrate=args.bsl_baudrate, timing=KERNEL_TIMING)
 		channel.open()
 		finished = bsl.bsl_handler(channel, args.bsl_mode, image_filename=args.bsl_image, output_filename=args.output,
-			driver=args.bsl_driver, rom_size=args.bsl_rom_size)
+			driver=args.bsl_driver, rom_size=args.bsl_rom_size, skip_verify=args.no_verify)
 		return 0 if finished else 1
 	except GkbusException as e:
 		print('[!] K-line interface: {}'.format(e))

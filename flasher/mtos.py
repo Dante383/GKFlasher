@@ -346,7 +346,7 @@ def cli_warn_check (warning: str) -> bool:
 
 def attach_session (bus, mode: str, image_filename: str | None = None, output_filename: str | None = None,
                     baudrate: int = 10400, confirm=cli_confirm, warn_check=cli_warn_check, attach_hint: str | None = None,
-                    log_callback=None, progress_callback=None) -> bool:
+                    skip_verify: bool = False, log_callback=None, progress_callback=None) -> bool:
 	'''Pick up a BSL kernel an earlier session left running (the ECU still
 	powered, at that session's baudrate) and run `mode` on it. No KWP2000 on
 	the way in, the firmware isn't running'''
@@ -361,7 +361,7 @@ def attach_session (bus, mode: str, image_filename: str | None = None, output_fi
 		return False
 	reset = mtos_kernel.run_session(
 		channel, mode, image=image, output_filename=output_filename, attached=True, confirm=confirm,
-		warn_check=warn_check, attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback,
+		warn_check=warn_check, attach_hint=attach_hint, skip_verify=skip_verify, log_callback=log_callback, progress_callback=progress_callback,
 	)
 	if reset:
 		check_after_reset(bus, log_callback=log_callback)
@@ -369,7 +369,7 @@ def attach_session (bus, mode: str, image_filename: str | None = None, output_fi
 
 
 def kernel_session (ecu: ECU, signature: bytes, mode: str, mtos_key: int | None = None, image: bytes | None = None, output_filename: str | None = None,
-                    confirm=None, warn_check=cli_warn_check, attach_hint: str | None = None, log_callback=None, progress_callback=None) -> bool:
+                    confirm=None, warn_check=cli_warn_check, attach_hint: str | None = None, skip_verify: bool = False, log_callback=None, progress_callback=None) -> bool:
 	try:
 		channel = launch_kernel(ecu, signature, mtos_key=mtos_key, log_callback=log_callback)
 	except KernelError as e:
@@ -377,7 +377,7 @@ def kernel_session (ecu: ECU, signature: bytes, mode: str, mtos_key: int | None 
 		return False
 	reset = mtos_kernel.run_session(
 		channel, mode, image=image, output_filename=output_filename, signature=signature, confirm=confirm,
-		warn_check=warn_check, attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback,
+		warn_check=warn_check, attach_hint=attach_hint, skip_verify=skip_verify, log_callback=log_callback, progress_callback=progress_callback,
 	)
 	if reset:
 		check_after_reset(ecu.bus, ecu, log_callback=log_callback)
@@ -391,7 +391,7 @@ def kernel_session (ecu: ECU, signature: bytes, mode: str, mtos_key: int | None 
 def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
                   payload_filename: str = None, address: int = 0x000000, length: int = 0x40,
                   output_filename: str | None = None, confirm_callback=cli_confirm, warn_check=cli_warn_check,
-                  attach_hint: str | None = None, log_callback=None, progress_callback=None):
+                  attach_hint: str | None = None, skip_verify: bool = False, log_callback=None, progress_callback=None):
 	if mtos_key is None:
 		log('[!] MTOS requires a key (e.g. 0x2d381c78)', log_callback)
 		return
@@ -418,7 +418,7 @@ def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
 
 	if mode in KERNEL_MODES:
 		kernel_session(ecu, signature, mode, mtos_key=mtos_key, image=image, output_filename=output_filename, confirm=confirm_callback,
-			warn_check=warn_check, attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback)
+			warn_check=warn_check, attach_hint=attach_hint, skip_verify=skip_verify, log_callback=log_callback, progress_callback=progress_callback)
 	elif mode == 'hello':
 		run_hello(ecu, signature, mtos_key=mtos_key, log_callback=log_callback)
 	elif mode == 'dump':

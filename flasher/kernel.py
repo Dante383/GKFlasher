@@ -648,7 +648,7 @@ class Flash:
 		if result != 0:
 			raise KernelError('Programming 0x{:05X} failed (0x{:02X})'.format(offset, result))
 
-	def write_sector (self, number: int, image: bytes) -> None:
+	def write_sector (self, number: int, image: bytes, verify: bool = True) -> None:
 		_, offset, size = self.chip.sectors[number]
 		target = image[offset:offset + size]
 		blocks = [start for start in range(0, size, PROGRAM_BLOCK)
@@ -657,23 +657,24 @@ class Flash:
 		self.kernel.guard.check()
 		self.kernel.critical = True
 		try:
-			self._write_sector(number, offset, size, target, blocks)
+			self._write_sector(number, offset, size, target, blocks, verify)
 		finally:
 			self.kernel.critical = False
 
-	def _write_sector (self, number: int, offset: int, size: int, target: bytes, blocks: list) -> None:
+	def _write_sector (self, number: int, offset: int, size: int, target: bytes, blocks: list, verify: bool = True) -> None:
 		kernel = self.kernel
 		for attempt in range(1, SECTOR_ATTEMPTS + 1):
 			self.log('[*] SA{} (0x{:05X}, {} KB){}'.format(
 				number, offset, size // 1024, '' if attempt == 1 else ', attempt {}'.format(attempt)))
 			try:
 				self.erase_sector(number)
-				progress = Progress(kernel.progress_callback, size * 2, 'SA{} program + verify'.format(number))
+				label = 'SA{} program + verify'.format(number) if verify else 'SA{} program'.format(number)
+				progress = Progress(kernel.progress_callback, size * 2 if verify else size, label)
 				try:
 					for index, start in enumerate(blocks):
 						self.program_block(offset + start, target[start:start + PROGRAM_BLOCK])
 						progress((index + 1) * size // len(blocks))
-					written = kernel.read_memory(FLASH_READ_BASE + offset, size, progress, done=size)
+					written = kernel.read_memory(FLASH_READ_BASE + offset, size, progress, done=size) if verify else None
 				finally:
 					progress.finish()
 			except KernelError as e:
@@ -681,6 +682,9 @@ class Flash:
 				kernel.recover()
 				continue
 
+			if not verify:
+				self.log('[+] SA{} written (not verified)'.format(number))
+				return
 			if written == target:
 				self.log('[+] SA{} written and verified'.format(number))
 				return
@@ -703,7 +707,7 @@ def read_flash (flash: Flash, output_filename: str) -> str:
 
 
 def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, order=None,
-                 boot_sectors=()) -> bool:
+                 boot_sectors=(), skip_verify: bool = False) -> bool:
 	'''
 	Backup, then every sector that differs from `image` in `order` (by default the one
 	with the reset vector last), then a full verify. False if nothing needed writing or
@@ -713,6 +717,11 @@ def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, orde
 		that returns them
 	:param boot_sectors: sectors the ECU can't start without, the user is warned about
 		them. Or a function of (current flash, image) that returns them
+	:param skip_verify: skip all read-back verification. Normally every sector is read
+		back and checked right after it's written, and then the whole flash is re-read
+		and checked at the end; this drops both. The sectors are still programmed (and
+		the driver still acknowledges each erase and program), so this only skips the
+		read-back passes - a big time saver over a slow K-line
 	'''
 	flash.check_writable()
 	sectors = flash.chip.sectors
@@ -748,9 +757,15 @@ def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, orde
 		flash.log('[!] Aborted, nothing written')
 		return False
 
+	if skip_verify:
+		flash.log('[!] Skipping all read-back verification (sectors are programmed but not read back)')
+
 	for number in order:
 		if number in changed:
-			flash.write_sector(number, image)
+			flash.write_sector(number, image, verify=not skip_verify)
+
+	if skip_verify:
+		return True
 
 	for attempt in range(3):
 		bad = flash.changed_sectors(flash.read('Verifying'), image)

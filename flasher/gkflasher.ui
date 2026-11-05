@@ -543,6 +543,25 @@
       <string>Write External Flash</string>
      </property>
     </widget>
+    <widget class="QCheckBox" name="bslSkipVerifyCheck">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>100</y>
+       <width>350</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="toolTip">
+      <string>Programs the sectors but skips reading them back to verify. Faster, but you won't know if a sector didn't take</string>
+     </property>
+     <property name="text">
+      <string>Skip verification (write)</string>
+     </property>
+    </widget>
     <widget class="QLabel" name="bslDriverLabel">
      <property name="geometry">
       <rect>
@@ -948,6 +967,25 @@
      </property>
      <property name="text">
       <string>Run MTOS</string>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="mtosSkipVerifyCheck">
+     <property name="geometry">
+      <rect>
+       <x>250</x>
+       <y>112</y>
+       <width>420</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">color: #ecf0f1;</string>
+     </property>
+     <property name="toolTip">
+      <string>Programs the sectors but skips reading them back to verify. Faster, but you won't know if a sector didn't take</string>
+     </property>
+     <property name="text">
+      <string>Skip verification (fullflash)</string>
      </property>
     </widget>
    </widget>

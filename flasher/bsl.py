@@ -234,10 +234,10 @@ def read_internal_rom (kernel: Kernel, output_filename: str, size: int) -> None:
 	save(output_filename, data, kernel.log_callback)
 
 
-def write (kernel: Kernel, image: bytes, backup_filename: str, confirm, driver: str) -> None:
+def write (kernel: Kernel, image: bytes, backup_filename: str, confirm, driver: str, skip_verify: bool = False) -> None:
 	flash = load_flash(kernel, driver)
 	flash.check_writable()
-	write_flash(flash, fit_image(flash, image), backup_filename, confirm)
+	write_flash(flash, fit_image(flash, image), backup_filename, confirm, skip_verify=skip_verify)
 
 
 def cli_confirm (message: str) -> bool:
@@ -246,7 +246,7 @@ def cli_confirm (message: str) -> bool:
 
 def bsl_handler (channel, mode: str, image_filename: str | None = None, output_filename: str | None = None,
                  driver: str = 'auto', rom_size: int = INTERNAL_ROM_SIZE, confirm=cli_confirm,
-                 log_callback=None, progress_callback=None) -> bool:
+                 skip_verify: bool = False, log_callback=None, progress_callback=None) -> bool:
 	'''
 	Run `mode` (MODES) over BSL on an open K-line channel at the boot ROM's baudrate.
 
@@ -293,7 +293,7 @@ def bsl_handler (channel, mode: str, image_filename: str | None = None, output_f
 			job = lambda kernel: read_internal_rom(kernel, output_filename or 'bsl_irom_{}.bin'.format(stamp), rom_size)
 		else:
 			job = lambda kernel: write(kernel, image, output_filename or 'bsl_backup_{}.bin'.format(stamp),
-				confirm or (lambda message: False), driver)
+				confirm or (lambda message: False), driver, skip_verify=skip_verify)
 
 		finished = run_session(kernel, job, reset_when_done=False, attach_hint=ATTACH_HINT)
 		if finished:
