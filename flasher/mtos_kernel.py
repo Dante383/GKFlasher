@@ -76,10 +76,13 @@ def warn_sectors (current: bytes, image: bytes) -> tuple:
 	return tuple(sorted(boot_sectors(current) | boot_sectors(image)))
 
 
-def load_image (filename: str, log_callback=None) -> bytes:
+def load_image (filename: str, log_callback=None, warn_check=None) -> bytes:
 	'''
 	A whole 512 KB flash image, sanity checked so a wrong file doesn't get as far as the
-	boot sectors. A few trailing bytes (an over-read) are ignored
+	boot sectors. A few trailing bytes (an over-read) are ignored.
+	
+	:param warn_check: optional callback(warning_message) -> bool for risky conditions.
+	                     Defaults to always returning True if not provided.
 	'''
 	with open(filename, 'rb') as file:
 		data = file.read()
@@ -98,16 +101,23 @@ def load_image (filename: str, log_callback=None) -> bytes:
 	if target is None:
 		raise KernelError('No jmps at the reset vector ({}), not a SIMK43 flash image'.format(image[:4].hex()))
 	if image[target:target + 4] == b'\xff' * 4:
-		raise KernelError('The reset vector jumps to erased flash (0x{:05X})'.format(target))
+		if warn_check is None or warn_check('The image\'s reset vector jumps to erased flash (0x{:05X}). This usually means you\'re flashing an incomplete or corrupted image.'.format(target)):
+			log('[*] Allowing image with reset vector in erased flash at 0x{:05X}'.format(target), log_callback)
+		else:
+			raise KernelError('The reset vector jumps to erased flash (0x{:05X})'.format(target))
 	if image[0x10040:0x10044] != b'ca66':
 		raise KernelError('No ca66 identification at 0x10040, not a SIMK43 2.0 image')
 	return image
 
 
-def prepare (kernel: Kernel, signature: bytes | None = None, allow_blank: bool = False) -> Flash:
+def prepare (kernel: Kernel, signature: bytes | None = None, allow_blank: bool = False, warn_check=None) -> Flash:
 	'''
 	The write strobe where the driver expects it, the driver, and proof that both the read
-	and the write path reach the flash - before anything gets erased
+	and the write path reach the flash - before anything gets erased.
+	
+	:param allow_blank: if True, allow a flash that reads blank everywhere
+	:param warn_check: optional callback(warning_message) -> bool for risky conditions.
+	                     Defaults to always returning True if not provided.
 	'''
 	previous = kernel.read_word(ADDRSEL1)
 	kernel.write_word(ADDRSEL1, ADDRSEL1_DRIVER)
@@ -125,7 +135,10 @@ def prepare (kernel: Kernel, signature: bytes | None = None, allow_blank: bool =
 				FLASH_READ_BASE + offset, FLASH_MIRROR + offset))
 		has_data |= mirror.count(0xFF) != len(mirror)
 	if not has_data and not allow_blank:
-		raise KernelError('The flash reads blank everywhere, that\'s not the flash')
+		if warn_check is None or warn_check('The flash appears to be blank (all 0xFF). This is unusual unless you just erased it. Continue?'):
+			kernel.log('[*] Allowing blank flash')
+		else:
+			raise KernelError('The flash reads blank everywhere, that\'s not the flash')
 	if signature is not None:
 		found = kernel.read_memory(FLASH_READ_BASE + 0x3FE8, len(signature))
 		if found != signature:
@@ -156,38 +169,39 @@ def probe (kernel: Kernel, signature: bytes | None = None) -> None:
 	kernel.log('[+] Probe passed: kernel, driver, read and write path all good')
 
 
-def read (kernel: Kernel, output_filename: str, signature: bytes | None = None, allow_blank: bool = False) -> str:
-	return read_flash(prepare(kernel, signature, allow_blank=allow_blank), output_filename)
+def read (kernel: Kernel, output_filename: str, signature: bytes | None = None, allow_blank: bool = False, warn_check=None) -> str:
+	return read_flash(prepare(kernel, signature, allow_blank=allow_blank, warn_check=warn_check), output_filename)
 
 
-def full_flash (kernel: Kernel, image: bytes, backup_filename: str, confirm, signature: bytes | None = None, allow_blank: bool = False) -> bool:
+def full_flash (kernel: Kernel, image: bytes, backup_filename: str, confirm, signature: bytes | None = None, allow_blank: bool = False, warn_check=None) -> bool:
 	'''
 	Backup, then every sector that differs from `image` (boot code last, see
 	write_order), then a full verify. False if nothing needed writing or the user said no
 	'''
-	flash = prepare(kernel, signature, allow_blank=allow_blank)
+	flash = prepare(kernel, signature, allow_blank=allow_blank, warn_check=warn_check)
 	return write_flash(flash, image, backup_filename, confirm, order=write_order, boot_sectors=warn_sectors)
 
 
 def run_session (channel, mode: str, image: bytes | None = None, output_filename: str | None = None,
-                 signature: bytes | None = None, attached: bool = False, confirm=None, attach_hint: str | None = None,
-                 log_callback=None, progress_callback=None) -> bool:
+                 signature: bytes | None = None, attached: bool = False, confirm=None, warn_check=None,
+                 attach_hint: str | None = None, log_callback=None, progress_callback=None) -> bool:
 	'''
 	Run `mode` (probe, read, fullflash) on a kernel that's up and answering on `channel`.
 
 	Ends with a software reset when it worked, or when it failed before the flash was
 	touched. Otherwise the kernel is left running for --mtos-attach.
 
+	:param warn_check: optional callback(warning_message) -> bool for risky conditions
 	:return: whether the ECU was reset
 	'''
 	stamp = time.strftime('%Y%m%d_%H%M%S')
 	if mode == 'probe':
 		job = lambda kernel: probe(kernel, signature)
 	elif mode == 'read':
-		job = lambda kernel: read(kernel, output_filename or 'mtos_read_{}.bin'.format(stamp), signature, allow_blank=attached)
+		job = lambda kernel: read(kernel, output_filename or 'mtos_read_{}.bin'.format(stamp), signature, allow_blank=attached, warn_check=warn_check)
 	elif mode == 'fullflash':
 		job = lambda kernel: full_flash(kernel, image, output_filename or 'mtos_backup_{}.bin'.format(stamp),
-			confirm or (lambda message: False), signature, allow_blank=attached)
+			confirm or (lambda message: False), signature, allow_blank=attached, warn_check=warn_check)
 	else:
 		raise KernelError('Unknown kernel mode {}'.format(mode))
 

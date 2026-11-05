@@ -1628,6 +1628,22 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[*] {} Confirmed before starting'.format(message))
 			return True
 
+		def warn_check (message):
+			result = QMessageBox.warning(
+				self, 'MTOS Safety Check',
+				'⚠️  WARNING ⚠️\n\n'
+				'{}\n\n'
+				'If you aren\'t COMPLETELY sure what you\'re doing, you could BRICK your ECU.\n'
+				'If in doubt, ask on the OpenGK Discord'.format(message),
+				QMessageBox.Yes | QMessageBox.No,
+				QMessageBox.No
+			) == QMessageBox.Yes
+			if result:
+				log_callback.emit('[*] User confirmed dangerous operation')
+			else:
+				log_callback.emit('[!] User aborted dangerous operation')
+			return result
+
 		baudrate_index = self.get_desired_baudrate().index
 		attach_hint = 'python gkflasher.py -p kline -i <this adapter> --mtos --mtos-mode {} --mtos-attach{}{}'.format(
 			mode,
@@ -1648,7 +1664,7 @@ class Ui(QtWidgets.QMainWindow):
 				ecu, mtos_key, mode=mode, payload_filename=filename or None,
 				address=address, length=length,
 				output_filename=(filename or None) if mode == 'read' else None,
-				confirm_callback=confirm, attach_hint=attach_hint,
+				confirm_callback=confirm, warn_check=warn_check, attach_hint=attach_hint,
 				log_callback=log_callback, progress_callback=progress_callback
 			)
 		except Exception as e:
