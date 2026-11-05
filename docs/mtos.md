@@ -92,7 +92,8 @@ session back up (`--mtos-attach`) is CLI only.
 
 GKFlasher performs, in order:
 
-1. `StartDiagnosticSession(DEFAULT)` — required before Siemens-level access.
+1. `StartDiagnosticSession(DEFAULT)` — required before Siemens-level access and
+   for the RAM upload.
 2. `SecurityAccess(0xFD)` — request seed, send key (`--mtos-key`).
 3. Read the 6-byte signature from flash `0x3FE8` (`ReadMemoryByAddress`).
 4. Build the blob (header + your code) and `WriteMemoryByAddress` it to RAM at
@@ -101,6 +102,15 @@ GKFlasher performs, in order:
    success performs a far `calls 0xC014` into your code.
 
 The firmware is blocked until your code executes `rets`.
+
+> **Session note (ca663057 and later):** on these calibrations `0xFA`'s gate only
+> opens in the **flash-reprogramming** session, while the RAM upload still only
+> works in the **default** session. If `0xFA` comes back refused
+> (`7F 31 33` securityAccessDenied) in the default session, GKFlasher switches to
+> the flash-reprogramming session, re-does the `0xFD` access (the grant is
+> per-session), and fires the routine again — the blob is already resident in RAM
+> and survives the switch, so it is not re-uploaded. Older calibrations (ca663056)
+> run the routine straight from the default session and never need the switch.
 
 ---
 
@@ -483,6 +493,11 @@ as the emulated EEPROM records in SA2, get the image's contents.
 
 - **Security access fails:** wrong `--mtos-key`, or you skipped the default session.
   GKFlasher does the session for you; double-check the key.
+- **`StartRoutine(0xFA)` refused with `7F 31 33` (securityAccessDenied), nothing runs:**
+  the routine's session gate is shut in the current session. On ca663057 and later it
+  only opens in the flash-reprogramming session — GKFlasher now detects the refusal and
+  retries there automatically (you'll see a "retrying after switching session" line). If
+  it still fails in both sessions the key or calibration is wrong.
 - **ECU resets mid-payload (output stops early, or nothing comes back):** the watchdog
   fired. Your routine waited in a loop or ran longer than a few milliseconds without
   calling `srvwdt`. Service the watchdog in every wait/long loop (see above).

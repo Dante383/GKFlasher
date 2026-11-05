@@ -44,15 +44,9 @@ def read_signature (ecu: ECU) -> bytes:
 	return bytes(ecu.read_memory_by_address(MTOS_SIGNATURE_ADDRESS, MTOS_SIGNATURE_LENGTH))
 
 
-def siemens_unlock (ecu: ECU, mtos_key: int, log_callback=None) -> None:
-	log('[*] Default diagnostic session', log_callback)
-	ecu.bus.execute(
-		kwp2000.commands.StartDiagnosticSession(
-			kwp2000.enums.DiagnosticSession.DEFAULT,
-			ecu.get_desired_baudrate().index
-		)
-	)
-
+def _siemens_access (ecu: ECU, mtos_key: int, log_callback=None) -> None:
+	'''Siemens (0xFD) security access. The grant is per diagnostic session, so
+	this has to be redone after every StartDiagnosticSession.'''
 	log('[*] Siemens (0xFD) security access', log_callback)
 	key = mtos_key.to_bytes(4, 'big')
 	seed = ecu.bus.execute(
@@ -60,13 +54,45 @@ def siemens_unlock (ecu: ECU, mtos_key: int, log_callback=None) -> None:
 	).get_data()[1:]
 
 	if (sum(seed) == 0):
-		log('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
+		log('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active', log_callback)
 		return
 
 	log('[*] Seed {}, sending key {}'.format(seed.hex(), key.hex()), log_callback)
 	ecu.bus.execute(
 		kwp2000.commands.SecurityAccess().send_key(key, access_level=AccessLevel.SIEMENS_0xFD.value + 1)
 	)
+
+
+def siemens_unlock (ecu: ECU, mtos_key: int, log_callback=None) -> None:
+	'''Default diagnostic session + Siemens unlock. This is the session the blob
+	upload (WriteMemoryByAddress into the 0xC000 RAM window) needs.'''
+	log('[*] Default diagnostic session', log_callback)
+	ecu.bus.execute(
+		kwp2000.commands.StartDiagnosticSession(
+			kwp2000.enums.DiagnosticSession.DEFAULT,
+			ecu.get_desired_baudrate().index
+		)
+	)
+	_siemens_access(ecu, mtos_key, log_callback=log_callback)
+
+
+def _enter_execution_session (ecu: ECU, mtos_key: int, log_callback=None) -> None:
+	'''Put the ECU in the flash-reprogramming session StartRoutine(0xFA) needs.
+
+	On ca663056 the routine ran straight from the default upload session; on
+	ca663057 its gate only opens in the flash-reprogramming session, while the
+	blob upload still only works in the default one. So the blob is uploaded in
+	the default session and left in RAM (it survives the switch), then we come
+	here before firing the routine. The 0xFD grant is per session, so it's
+	re-established too.'''
+	log('[*] Flash-reprogramming diagnostic session', log_callback)
+	ecu.bus.execute(
+		kwp2000.commands.StartDiagnosticSession(
+			kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING,
+			ecu.get_desired_baudrate().index
+		)
+	)
+	_siemens_access(ecu, mtos_key, log_callback=log_callback)
 
 
 def upload_blob (ecu: ECU, blob: bytes, base: int = MTOS_BASE, log_callback=None) -> None:
@@ -81,7 +107,7 @@ def upload_blob (ecu: ECU, blob: bytes, base: int = MTOS_BASE, log_callback=None
 		written += len(chunk)
 
 
-def execute (ecu: ECU, raw: bool = False):
+def execute (ecu: ECU, raw: bool = False, mtos_key: int | None = None, log_callback=None):
 	'''Start MTOS routine 0xFA.
 
 	With raw=True we hand-roll the request so the firmware's KWP bookkeeping
@@ -89,31 +115,73 @@ def execute (ecu: ECU, raw: bool = False):
 	the StartRoutine request is written, and the mandatory "response pending"
 	frame the firmware always emits first is consumed. The live channel is then
 	returned so the caller can read the payload's output (or, for the loader,
-	stream the second stage to it).'''
+	stream the second stage to it).
+
+	If the routine is refused instead of running (a `7F 31 xx` negative response
+	with an NRC other than the benign 0x78 response-pending - on ca663057 the
+	session gate answers 0x33 securityAccessDenied in the default session) and we
+	were handed the key, the ECU is moved into the flash-reprogramming session
+	the gate wants and the routine is fired once more. The blob is already
+	resident in the 0xC000 RAM window and survives the session switch, so it does
+	not need re-uploading.'''
 	if not raw:
 		return ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.EXECUTE_MTOS.value))
 
-	transport = ecu.bus.transport
-	channel = transport.channel
-	channel.reset_buffers()
-	channel.write(transport.build_payload(bytes([0x31, Routine.EXECUTE_MTOS.value])))
-	_consume_pending(channel)
+	channel = _fire_routine(ecu)
+	nrc = _read_routine_reply(channel)
+	if nrc is not None and nrc != NRC_RESPONSE_PENDING:
+		if mtos_key is None:
+			raise MtosExecutionDenied(nrc)
+		log('[!] StartRoutine(0xFA) refused in this session (NRC 0x{:02X}), retrying after switching session'.format(nrc), log_callback)
+		_enter_execution_session(ecu, mtos_key, log_callback=log_callback)
+		channel = _fire_routine(ecu)
+		nrc = _read_routine_reply(channel)
+		if nrc is not None and nrc != NRC_RESPONSE_PENDING:
+			raise MtosExecutionDenied(nrc)
 	return channel
 
 
 # the firmware answers StartRoutine with a KWP negative "response pending"
-# (7F 31 78) frame before our payload runs: 83 F1 11 7F 31 78 AD = 7 bytes
+# (7F 31 78) frame before our payload runs: 83 F1 11 7F 31 78 AD = 7 bytes.
+# The 0x31 is the StartRoutine service id a KWP negative response echoes back
+# (not the 0xFA routine id). A refusal comes back the same shape with a
+# different NRC (0x33 securityAccessDenied when the routine's session gate is
+# shut).
 PENDING_FRAME_LENGTH = 7
+START_ROUTINE_SERVICE = 0x31
+NRC_RESPONSE_PENDING = 0x78
 
 
-def _consume_pending (channel, length: int = PENDING_FRAME_LENGTH, timeout: float = 0.6) -> bytes:
-	'''Read and discard exactly the KWP response-pending frame, leaving any
-	payload output untouched in the buffer.'''
-	collected = bytearray()
+class MtosExecutionDenied (Exception):
+	'''StartRoutine(0xFA) answered with a KWP negative response instead of
+	running the payload.'''
+	def __init__ (self, nrc: int):
+		self.nrc = nrc
+		super().__init__('StartRoutine(0xFA) refused with NRC 0x{:02X}'.format(nrc))
+
+
+def _fire_routine (ecu: ECU):
+	'''Clear the buffers and hand-write the StartRoutine(0xFA) request.'''
+	transport = ecu.bus.transport
+	channel = transport.channel
+	channel.reset_buffers()
+	channel.write(transport.build_payload(bytes([0x31, Routine.EXECUTE_MTOS.value])))
+	return channel
+
+
+def _read_routine_reply (channel, length: int = PENDING_FRAME_LENGTH, timeout: float = 0.6):
+	'''Read the firmware's first frame after StartRoutine(0xFA), leaving any
+	payload output behind it untouched in the buffer. Returns the NRC byte when
+	it's a `7F 31 xx` negative response (0x78 is the benign response-pending that
+	precedes the payload; anything else is a refusal), or None when the payload's
+	own output is already flowing.'''
+	frame = bytearray()
 	deadline = time.time() + timeout
-	while len(collected) < length and time.time() < deadline:
-		collected += read_partial(channel, length - len(collected), 0.2)
-	return bytes(collected)
+	while len(frame) < length and time.time() < deadline:
+		frame += read_partial(channel, length - len(frame), 0.2)
+	if len(frame) >= 6 and frame[3] == 0x7F and frame[4] == START_ROUTINE_SERVICE:
+		return frame[5]
+	return None
 
 
 def listen (channel, duration: float = 2.0, idle: float = 0.4) -> bytes:
@@ -138,7 +206,7 @@ def listen (channel, duration: float = 2.0, idle: float = 0.4) -> bytes:
 # modes
 # ---------------------------------------------------------------------------
 
-def run_hello (ecu: ECU, signature: bytes, log_callback=None) -> bytes:
+def run_hello (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_callback=None) -> bytes:
 	'''Safest self-test: upload a payload that sends KLINE_HELLO over the K-line
 	and run it. Proves upload + CRC validation + execution + I/O in one shot.'''
 	body = payload_kline_hello()
@@ -146,7 +214,7 @@ def run_hello (ecu: ECU, signature: bytes, log_callback=None) -> bytes:
 	upload_blob(ecu, blob, log_callback=log_callback)
 	log('[*] MTOS checksum: 0x{:04X}'.format(crc16_mtos(body)), log_callback)
 	log('[*] Executing, listening on K-line', log_callback)
-	channel = execute(ecu, raw=True)
+	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback)
 	out = listen(channel)
 	log('[*] Received: {} ({})'.format(out.hex(), out), log_callback)
 	if KLINE_HELLO in out:
@@ -156,27 +224,27 @@ def run_hello (ecu: ECU, signature: bytes, log_callback=None) -> bytes:
 	return out
 
 
-def run_dump (ecu: ECU, signature: bytes, address: int, length: int, log_callback=None) -> bytes:
+def run_dump (ecu: ECU, signature: bytes, address: int, length: int, mtos_key: int | None = None, log_callback=None) -> bytes:
 	blob = build_blob(payload_memory_dump(address, length), signature)
 	upload_blob(ecu, blob, log_callback=log_callback)
 	log('[*] Executing memory dump 0x{:06X}+0x{:X} over K-line'.format(address, length), log_callback)
-	channel = execute(ecu, raw=True)
+	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback)
 	out = listen(channel, duration=max(3.0, length / 300.0))
 	log('[*] Received {} bytes: {}'.format(len(out), out.hex()), log_callback)
 	return out
 
 
-def run_payload_file (ecu: ECU, signature: bytes, body: bytes, log_callback=None) -> bytes:
+def run_payload_file (ecu: ECU, signature: bytes, body: bytes, mtos_key: int | None = None, log_callback=None) -> bytes:
 	'''Upload a raw user-authored body (code starting at 0xC014) and run it.'''
 	blob = build_blob(body, signature)
 	upload_blob(ecu, blob, log_callback=log_callback)
-	channel = execute(ecu, raw=True)
+	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback)
 	out = listen(channel)
 	log('[*] Received: {}'.format(out.hex()), log_callback)
 	return out
 
 
-def run_loader (ecu: ECU, signature: bytes, stage2: bytes, log_callback=None) -> bytes:
+def run_loader (ecu: ECU, signature: bytes, stage2: bytes, mtos_key: int | None = None, log_callback=None) -> bytes:
 	'''Upload the small K-line loader, then stream `stage2` to it and run it.
 
 	Wire protocol: u16 little-endian length, then the stage-2 body. The loader
@@ -185,14 +253,14 @@ def run_loader (ecu: ECU, signature: bytes, stage2: bytes, log_callback=None) ->
 	upload_blob(ecu, blob, log_callback=log_callback)
 	log('[*] Executing loader, streaming {} byte second stage to 0x{:04X}'.format(
 		len(stage2), STAGE2_ADDRESS), log_callback)
-	channel = execute(ecu, raw=True)
+	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback)
 	channel.write(struct.pack('<H', len(stage2)) + stage2)
 	out = listen(channel, duration=3.0)
 	log('[*] Received {} bytes: {}'.format(len(out), out.hex()), log_callback)
 	return out
 
 
-def launch_kernel (ecu: ECU, signature: bytes, log_callback=None):
+def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_callback=None):
 	'''Turn the ECU over to the BSL kernel: the loader, then the kernel as its
 	second stage (mtos_asm.payload_bsl_kernel_shim). Returns the channel, with
 	the kernel answering at the session's baudrate and kernel timing set.
@@ -204,7 +272,7 @@ def launch_kernel (ecu: ECU, signature: bytes, log_callback=None):
 	upload_blob(ecu, blob, log_callback=log_callback)
 
 	log('[*] Starting the loader, sending it the BSL kernel ({} bytes)'.format(len(stage2)), log_callback)
-	channel = execute(ecu, raw=True)
+	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback)
 	enter(channel, log_callback)
 	link = KernelLink(channel)
 	# the loader sends nothing: whatever is here is KWP left over, and would break the echo check
@@ -300,10 +368,10 @@ def attach_session (bus, mode: str, image_filename: str | None = None, output_fi
 	return reset
 
 
-def kernel_session (ecu: ECU, signature: bytes, mode: str, image: bytes | None = None, output_filename: str | None = None,
+def kernel_session (ecu: ECU, signature: bytes, mode: str, mtos_key: int | None = None, image: bytes | None = None, output_filename: str | None = None,
                     confirm=None, warn_check=cli_warn_check, attach_hint: str | None = None, log_callback=None, progress_callback=None) -> bool:
 	try:
-		channel = launch_kernel(ecu, signature, log_callback=log_callback)
+		channel = launch_kernel(ecu, signature, mtos_key=mtos_key, log_callback=log_callback)
 	except KernelError as e:
 		log('[!] {}'.format(e), log_callback)
 		return False
@@ -349,23 +417,23 @@ def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
 		MTOS_SIGNATURE_ADDRESS, signature.hex(), signature.decode('latin-1')), log_callback)
 
 	if mode in KERNEL_MODES:
-		kernel_session(ecu, signature, mode, image=image, output_filename=output_filename, confirm=confirm_callback,
+		kernel_session(ecu, signature, mode, mtos_key=mtos_key, image=image, output_filename=output_filename, confirm=confirm_callback,
 			warn_check=warn_check, attach_hint=attach_hint, log_callback=log_callback, progress_callback=progress_callback)
 	elif mode == 'hello':
-		run_hello(ecu, signature, log_callback=log_callback)
+		run_hello(ecu, signature, mtos_key=mtos_key, log_callback=log_callback)
 	elif mode == 'dump':
-		run_dump(ecu, signature, address, length, log_callback=log_callback)
+		run_dump(ecu, signature, address, length, mtos_key=mtos_key, log_callback=log_callback)
 	elif mode == 'payload':
 		if not payload_filename:
 			log('[!] payload mode requires a payload file', log_callback)
 			return
 		with open(payload_filename, 'rb') as f:
-			run_payload_file(ecu, signature, f.read(), log_callback=log_callback)
+			run_payload_file(ecu, signature, f.read(), mtos_key=mtos_key, log_callback=log_callback)
 	elif mode == 'loader':
 		if not payload_filename:
 			log('[!] loader mode requires a second-stage payload file', log_callback)
 			return
 		with open(payload_filename, 'rb') as f:
-			run_loader(ecu, signature, f.read(), log_callback=log_callback)
+			run_loader(ecu, signature, f.read(), mtos_key=mtos_key, log_callback=log_callback)
 	else:
 		log('[!] unknown MTOS mode: {}'.format(mode), log_callback)
