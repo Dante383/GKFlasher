@@ -106,7 +106,10 @@ def load_image (filename: str, log_callback=None, warn_check=None) -> bytes:
 		else:
 			raise KernelError('The reset vector jumps to erased flash (0x{:05X})'.format(target))
 	if image[0x10040:0x10044] != b'ca66':
-		raise KernelError('No ca66 identification at 0x10040, not a SIMK43 2.0 image')
+		if warn_check is None or warn_check('No ca66 identification at 0x10040 ({}). This is not a stock SIMK43 2.0 image.'.format(image[0x10040:0x10048])):
+			log('[*] Allowing image without ca66 identification', log_callback)
+		else:
+			raise KernelError('No ca66 identification at 0x10040, not a SIMK43 2.0 image')
 	return image
 
 
