@@ -89,7 +89,7 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('program').write.size-16)])
 		payload = eeprom[payload_start:payload_stop]
 
-		flash_start = ecu.get_region('program').write.size + 16
+		flash_start = ecu.get_region('program').write.address + 16
 		flash_size = payload_stop-payload_start
 
 		with alive_bar(flash_size, unit='B') as bar:
