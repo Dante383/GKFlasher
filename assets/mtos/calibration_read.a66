@@ -5,8 +5,9 @@ $MOD167
 $INCLUDE (REG167.INC)
 START EQU 090000H
 LENGTH EQU 0H                 ; zero in the 16-bit counter means 65536 bytes
-BAUD_RELOAD EQU 0H
-BLOCK_SIZE EQU 78H            ; leave room for the ACK echo in the adapter FIFO
+ENTRY_RELOAD EQU 47H         ; 10400-baud handshake even if firmware resets S0BG
+BAUD_RELOAD EQU 5H            ; default transfer rate: 125000 baud
+BLOCK_SIZE EQU 0F0H            ; leave room for the ACK echo in the adapter FIFO
 MTOS SECTION CODE AT 0C014H
 Main PROC FAR
     PUSH R1
@@ -23,22 +24,23 @@ Main PROC FAR
     PUSH R12
     BCLR S0RIE
     BCLR S0TIE
+    MOV S0BG,#ENTRY_RELOAD
     MOVB RL1,#'M'
     CALLS SEG EchoByte, SOF EchoByte
     CMP R2,#0
-    JMPA cc_EQ,Restore
+    JMPR cc_EQ,Restore
     MOVB RL1,#'T'
     CALLS SEG EchoByte, SOF EchoByte
     CMP R2,#0
-    JMPA cc_EQ,Restore
+    JMPR cc_EQ,Restore
     MOVB RL1,#'R'
     CALLS SEG EchoByte, SOF EchoByte
     CMP R2,#0
-    JMPA cc_EQ,Restore
+    JMPR cc_EQ,Restore
     MOVB RL1,#'D'
     CALLS SEG EchoByte, SOF EchoByte
     CMP R2,#0
-    JMPA cc_EQ,Restore
+    JMPR cc_EQ,Restore
     BCLR S0BRS
     MOV S0BG,#BAUD_RELOAD
     MOV R4,#POF START
@@ -67,12 +69,7 @@ Loop:
     EXTP R6,#1
     MOVB RL1,[R4]
     MOVB S0TBUF,RL1
-WaitTx:
-    ; Drain our own echo before accepting a host ACK at the block boundary.
-    JNB S0RIR,WaitTx
-    MOVB RL2,S0RBUF
-    BCLR S0RIR
-    BCLR S0TIR
+    ; Calculate the CRC while ASC0 shifts the byte onto the wire.
     MOVBZ R2,RL1
     XOR R7,R2
     MOV R3,#8
@@ -83,6 +80,12 @@ CrcLoop:
 CrcNext:
     SUB R3,#1
     JMPR cc_NE,CrcLoop
+WaitTx:
+    ; Drain our own echo before accepting a host ACK at the block boundary.
+    JNB S0RIR,WaitTx
+    MOVB RL2,S0RBUF
+    BCLR S0RIR
+    BCLR S0TIR
     ADD R4,#1
     CMP R4,#04000H
     JMPR cc_NE,Next

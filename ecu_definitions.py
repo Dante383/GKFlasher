@@ -262,6 +262,20 @@ ECU_IDENTIFICATION_TABLE = [
 	},
 ]
 
+
+# Temporary OpenGK layouts. A 4 Mbit chip mirrors calibration into bank 1;
+# a complete BIN keeps it at offset 0x10040 regardless of that CPU alias.
+for _size, _offset, _image_offset in ((0x80000, 0x10040, 0x10040), (0x100000, 0x90040, 0x90040)):
+	ECU_IDENTIFICATION_TABLE.append({
+		'offset': _offset,
+		'image_offset': _image_offset,
+		'expected': [b'OPENGK'],
+		'ecu': dict(ECU_IDENTIFICATION_TABLE[1]['ecu'],
+			name='OPENGK {}mbit'.format(_size // 0x20000),
+			eeprom_size_bytes=_size, bin_offset=0 if _size == 0x100000 else -0x80000),
+	})
+del _size, _offset, _image_offset
+
 BAUDRATES = {
 	0x01: 10400,
 	0x02: 19231,

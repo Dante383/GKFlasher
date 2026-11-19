@@ -1,0 +1,142 @@
+; RAM-only UART qualification for the running MTOS/BSL kernel.
+; Trial round-trips 256 bytes and always restores the original UART before
+; accepting A5 at the original rate. Commit is allowed only after a passed trial.
+; R8=reload, R10=0 trial / 1 commit, R11=entry reload.
+; Returns R8=0 success / 1 timeout.
+$MOD167
+$INCLUDE (REG167.INC)
+; Reuse the flash-driver RAM only before a job, or after it has completed.
+; This also works in cold BSL before extended XRAM has been enabled.
+HELP SECTION CODE AT 0F600H
+Main PROC FAR
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH R7
+    PUSH DPP3
+    PUSH PSW
+    PUSH S0CON
+    ; Do not derive the entry reload from live S0BG readback. The host supplies
+    ; the known reload for the entry rate and BRS setting.
+    PUSH R11
+    BCLR IEN
+    MOV DPP3,#3
+    MOV R7,R10
+    MOV R4,#8
+    CALLA cc_UC,Delay
+    BCLR S0R
+    BCLR S0BRS
+    MOV S0BG,R8
+    BSET S0R
+    BSET S0REN
+    BCLR S0RIR
+    BCLR S0TIR
+    CMP R7,#1
+    JMPR cc_EQ,Commit
+    MOV R8,#1
+    MOV R1,#0F800H
+    MOV R6,#256
+Receive:
+    CALLA cc_UC,WaitRx
+    CMP R2,#0
+    JMPA cc_EQ,Restore
+    MOVB RL5,S0RBUF
+    BCLR S0RIR
+    MOVB [R1],RL5
+    ADD R1,#1
+    SUB R6,#1
+    JMPR cc_NE,Receive
+    MOV R1,#0F800H
+    MOV R6,#256
+Transmit:
+    MOVB RL5,[R1+]
+    BCLR S0RIR
+    MOVB S0TBUF,RL5
+    MOV R2,#32
+    MOV R3,#0
+TxWait:
+    SRVWDT
+    JB S0TIR,TxDone
+    SUB R3,#1
+    JMPR cc_NE,TxWait
+    SUB R2,#1
+    JMPR cc_NE,TxWait
+    JMPR cc_UC,Restore
+TxDone:
+    BCLR S0TIR
+    CALLA cc_UC,WaitRx
+    CMP R2,#0
+    JMPR cc_EQ,Restore
+    MOVB RL4,S0RBUF
+    BCLR S0RIR
+    CMPB RL4,RL5
+    JMPR cc_NE,Restore
+    SUB R6,#1
+    JMPR cc_NE,Transmit
+    MOV R8,#0
+Restore:
+    BCLR S0R
+    POP S0BG
+    POP S0CON
+    BSET S0REN
+    BCLR S0RIR
+    ; Host returns after loopback completion or the bounded trial timeout.
+    MOV R4,#128
+AckLoop:
+    CALLA cc_UC,WaitRx
+    CMP R2,#0
+    JMPR cc_EQ,AckNext
+    MOVB RL5,S0RBUF
+    BCLR S0RIR
+    CMPB RL5,#0A5H
+    JMPR cc_EQ,Exit
+AckNext:
+    SUB R4,#1
+    JMPR cc_NE,AckLoop
+    JMPR cc_UC,Exit
+Commit:
+    POP R5
+    POP R5
+    MOV R8,#0
+Exit:
+    POP PSW
+    POP DPP3
+    POP R7
+    POP R6
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    RETS
+Main ENDP
+WaitRx PROC NEAR
+    MOV R2,#32
+    MOV R3,#0
+RxWait:
+    SRVWDT
+    JB S0RIR,RxReady
+    SUB R3,#1
+    JMPR cc_NE,RxWait
+    SUB R2,#1
+    JMPR cc_NE,RxWait
+    MOV R2,#0
+RxReady:
+    RET
+WaitRx ENDP
+Delay PROC NEAR
+Outer:
+    MOV R5,#0
+Inner:
+    SRVWDT
+    SUB R5,#1
+    JMPR cc_NE,Inner
+    SUB R4,#1
+    JMPR cc_NE,Outer
+    RET
+Delay ENDP
+HELP ENDS
+END

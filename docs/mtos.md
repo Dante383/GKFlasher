@@ -2,7 +2,7 @@
 
 MTOS is a stock Siemens diagnostic feature baked into the SIMK43 firmware. It lets
 you upload a small machine-code routine into ECU RAM and have the firmware execute
-it, synchronously, over the normal KWP2000 K-line diagnostic session. It is the
+it, synchronously, through the normal KWP2000 diagnostic session. It is the
 ECU's own "run arbitrary code" primitive — originally a factory test hook — and we
 can use it to poke at memory, prototype routines, or bootstrap larger tooling.
 
@@ -18,7 +18,7 @@ payloads) and how to drive it from GKFlasher.
 
 ## Quick start
 
-MTOS runs over the K-line diagnostic session, so force the K-line protocol:
+For K-Line MTOS, select the K-Line protocol:
 
 ```bash
 # Safest first test: upload a payload that sends "MTOS" out of the K-line and
@@ -38,18 +38,70 @@ Expected tail of the output:
 The `--mtos-key` is the Siemens (0xFD) security-access key for your ECU. For the
 reference bench ECU it is `0x2d381c78`.
 
+### CAN transport
+
+CAN MTOS reuses the RSW CAN2 message objects (`0x6A0` requests, `0x6A1` replies).
+The live message-object layout is checked before uploading anything. The upload
+uses the passive diagnostic session (`0x90`) and Siemens security access; execution
+uses the flash-reprogramming session (`0x85`) with a fresh security grant.
+
+```bash
+python gkflasher.py -p canbus -i pcan:PCAN_USBBUS1 \
+    --mtos --mtos-mode read-calibration --mtos-key 0x2c8430d5 -o calibration.bin
+```
+
+Use the key for your ECU. The CAN link is a sequenced, flow-controlled byte stream
+through the RSW message objects, not standard CCP commands. It runs the same SIMK
+kernel and flash driver as K-Line MTOS. CAN `hello` checks the kernel; `dump`,
+`probe`, `read`, `read-calibration`, `flash-calibration` and `fullflash` use the shared
+kernel. CAN reads retain its block checksums. Arbitrary `payload`/`loader` files
+currently require K-Line.
+
+CAN bitrate remains 500000 bit/s by default; it does not use a UART baud selector.
+PCAN and SLCAN have passed calibration read/write/readback trials on the
+OpenGK bench. Transfer windows are bounded to each adapter's receive capacity.
+OpenPort CAN has not yet been bench-tested with this MTOS transport.
+
+### Write options and recovery
+
+Both CLI and GUI provide these MTOS write options:
+`[--no-verify] [--skip-backup] [--force-write] [--override-safety-checks]`.
+The GUI remembers checkbox choices; they only affect writing modes.
+`--no-verify` also accepts the name `--skip-verify`. `--override-safety-checks`
+only bypasses unknown BIN identification, not size, reset-vector or hardware checks.
+
+On C167CS devices with enabled 6 KiB XRAM, writes qualify a 2 KiB output buffer
+at `0xC400` and compressed input at `0xCC00` before erasing. Independent LZSS blocks
+use at most 1 KiB history. Blocks without sufficient compression use raw transfer.
+The bounded decoder checks lengths, match bounds and the decoded checksum before
+calling the unchanged flash driver in the same kernel transaction. Other RAM
+configurations retain raw 512-byte programming. Sector and final readback remain
+enabled unless explicitly skipped.
+
+After a failed write, the kernel stays running to avoid booting partly written
+flash. `--mtos-attach` is still needed to resume that state without starting KWP:
+
+```bash
+python gkflasher.py -p canbus -i pcan:PCAN_USBBUS1 \
+    --mtos --mtos-mode flash-calibration --mtos-payload firmware.bin --mtos-attach
+```
+
+For K-Line, use the same interface and the running kernel's baudrate from the
+previous job's recovery command. A successful MTOS job resets the ECU and checks diagnostic recovery.
+
 ### Modes
 
 | `--mtos-mode` | What it does |
 |---------------|--------------|
 | `hello` (default) | Sends the ASCII bytes `MTOS` out of the K-line, then returns. Proves upload, validation, execution and UART I/O. |
-| `dump`   | Streams a block of ECU memory out of the K-line. Range comes from `-s/--address-start` and `-e/--address-stop` (defaults to `0x000000`+`0x40`). Sample stays within one 16 KB page. |
+| `dump`   | Reads up to 64 KiB of ECU memory at the selected baudrate using flow control and CRC. Range comes from `-s/--address-start` and `-e/--address-stop` (defaults to `0x000000`+`0x40`). |
 | `payload`| Uploads a raw body you authored (`--mtos-payload file.bin`, code starting at `0xC014`), runs it, and listens on the K-line. |
 | `loader` | Uploads the built-in K-line loader, then streams `--mtos-payload` to it as a second stage and runs that. Lets you run code larger than the MTOS RAM budget. |
 | `probe`  | Starts the BSL kernel over MTOS and does everything a full flash does before the first erase, then resets the ECU. Writes nothing to the flash. See [Full flash](#full-flash-bsl-kernel-over-mtos). |
-| `read`   | Starts the BSL kernel and reads the whole 512 KB external flash to `-o` (or `mtos_read_<time>.bin`). |
-| `read-calibration` | Reads calibration at 750000 baud in flow-controlled 120-byte blocks, verifies CRC16, saves a BIN, then recovers diagnostics. Experimental: tested on the 24 MHz C167 SIMK43 2.0 with CA663057 and an FTDI adapter. |
-| `fullflash` | Starts the BSL kernel and rewrites the whole flash, **boot sectors included**, from `--mtos-payload` (a 512 KB image). Backs up first. |
+| `read`   | Starts the BSL kernel and reads the whole 512 KiB or 1 MiB external flash to `-o` (or `mtos_read_<time>.bin`). |
+| `read-calibration` | Reads calibration at the selected baudrate in flow-controlled 240-byte blocks, verifies CRC16, saves a BIN, then recovers diagnostics. Experimental: tested on the 24 MHz C167 SIMK43 2.0 with CA663057 and an FTDI adapter. |
+| `flash-calibration` | Rewrites only the 64 KiB calibration sector from `--mtos-payload`, a matching full BIN or padded calibration-read BIN. Backs up first and preserves all boot/program bytes. |
+| `fullflash` | Starts the BSL kernel and rewrites the whole flash, **boot sectors included**, from `--mtos-payload` (a matching 512 KiB or 1 MiB image). Backs up first. |
 
 > There is deliberately no "write a value to RAM and read it back" self-test mode.
 > `StartRoutine(0xFA)` ends the KWP session once your code returns, and the ensuing
@@ -77,20 +129,69 @@ The **MTOS** tab exposes the same flow:
 
 | GUI field | CLI equivalent |
 |-----------|----------------|
-| **Mode** (`hello` / `dump` / `payload` / `loader` / `probe` / `read` / `fullflash`) | `--mtos-mode` |
+| **Mode** (`hello` / `dump` / `payload` / `loader` / `probe` / `read` / `read-calibration` / `flash-calibration` / `fullflash`) | `--mtos-mode` |
 | **Key** | `--mtos-key` |
-| **Select file** / file box | `--mtos-payload` (payload, loader and fullflash modes), `-o` (read mode) |
+| **Select file** / file box | `--mtos-payload` (payload, loader, flash-calibration and fullflash modes), `-o` (read/read-calibration mode) |
 | **Dump address** / **Length** | `-s` / `-e` (dump mode; default `0x000000`+`0x40`) |
 | **Run MTOS** | runs the selected mode |
-| **Skip verification (fullflash)** | `--no-verify` |
+| **Skip verification (write)** | `--no-verify` |
 
 Output and the received K-line bytes appear in the log pane, same as the CLI.
-`fullflash` asks for confirmation in a dialog before the kernel starts. Picking a
+`fullflash` and `flash-calibration` ask for confirmation in a dialog before the kernel starts. Picking a
 session back up (`--mtos-attach`) is CLI only.
 
 ---
 
 ## How it works (trigger sequence)
+
+### Runtime speed
+
+The built-in `hello`, `dump`, `loader`, `probe`, `read`, `read-calibration`,
+`flash-calibration` and `fullflash` modes use **Desired Baudrate** for their
+RAM-code communication on the 24 MHz C167 platform. The default is **automatic
+discovery** in both CLI and GUI. The shared kernel starts conservatively and
+qualifies candidate rates with a recoverable 256-byte round trip, then validates
+kernel readback at the selected rate. No firmware-version lookup is used.
+Explicit CLI selectors `0x01` through `0x05` use the rates in
+`ecu_definitions.py`; `0x06` selects **750000 baud** for MTOS. An optional
+`--session-baudrate` supplies a custom transfer rate. Rates are rounded to an
+achievable C167 UART divider, between 10400 and 750000 baud.
+
+KWP initialization, security access and the initial RAM upload always start at
+**10400 baud**, independently of the transfer selection. No firmware high-speed
+KWP selector is required. CAN MTOS continues to use its selected CAN bitrate.
+For stream/hello/loader modes, automatic qualification uses a temporary kernel,
+then resets back to diagnostics before launching the existing payload at the
+qualified rate. Explicit rates avoid this extra qualification/reset. Custom
+`payload` files retain their own protocol and are not automatically rate-probed.
+
+```powershell
+python gkflasher.py --protocol kline --interface COM69 --mtos --mtos-key <key> --mtos-mode read-calibration --desired-baudrate 0x06
+```
+
+The `dump` and `read-calibration` reader calculates each byte's CRC while the
+UART transmits it, then waits for and drains its echo. This overlaps CPU work
+with wire time without adding RAM, changing the protocol or weakening CRC checks.
+
+The fast hello/loader payload sends `MT75` at entry baud, switches the ECU UART
+to the selected transfer rate, then waits for the host's `A5` acknowledgement before continuing.
+Returning payloads restore the saved ECU UART state, and the host restores its
+entry baudrate. The kernel retains its selected rate until its software reset or power cycle.
+Dump and calibration reads share the `MTRD` flow-controlled reader and its CRC.
+
+Kernel communication uses the same transfer sizing as BSL: up to 255 bytes
+per echo-checked upload burst and 512-byte read blocks at 750000 baud. On the
+connected OpenGK/FTDI bench, three calibration reads at that block size passed
+at about 39,500 B/s, versus about 15,800 B/s with the former 64-byte limit.
+
+Raw `payload` mode remains controlled by the user-authored machine code: it cannot
+be transparently relocated or given a new UART protocol. Loader second stages
+inherit the selected transfer rate and must preserve any additional registers they clobber if
+they return. Their arbitrary output still needs suitable buffering or flow control.
+
+The OpenGK/C167CS bench has passed repeated kernel reads and calibration writes
+at 750000 baud with full readback. Other hardware/firmware combinations still
+need their own validation.
 
 GKFlasher performs, in order:
 
@@ -117,18 +218,23 @@ live, and requires the correct Siemens key for the installed firmware.
 python gkflasher.py --protocol kline --interface COM69 --mtos --mtos-mode read-calibration --mtos-key <your-firmware-key> --output calibration.bin
 ```
 
-This mode is currently available from the CLI. Start at the normal 10400 baud;
+This mode is available from the CLI and the GUI MTOS mode dropdown. In the GUI,
+choose `read-calibration` and use the file button to select the output BIN.
+MTOS starts at 10400 baud independently of the GUI KWP baudrate selection.
+For the CLI, start at the normal 10400 baud;
 omit `--desired-baudrate`, `--session-baudrate`
 and `--kline-p4-min`. The RAM routine switches the UART for the stream. This
 mode assumes a 24 MHz C167; other hardware is untested. It does not change
 the firmware's baud table or write external flash.
 
-The host acknowledges each block before the ECU sends up to 120 bytes. This
+The host acknowledges each block before the ECU sends up to 240 bytes. This
 prevents adapter receive overruns when the host or USB driver pauses. The
 routine consumes its own byte echoes before waiting for an acknowledgement;
 the last block is followed by the whole-region CRC16. On the reference bench,
 ten consecutive reads matched both CRC and all reference bytes, with transfers
-taking approximately 2.2 seconds. Setup, security waits and recovery add time
+taking approximately 2.2 seconds with the older 120-byte blocks. Three OpenGK
+reads with 240-byte blocks passed at 35,800?36,800 B/s (about 1.8 seconds).
+Setup, security waits and recovery add time
 to the complete command.
 
 The reader saves UART registers directly on the stack to keep its code below
@@ -240,7 +346,7 @@ ready-made transmit payloads (`kline_hello.a66`, `memory_dump.a66`) end this way
 | Region | Range | Notes |
 |--------|-------|-------|
 | MTOS blob / RAM | `0xC000–` | where your blob lives; `0xC002` header word is free scratch |
-| XRAM | `0xE000–0xEEFF` | r/w/x — good scratch / second-stage area |
+| XRAM | `0xE000–0xE7FF` | r/w/x — good scratch / second-stage area |
 | SFRs | `0xFE00–0xFFFF` | peripherals, directly addressable |
 
 ### K-line I/O (ASC0)
@@ -387,8 +493,9 @@ same data as reading flash directly.
 
 ## Full flash (BSL kernel over MTOS)
 
-`probe`, `read` and `fullflash` turn MTOS into a whole-flash tool. They rewrite all
-512 KB of the external flash, **including the boot sectors**, from a running ECU over
+`probe`, `read` and `fullflash` run the BSL kernel from the live application.
+`fullflash` can rewrite all 512 KiB or 1 MiB of external flash, **including boot
+sectors**, from a running ECU over
 the normal K-line, without opening the case for BSL. Use them to move an ECU to a
 firmware with a different bootloader, such as `ca663056` (or lower) to `ca663057`.
 KWP2000 flashing can't do that: it only writes the program and calibration areas.
@@ -400,20 +507,20 @@ KWP2000 flashing can't do that: it only writes the program and calibration areas
 ```bash
 # 1. Dry run: everything up to the first erase, then the ECU is reset. Nothing is written
 python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
-    --desired-baudrate 0x05 --mtos-mode probe
+    --mtos-mode probe
 
 # 2. Read the whole flash
 python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
-    --desired-baudrate 0x05 --mtos-mode read -o flash.bin
+    --mtos-mode read -o flash.bin
 
 # 3. Full flash. Backs up to -o (or mtos_backup_<time>.bin) and asks before erasing anything
 python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-key 0x2d381c78 \
-    --desired-baudrate 0x05 --mtos-mode fullflash --mtos-payload image.bin
+    --mtos-mode fullflash --mtos-payload image.bin
 ```
 
-`--desired-baudrate 0x05` runs the session, and so the kernel, at 125000 baud. At
-the default 10400 baud a full read takes about 10 minutes, and a full flash reads the
-flash twice (the backup and the verify).
+The initial KWP session defaults to 10400 baud. The loader switches both sides to
+the selected Desired Baudrate before the kernel upload; no high-speed KWP selector is needed. A full
+flash reads the flash twice (the backup and the verify).
 
 `--no-verify` skips all read-back verification. Normally each sector is read back and
 checked the moment it's written, and then the whole flash is re-read and checked at the
@@ -431,7 +538,7 @@ write order) and can't be skipped.
    The prologue moves the stack and context pointer out of the firmware's RAM, then
    jumps into the kernel. The firmware never gets the CPU back.
 2. The kernel greets with `0x03` and speaks the BSL protocol over the K-line, at the
-   diagnostic session's baudrate.
+   loader's selected runtime baudrate.
 3. GKFlasher sets `ADDRSEL1` to `0x4008`, putting the flash write strobe where the BSL
    flash driver expects it. It then uploads the stock **I4 flash driver**
    (`assets/simk4x_driver_i4_a29fx00bx.bin`) to `0xF600` and reads it back.
@@ -485,12 +592,16 @@ ignored.
 
   ```bash
   python gkflasher.py -p kline -i /dev/ttyUSB0 --mtos --mtos-mode fullflash \
-      --mtos-attach --mtos-payload image.bin --desired-baudrate 0x05
+      --mtos-attach --mtos-payload image.bin
   ```
 
   This finds the kernel again (no KWP2000, no key) and runs the mode again from the
-  start, including a new backup. Use the **same `--desired-baudrate`** as the session
-  that left the kernel running. Attach works with `probe`, `read` and `fullflash`.
+  start, including a new backup. Without an explicit rate, attach checks the known
+  **57600-baud entry rate** used between successful automatic BSL operations.
+  For a kernel left by an interrupted MTOS session, supply the
+  same `--desired-baudrate` (and `--session-baudrate` override, if used) as the
+  original session; use `--desired-baudrate 0x06` for an existing 750000-baud kernel. Attach works with
+  `probe`, `read`, `flash-calibration` and `fullflash`.
 
 ### Getting back in sync, and what can still go wrong
 
@@ -574,3 +685,81 @@ as the emulated EEPROM records in SA2, get the image's contents.
 - The StartRoutine pre-hook re-inits peripherals and clears `IEN` (global interrupts
   off) before your code runs; it does **not** touch any ASC0 register, so the K-line
   stays usable as configured.
+
+
+### Calibration-only flashing
+
+```powershell
+python gkflasher.py --protocol kline --interface COM69 --mtos --mtos-key <your-firmware-key> --mtos-mode flash-calibration --mtos-payload calibration.bin
+```
+
+Choose the same mode and input file in the GUI. Supply a full 512 KiB or 1 MiB
+BIN matching the detected chip size; a padded file saved by `read-calibration`
+also works. Calibration addresses and sizes come from `ecu_definitions.py`.
+The shared flash writer backs up first, merges only the defined calibration
+write range into the live image, and verifies the result. If a range occupies
+part of a flash sector, bytes outside that range are preserved. `--no-verify` (alias
+`--skip-verify`) matches the GUI write-verification checkbox. Other modes keep
+read/CRC verification enabled. Firmware restart and diagnostic recovery are
+automatic after successful kernel jobs.
+
+Full reads/writes identify the flash chip before choosing the CPU alias: 4 Mbit
+chips use the 0x080000 mirror, while 8 Mbit chips use their 1 MiB CPU mapping.
+BIN identification uses `ECU_IDENTIFICATION_TABLE` in `ecu_definitions.py`;
+temporary OpenGK entries cover 4/8 Mbit images. Register new identifiers only
+after confirming their memory layout. The selected ECU label does not
+override the detected chip capacity.
+
+Before entering MTOS, the input check accepts a full 512 KiB or 1 MiB image
+(with up to 16 trailing bytes ignored), recognizes its layout and rejects empty
+selected regions. Full flashing also checks the reset jump and warns if its
+destination is erased. Calibration-only files do not need a boot region.
+
+Once the RAM kernel is running, the hardware check identifies the flash chip,
+verifies the uploaded driver and checks that the CPU and driver aliases see the
+same flash. Capacity and writable sector geometry must match before erasing.
+The default writer saves a backup and verifies the result. Calibration-only
+writes preserve data outside the selected range.
+
+These are structural and hardware checks: they do not validate firmware
+behaviour or repair the image's internal ECU checksums. An unmatched identifier
+means the layout is unrecognized, not that every byte in the file is invalid.
+
+GUI reads display their absolute output filename before starting. With no
+filename selected, a timestamped BIN is saved in the GUI's normal output folder.
+Read/flash completion summaries use `Read ... bytes in ... seconds` or
+`Flashed ... bytes in ... seconds`, each followed by `at ... B/s`, then the saved
+path when applicable.
+Calibration streaming counts the bytes transferred, excluding padding in the
+saved full-size BIN. After diagnostic recovery, `read-calibration` prints the
+calibration information immediately after the ECU responds again.
+
+
+CLI recovery via `--mtos-attach` remains an advanced CLI-only operation. The CLI
+can also select a write-backup path with `--output`; GUI writes use a timestamped
+backup in the working folder. The GUI and CLI otherwise share the mode list,
+input/output file semantics and write-verification setting.
+
+MTOS writes share the BSL write options in both interfaces:
+
+| GUI checkbox | CLI option | Effect |
+|---|---|---|
+| Skip backup | `--skip-backup` | Does not save a backup file. Reads needed for sector comparison, preservation or boot ordering still run. |
+| Force write all sectors | `--force-write` | Rewrites every selected sector, including matching sectors. With `flash-calibration`, only calibration sectors are selected. |
+| Skip verification (write) | `--skip-verify` / `--no-verify` | Skips sector readback and the final whole-flash comparison. |
+| Override BIN checks | `--override-safety-checks` | Allows an unrecognized BIN identifier. Image size, reset-vector and detected-chip checks remain. Calibration-only writes still need a recognized live calibration layout. |
+
+All four options default to off and apply only to `fullflash` or
+`flash-calibration`. They use the existing shared flash writer.
+
+For calibration-only flashing with **Skip backup**, the initial read covers only
+physical sectors intersecting calibration, preserving any bytes outside the
+requested range in those sectors. Each rewritten sector is still read back and
+verified in full. Calibration-only writes do not repeat verification across the
+unmodified boot/program regions. Keeping backup enabled still saves a complete
+flash backup; full-image flashing retains its final whole-flash verification.
+
+During enabled readback checks, both interfaces print `[*] Verifying eeprom...`.
+Safety dialogs run on the GUI thread, including warnings raised while a worker
+validates an input file. A reset-vector warning is independent of identifier
+recognition and is not suppressed by the identifier override.

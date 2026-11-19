@@ -1,0 +1,243 @@
+; RAM-only CAN byte stream for the existing SIMK kernel. R0 is the kernel data register.
+; Existing RSW CAN2 objects: TX EE10 (6A1), RX EE20 (6A0).
+; Header: LAST:1, sequence:4, payload count:3. ACK: 00, sequence.
+$MOD167
+$INCLUDE (REG167.INC)
+TX_COUNT EQU 0E7C0H
+TX_SEQ EQU 0E7C2H
+SYNC_TOKEN EQU 0E7CEH
+TX_WINDOW EQU 0E7CCH
+TX_BURST EQU 0E7C4H
+RX_COUNT EQU 0E7C6H
+RX_POS EQU 0E7C8H
+RX_SEQ EQU 0E7CAH
+TX_BUFFER EQU 0E7D0H
+RX_BUFFER EQU 0E7E0H
+CAN_IO SECTION CODE AT 0E200H
+CanInit:
+    MOV R1,#0
+    MOV TX_COUNT,R1
+    MOV TX_SEQ,R1
+    MOV TX_BURST,R1
+    MOV RX_COUNT,R1
+    MOV RX_SEQ,R1
+    MOV R1,#7
+    MOV TX_WINDOW,R1
+    MOV R1,#0FFFFH
+    MOV SYNC_TOKEN,R1
+    RETS
+; Kernel TX byte in RH0; preserve every other register.
+CanTx:
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    MOV R1,TX_COUNT
+    CMP R1,#7
+    JMPA cc_NE,Append
+    MOV R5,#0
+    CALLA cc_UC,Flush
+Append:
+    MOV R1,TX_COUNT
+    MOVB [R1+#TX_BUFFER],RH0
+    ADD R1,#1
+    MOV TX_COUNT,R1
+    CMPB RH0,#0EAH
+    JMPA cc_NE,TxExit
+    MOV R5,#1
+    CALLA cc_UC,Flush
+TxExit:
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    RET
+; Kernel RX byte returned in RL0.
+CanRx:
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    MOV R5,#1
+    CALLA cc_UC,Flush
+    MOV R1,RX_COUNT
+    CMP R1,#0
+    JMPA cc_NE,Buffered
+RxWait:
+    SRVWDT
+    MOV R1,0EE20H
+    AND R1,#0200H
+    JMPA cc_EQ,RxWait
+    MOVBZ R2,0EE27H
+    MOV R3,R2
+    AND R3,#7
+    JMPA cc_EQ,Control
+    MOV R4,R2
+    SHR R4,#3
+    AND R4,#0FH
+    CMP R4,RX_SEQ
+    JMPA cc_NE,Discard
+    MOV R1,#0
+RxCopy:
+    MOVB RL5,[R1+#0EE28H]
+    MOVB [R1+#RX_BUFFER],RL5
+    ADD R1,#1
+    CMP R1,R3
+    JMPA cc_C,RxCopy
+    MOV RX_COUNT,R3
+    MOV R1,#RX_BUFFER
+    MOV RX_POS,R1
+    MOV R1,#05595H
+    MOV 0EE20H,R1
+    ADD R4,#1
+    AND R4,#0FH
+    MOV RX_SEQ,R4
+    AND R2,#080H
+    JMPA cc_EQ,Buffered
+    MOV R1,#05A95H
+    MOV 0EE10H,R1
+    MOVB RL1,#0
+    MOVB 0EE17H,RL1
+    SUB R4,#1
+    AND R4,#0FH
+    MOVB 0EE18H,RL4
+    MOV R1,#06795H
+    MOV 0EE10H,R1
+    CALLA cc_UC,WaitTx
+Buffered:
+    MOV R1,RX_POS
+    MOVB RL0,[R1+]
+    MOV RX_POS,R1
+    MOV R1,RX_COUNT
+    SUB R1,#1
+    MOV RX_COUNT,R1
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    RET
+Control:
+    MOVBZ R1,0EE28H
+    CMP R1,#0FFH
+    JMPA cc_NE,Discard
+    MOV R1,#05595H
+    MOV 0EE20H,R1
+    MOV R3,0EE2AH
+    CMP R3,SYNC_TOKEN
+    JMPA cc_EQ,SyncReply
+    MOV SYNC_TOKEN,R3
+    MOV R1,#0
+    MOV TX_SEQ,R1
+    MOV TX_BURST,R1
+    MOV RX_SEQ,R1
+    MOVBZ R2,0EE29H
+    CMP R2,#15
+    JMPA cc_EQ,WindowReady
+    CMP R2,#7
+    JMPA cc_EQ,WindowReady
+    CMP R2,#0
+    JMPA cc_EQ,WindowReady
+    MOV R2,#3
+WindowReady:
+    MOV TX_WINDOW,R2
+SyncReply:
+    MOV R1,#05A95H
+    MOV 0EE10H,R1
+    MOVB RL1,#0
+    MOVB 0EE17H,RL1
+    MOVB RL1,#0FFH
+    MOVB 0EE18H,RL1
+    MOVB 0EE19H,RL3
+    MOVB 0EE1AH,RH3
+    MOV R1,#06795H
+    MOV 0EE10H,R1
+    CALLA cc_UC,WaitTx
+Discard:
+    MOV R1,#05595H
+    MOV 0EE20H,R1
+    JMPA cc_UC,RxWait
+; R5=force LAST; flush a full packet or the end of the kernel's response.
+Flush:
+    MOV R1,TX_COUNT
+    CMP R1,#0
+    JMPA cc_EQ,FlushExit
+    MOV R2,TX_SEQ
+    SHL R2,#3
+    OR R2,R1
+    MOV R3,TX_BURST
+    CMP R3,TX_WINDOW
+    JMPA cc_NE,CheckLast
+    MOV R5,#1
+CheckLast:
+    CMP R5,#0
+    JMPA cc_EQ,Header
+    OR R2,#080H
+Header:
+    CALLA cc_UC,WaitTx
+    MOV R4,#05A95H
+    MOV 0EE10H,R4
+    MOVB 0EE17H,RL2
+    MOV R3,#0
+TxCopy:
+    MOVB RL4,[R3+#TX_BUFFER]
+    MOVB [R3+#0EE18H],RL4
+    ADD R3,#1
+    CMP R3,R1
+    JMPA cc_C,TxCopy
+    MOV R4,#06795H
+    MOV 0EE10H,R4
+    CMP R5,#0
+    JMPA cc_EQ,NextPacket
+AckWait:
+    SRVWDT
+    MOV R3,0EE20H
+    AND R3,#0200H
+    JMPA cc_EQ,AckWait
+    MOVBZ R3,0EE27H
+    CMP R3,#0
+    JMPA cc_NE,AckDiscard
+    MOVBZ R3,0EE28H
+    CMP R3,TX_SEQ
+    JMPA cc_EQ,AckReceived
+    CMP R3,#0FFH
+    JMPA cc_NE,AckDiscard
+    MOV R3,#05595H
+    MOV 0EE20H,R3
+    MOV R3,#06795H
+    MOV 0EE10H,R3
+    JMPA cc_UC,AckWait
+AckDiscard:
+    MOV R3,#05595H
+    MOV 0EE20H,R3
+    JMPA cc_UC,AckWait
+AckReceived:
+    MOV R3,#05595H
+    MOV 0EE20H,R3
+    MOV R3,#0
+    MOV TX_BURST,R3
+    JMPA cc_UC,NextSeq
+NextPacket:
+    MOV R3,TX_BURST
+    ADD R3,#1
+    MOV TX_BURST,R3
+NextSeq:
+    MOV R3,TX_SEQ
+    ADD R3,#1
+    AND R3,#0FH
+    MOV TX_SEQ,R3
+    MOV R1,#0
+    MOV TX_COUNT,R1
+FlushExit:
+    RET
+WaitTx:
+    SRVWDT
+    MOV R4,0EE10H
+    AND R4,#01000H
+    JMPA cc_EQ,WaitTx
+    RET
+CAN_IO ENDS
+END

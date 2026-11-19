@@ -12,6 +12,7 @@ takes the kernel and runs it. A kernel a previous run left behind is picked up i
 nothing resets the ECU at the end, the kernel stays until the ECU is switched off.
 '''
 import time
+from .lzss import CompressedFlash, RamCodec, BSL_LAYOUT
 
 from .kernel import (
 	ACK, CHIPS, DONE, DRIVER_I4, DRIVER_V6, DRIVERS, FLASH_READ_BASE, IDENTIFICATION, IDENTIFICATION_LENGTH,
@@ -26,8 +27,11 @@ KERNEL_SIZE = 0x18A
 # the bootstrap loader's first words once it runs
 LOADER_STARTED = 0x01
 
-DEFAULT_BAUDRATE = 57600
-BAUDRATES = (57600, 38400, 19200, 9600)
+DEFAULT_BAUDRATE = 750000
+BAUDRATES = (750000, 57600, 38400, 19200, 9600)
+FAST_PROGRAM_THRESHOLD = 57600
+FAST_PROGRAM_BUFFER = 0xE000
+FAST_PROGRAM_BLOCK = 0x800
 MODES = ('hwinfo', 'read', 'readint', 'write')
 DRIVER_CHOICES = ('auto',) + tuple(DRIVERS)
 
@@ -89,7 +93,7 @@ def fit_image (flash: Flash, image: bytes) -> bytes:
 	return image[:size]
 
 
-def bootstrap (kernel: Kernel) -> str | None:
+def bootstrap (kernel: Kernel, initial_reply=None) -> str | None:
 	'''
 	The kernel up and answering: started through the boot ROM, or one a previous run left
 	running.
@@ -99,17 +103,20 @@ def bootstrap (kernel: Kernel) -> str | None:
 	link = kernel.link
 	# a kernel finishing a block, or the adapter switching to K-line. Whatever it is,
 	# the boot ROM has to get 0x00 first: it measures the baudrate on it
-	junk = link.drain(quiet=0.3)
+	junk = link.drain(quiet=0.02 if link._serial else 0.3) if initial_reply is None else b''
 	if junk:
 		kernel.log('[*] Ignoring {} byte(s) on the line'.format(len(junk)))
 
 	# to a kernel it's a no-op command, or the last byte of one it was waiting for
-	link.send(b'\x00')
-	reply = link.read(1, 1.0)
+	if initial_reply is None:
+		link.send(b'\x00')
+		reply = link.read(1, 1.0)
+	else:
+		reply = initial_reply
 	if not reply:
 		kernel.log('[*] No answer, looking for a kernel left in the middle of a command (up to 20 s)')
 		return _find_kernel(kernel)
-	if link.drain(quiet=0.2):
+	if link.drain(quiet=0.02 if link._serial else 0.2):
 		kernel.log('[*] More than the boot ROM would say, looking for a kernel left running')
 		return _find_kernel(kernel)
 
@@ -188,14 +195,14 @@ def load_flash (kernel: Kernel, driver: str = 'auto') -> Flash:
 	'''
 	configure(kernel)
 	if driver != 'auto':
-		flash = Flash(kernel, DRIVERS[driver])
+		flash = CompressedFlash(kernel, DRIVERS[driver], layout=BSL_LAYOUT)
 		flash.upload()
 		flash.identify()
 		return flash
 
 	tried = []
 	for candidate in (DRIVER_V6, DRIVER_I4):
-		flash = Flash(kernel, candidate)
+		flash = CompressedFlash(kernel, candidate, layout=BSL_LAYOUT)
 		flash.upload()
 		ids = flash.read_ids()
 		if ids in CHIPS:
@@ -221,23 +228,45 @@ def hwinfo (kernel: Kernel, cpu: str | None, driver: str) -> None:
 
 
 def read (kernel: Kernel, output_filename: str, driver: str) -> None:
-	read_flash(load_flash(kernel, driver), output_filename)
+	flash = load_flash(kernel, driver)
+	read_flash(flash, output_filename)
 
 
 def read_internal_rom (kernel: Kernel, output_filename: str, size: int) -> None:
 	configure(kernel, internal_rom=True)
+	codec = RamCodec(kernel, BSL_LAYOUT)
+	codec.upload()
 	progress = Progress(kernel.progress_callback, size, 'Reading the internal ROM')
+	started_at = time.monotonic()
 	try:
-		data = kernel.read_memory(INTERNAL_ROM, size, progress)
+		data = codec.read_memory(INTERNAL_ROM, size, progress)
 	finally:
 		progress.finish()
-	save(output_filename, data, kernel.log_callback)
+	save(output_filename, data, kernel.log_callback, started_at=started_at)
 
 
-def write (kernel: Kernel, image: bytes, backup_filename: str, confirm, driver: str, skip_verify: bool = False) -> None:
+def prepare_programming (flash: Flash) -> None:
+	'''Qualify the C167's 2 KiB XRAM staging area before any erase at high serial speeds.'''
+	kernel = flash.kernel
+	if isinstance(flash, CompressedFlash) and flash.codec.entries:
+		return  # Keep the qualified codec workspace clear of raw 2 KiB staging.
+	if not kernel.link._serial or kernel.baudrate <= FAST_PROGRAM_THRESHOLD:
+		return
+	probe = bytes(range(256)) * (FAST_PROGRAM_BLOCK // 256)
+	kernel.write_memory(FAST_PROGRAM_BUFFER, probe)
+	if kernel.read_memory(FAST_PROGRAM_BUFFER, FAST_PROGRAM_BLOCK) != probe:
+		raise KernelError('BSL XRAM staging verification failed; flash has not been erased')
+	flash.buffer_address = FAST_PROGRAM_BUFFER
+	flash.program_block_size = FAST_PROGRAM_BLOCK
+
+
+def write (kernel: Kernel, image: bytes, backup_filename: str, confirm, driver: str,
+           skip_verify: bool = False, skip_backup: bool = False, force: bool = False) -> None:
 	flash = load_flash(kernel, driver)
 	flash.check_writable()
-	write_flash(flash, fit_image(flash, image), backup_filename, confirm, skip_verify=skip_verify)
+	prepare_programming(flash)
+	write_flash(flash, fit_image(flash, image), backup_filename, confirm,
+		skip_verify=skip_verify, skip_backup=skip_backup, force=force)
 
 
 def cli_confirm (message: str) -> bool:
@@ -246,7 +275,8 @@ def cli_confirm (message: str) -> bool:
 
 def bsl_handler (channel, mode: str, image_filename: str | None = None, output_filename: str | None = None,
                  driver: str = 'auto', rom_size: int = INTERNAL_ROM_SIZE, confirm=cli_confirm,
-                 skip_verify: bool = False, log_callback=None, progress_callback=None) -> bool:
+                 skip_verify: bool = False, log_callback=None, progress_callback=None,
+                 skip_backup: bool = False, force: bool = False, auto_baudrate: bool = False) -> bool:
 	'''
 	Run `mode` (MODES) over BSL on an open K-line channel at the boot ROM's baudrate.
 
@@ -276,10 +306,19 @@ def bsl_handler (channel, mode: str, image_filename: str | None = None, output_f
 
 	previous = enter(channel, log_callback)
 	try:
-		kernel = Kernel(KernelLink(channel), log_callback=log_callback, progress_callback=progress_callback)
-		log('[*] BSL at {} baud: switch the ECU on in boot mode first'.format(kernel.baudrate), log_callback)
+		link = KernelLink(channel)
+		kernel = Kernel(link, log_callback=log_callback, progress_callback=progress_callback)
+		log('[*] BSL {}: switch the ECU on in boot mode first'.format(
+			'with automatic baudrate discovery' if auto_baudrate else 'at {} baud'.format(kernel.baudrate)), log_callback)
 		try:
-			cpu = bootstrap(kernel)
+			if auto_baudrate:
+				from .loader_baudrate import locate_loader, discover_loader_baudrate
+				kernel, reply = locate_loader(channel, log_callback)
+				kernel.progress_callback = progress_callback
+				cpu = bootstrap(kernel, reply) if reply is not None else None
+				discover_loader_baudrate(kernel)
+			else:
+				cpu = bootstrap(kernel)
 		except KernelError as e:
 			log('[!] {}'.format(e), log_callback)
 			return False
@@ -293,11 +332,17 @@ def bsl_handler (channel, mode: str, image_filename: str | None = None, output_f
 			job = lambda kernel: read_internal_rom(kernel, output_filename or 'bsl_irom_{}.bin'.format(stamp), rom_size)
 		else:
 			job = lambda kernel: write(kernel, image, output_filename or 'bsl_backup_{}.bin'.format(stamp),
-				confirm or (lambda message: False), driver, skip_verify=skip_verify)
+				confirm or (lambda message: False), driver,
+				skip_verify=skip_verify, skip_backup=skip_backup, force=force)
 
-		finished = run_session(kernel, job, reset_when_done=False, attach_hint=ATTACH_HINT)
+		hint = ('the same BSL command with --bsl-baudrate {}'.format(kernel.baudrate)
+			if auto_baudrate else ATTACH_HINT)
+		finished = run_session(kernel, job, reset_when_done=False, attach_hint=hint)
+		if finished and auto_baudrate and channel.get_baudrate() != 57600:
+			from .loader_baudrate import restore_loader_baudrate
+			restore_loader_baudrate(kernel)
 		if finished:
-			log('[*] Done. The kernel keeps running: switch the ECU off, and out of boot mode, to start it normally', log_callback)
+			log('[*] Done!', log_callback)
 		return finished
 	finally:
 		try:

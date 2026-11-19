@@ -1,22 +1,9 @@
 import os
 import time
-from contextlib import nullcontext
-from gkbus.channel import CanChannel
+from gkbus.channel import CanChannel, KLineChannel
 from gkbus.transport import CcpOverCanTransport
 from gkbus.protocol import ccp
-from alive_progress import alive_bar
-
-class Progress(object):
-	def __init__ (self, progress_callback, max_value: int):
-		self.progress_callback = progress_callback
-		self.progress_callback.emit((max_value, 0))
-		self.progress_callback.emit((0,))
-
-	def __call__ (self, value: int):
-		self.progress_callback.emit((value,))
-
-	def title (self, title: str):
-		pass
+from .progress import Progress, transfer_summary
 
 # ==========================================================
 # LOGGING
@@ -171,15 +158,16 @@ def native_bootstrap():
 # ==========================================================
 
 def flash_rsw(data, progress_callback=None, log_callback=None):
+    started_at = time.monotonic()
     log('[*] Uploading RSW', log_callback)
 
     def download(chunk):
         return (ccp.commands.DataDownload6Bytes(data=chunk) if len(chunk) == 6
                 else ccp.commands.DataDownload(size=len(chunk), data=chunk))
 
-    _transfer_6byte(data, download, 'Uploading RSW', progress_callback, percentage=True)
+    _transfer_6byte(data, download, 'Uploading RSW', progress_callback)
     ccp_client.execute(ccp.commands.ActionService(0xC314))
-    log('[*] RSW upload complete', log_callback)
+    log(transfer_summary('Uploaded', len(data), started_at), log_callback)
 
 # ==========================================================
 # PREP BOOT1
@@ -285,29 +273,39 @@ def prep_cal(cal_address, cal_size):
 # GENERIC 6 BYTE FLASHER
 # ==========================================================
 
-def _transfer_6byte(data, command, title, progress_callback=None, percentage=False):
-    total_chunks = (len(data) + 5) // 6
-    progress = (Progress(progress_callback, 100 if percentage else total_chunks)
-                if progress_callback is not None else None)
-
-    with (nullcontext() if progress is not None else alive_bar(len(data), title=title, unit='B')) as bar:
-        for current, offset in enumerate(range(0, len(data), 6), 1):
-            ccp_client.execute(command(data[offset:offset + 6]))
-            if progress is not None:
-                progress(int(current * 100 / total_chunks) if percentage else current)
-            else:
-                bar(len(data[offset:offset + 6]))
+def _transfer_6byte(data, command, title, progress_callback=None, batch=False):
+    progress = Progress(progress_callback, len(data), title)
+    try:
+        offset = 0
+        if batch:
+            offset = len(data) // 6 * 6
+            ccp_client.command_counter = transport.program_data(data[:offset], ccp_client.command_counter, progress)
+        for offset in range(offset, len(data), 6):
+            chunk = data[offset:offset + 6]
+            ccp_client.execute(command(chunk))
+            progress(offset + len(chunk))
+    finally:
+        progress.finish()
 
 
 def flash_file_6byte(name, data, progress_callback=None, log_callback=None):
+    if isinstance(getattr(transport, 'channel', None), KLineChannel):
+        # The selected region was erased first. Leave its erased tail alone;
+        # retain a complete native 128-byte staging block before the flush.
+        end = len(data.rstrip(b'\xFF'))
+        data = data[:min(len(data), (end + 127) // 128 * 128)]
+    started_at = time.monotonic()
     log(f'[*] Flashing {name}', log_callback)
     _transfer_6byte(
         data,
-        lambda chunk: ccp.commands.Program6Bytes(data=chunk.ljust(6, b"\x00")),
+        lambda chunk: (ccp.commands.Program6Bytes(data=chunk) if len(chunk) == 6
+                       else ccp.commands.Program(size=len(chunk), data=chunk)),
         f'Flashing {name}',
         progress_callback,
+        batch=isinstance(getattr(transport, 'channel', None), KLineChannel),
     )
-    log(f'[*] {name} upload complete', log_callback)
+    ccp_client.execute(ccp.commands.Program(size=0, data=b''))
+    log(transfer_summary('Flashed', len(data), started_at), log_callback)
 
 # ==========================================================
 # BIN HELPERS
@@ -321,7 +319,7 @@ def extract_bin_region(
     log_callback=None
 ):
 
-    start = ecu.calculate_bin_offset(address)
+    start = 0 if address == 0 else ecu.calculate_bin_offset(address)
     end = start + size
 
     log(f"    CCP Address : 0x{address:06X}", log_callback)
@@ -374,206 +372,65 @@ def finalize():
 # HANDLER
 # ==========================================================
 
-def rsw_handler(
-    ecu,
-    mode,
-    bin_file,
-    progress_callback=None,
-    log_callback=None
-):
-    # ======================================================
-    # CAN HARDWARE CHECK
-    # ======================================================
-    if not isinstance(ecu.bus.transport.channel, CanChannel):
-        raise Exception(
-            'RSW mode requires a CANBUS interface.'
-        )
-
+def rsw_handler(ecu, mode, bin_file, progress_callback=None, log_callback=None, key=None, baudrate=None):
+    if mode not in ('boot1', 'boot2', 'bsw', 'asw', 'cal', 'full', 'virginize'):
+        raise ValueError('Unknown RSW mode: {}'.format(mode))
+    if not all(name in ecu.regions for name in ('boot1', 'boot2', 'calibration', 'program')):
+        raise ValueError('This ECU layout is not supported by the SIMK43 RSW loader')
+    full_bin = None
     if mode != 'virginize':
-        with open(bin_file, "rb") as file:
+        with open(bin_file, 'rb') as file:
             full_bin = file.read()
-
-        log(f"[*] Loading up: {bin_file}", log_callback)
-        log(f"[*] Size: {len(full_bin)} bytes", log_callback)
-
+        if len(full_bin) != ecu.get_eeprom_size_bytes():
+            raise ValueError('BIN size does not match the selected ECU')
+        log('[*] Loading up: {}'.format(bin_file), log_callback)
+        log('[*] Size: {} bytes'.format(len(full_bin)), log_callback)
+    regions = _region_payloads(ecu, mode, full_bin, log_callback)
+    channel = ecu.bus.transport.channel
+    if isinstance(channel, KLineChannel):
+        from .rsw_kline import run
+        return run(ecu, mode, regions, key=key, baudrate=baudrate,
+                   progress_callback=progress_callback, log_callback=log_callback)
+    if not isinstance(channel, CanChannel):
+        raise ValueError('RSW requires a CAN or K-Line interface')
     init_ccp(ecu)
-
     native_connect()
-
     native_unlock(0x02)
-
     native_bootstrap()
-
-    # ======================================================
-    # FLASH RSW
-    # ======================================================
-
-    with open(RSW_FILE, "rb") as file:
-
-        rsw_data = file.read()
-
-    flash_rsw(
-        rsw_data,
-        progress_callback=progress_callback,
-        log_callback=log_callback
-    )
-    # ======================================================
-    # ECU REGION INFO
-    # ======================================================
-
-    boot1_region = ecu.regions['boot1']['write']
-    boot2_region = ecu.regions['boot2']['write']
-    cal_region   = ecu.regions['calibration']['write']
-    asw_region   = ecu.regions['program']['write']
-
-    boot1_address = boot1_region['address']
-    boot1_size    = boot1_region['size']
-
-    boot2_address = boot2_region['address']
-    boot2_size    = boot2_region['size']
-
-    cal_address = cal_region['address']
-    cal_size    = cal_region['size']
-
-    asw_address = asw_region['address']
-    asw_size    = asw_region['size']
-
-    # ======================================================
-    # BOOT1
-    # ======================================================
-
-    if mode == "bsw" or mode == "full":
-
-        log("[*] Extracting Boot1", log_callback)
-
-        boot1_data = extract_bin_region(
-            ecu,
-            full_bin,
-            boot1_address,
-            boot1_size,
-            log_callback
-        )
-
-        prep_boot1(boot1_address, boot1_size)
-
-        flash_file_6byte(
-            "Boot1",
-            boot1_data,
-            progress_callback=progress_callback,
-            log_callback=log_callback
-        )
-
-    # ======================================================
-    # BOOT2
-    # ======================================================
-
-    if mode == "bsw" or mode == "full":
-
-        log("[*] Extracting Boot2", log_callback)
-
-        boot2_data = extract_bin_region(
-            ecu,
-            full_bin,
-            boot2_address,
-            boot2_size,
-            log_callback
-        )
-
-        prep_boot2(boot2_address, boot2_size)
-
-        flash_file_6byte(
-            "Boot2",
-            boot2_data,
-            progress_callback=progress_callback,
-            log_callback=log_callback
-        )
-
-    # ======================================================
-    # CAL
-    # ======================================================
-
-    if mode == "cal" or mode == "full":
-
-        log("[*] Extracting Calibration", log_callback)
-
-        cal_data = extract_bin_region(
-            ecu,
-            full_bin,
-            cal_address,
-            cal_size - 0x10,
-            log_callback
-        )
-
-        log(f"[*] Calibration Size: 0x{len(cal_data):X}", log_callback)
-
-        prep_cal(cal_address, cal_size)
-
-        flash_file_6byte(
-            "CAL",
-            cal_data,
-            progress_callback=progress_callback,
-            log_callback=log_callback
-        )
-
-    # ======================================================
-    # ASW
-    # ======================================================
-
-    if mode == "asw" or mode == "full":
-
-        log("[*] Extracting ASW", log_callback)
-
-        asw_data = extract_bin_region(
-            ecu,
-            full_bin,
-            asw_address,
-            asw_size,
-            log_callback
-        )
-
-        log(f"[*] ASW Size: 0x{len(asw_data):X}", log_callback)
-
-        prep_asw(asw_address, asw_size)
-
-        flash_file_6byte(
-            "ASW",
-            asw_data,
-            progress_callback=progress_callback,
-            log_callback=log_callback
-        )
-
-    # ======================================================
-    # VIRGINIZE
-    # ======================================================
-
-    if mode == "virginize":
-
-        log("[*] Viginizating ECU", log_callback)
-
-        ccp_client.execute(
-            ccp.commands.Program(size=4, data=b"\xFF\xFF\xFF\xFF")
-        )
-
-        ccp_client.execute(
-            ccp.commands.SetMemoryTransferAddress(0, 0, 0x000000)
-        )
-
-        ccp_client.execute(
-            ccp.commands.SetMemoryTransferAddress(0, 0, 0x084000)
-        )
-
-        ccp_client.execute(
-            ccp.commands.ClearMemory(size=0x4000)
-        )
-
-        ccp_client.execute(
-            ccp.commands.SetMemoryTransferAddress(0, 0, 0x084000)
-        )
-        
-        log("[*] Viginization Complete", log_callback)
-
-    # ======================================================
-    # FINALIZE
-    # ======================================================
-
+    with open(RSW_FILE, 'rb') as file:
+        flash_rsw(file.read(), progress_callback=progress_callback, log_callback=log_callback)
+    _flash_regions(mode, regions, progress_callback, log_callback)
     finalize()
+
+
+def _region_payloads(ecu, mode, image, log_callback=None):
+    groups = {'bsw': ('boot1', 'boot2'), 'full': ('boot1', 'boot2', 'calibration', 'program'),
+              'boot1': ('boot1',), 'boot2': ('boot2',), 'cal': ('calibration',),
+              'asw': ('program',), 'virginize': ()}
+    regions = []
+    for name in groups[mode]:
+        region = ecu.regions[name]['write']
+        address, size = region['address'], region['size']
+        if name == 'boot1' and isinstance(ecu.bus.transport.channel, KLineChannel):
+            address = 0  # native RSW uses the low boot alias; BIN offset is also zero
+        data = extract_bin_region(ecu, image, address, size - (16 if name == 'calibration' else 0), log_callback)
+        if not data or not any(data) or data.count(0xFF) == len(data):
+            raise ValueError('The selected {} region is empty'.format(name))
+        regions.append((name, address, size, data))
+    return regions
+
+
+def _flash_regions(mode, regions, progress_callback=None, log_callback=None):
+    preparations = {'boot1': prep_boot1, 'boot2': prep_boot2,
+                    'calibration': prep_cal, 'program': prep_asw}
+    for name, address, size, data in regions:
+        preparations[name](address, size)
+        flash_file_6byte(name, data, progress_callback, log_callback)
+    if mode == 'virginize':
+        log('[*] Virginizing ECU', log_callback)
+        ccp_client.execute(ccp.commands.Program(size=4, data=b'\xFF' * 4))
+        ccp_client.execute(ccp.commands.SetMemoryTransferAddress(0, 0, 0))
+        ccp_client.execute(ccp.commands.SetMemoryTransferAddress(0, 0, 0x84000))
+        ccp_client.execute(ccp.commands.ClearMemory(size=0x4000))
+        ccp_client.execute(ccp.commands.SetMemoryTransferAddress(0, 0, 0x84000))
+        log('[*] Virginization complete', log_callback)
