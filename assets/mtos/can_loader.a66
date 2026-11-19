@@ -1,0 +1,107 @@
+; MTOS CAN loader using the existing RSW CAN2 TX/RX objects.
+; Header sequence/count framing matches the kernel stream. No flash operations.
+$MOD167
+$INCLUDE (REG167.INC)
+CAN_LOADER SECTION CODE AT 0C014H
+Main PROC FAR
+    BCLR IEN
+    NOP
+    MOV R1,#05A95H
+    MOV 0EE10H,R1
+    MOVB RL1,#'M'
+    MOVB 0EE17H,RL1
+    MOVB RL1,#'T'
+    MOVB 0EE18H,RL1
+    MOVB RL1,#'C'
+    MOVB 0EE19H,RL1
+    MOVB RL1,#'1'
+    MOVB 0EE1AH,RL1
+    MOV R1,#06795H
+    MOV 0EE10H,R1
+    MOV R12,#0
+    MOV R14,#0
+    CALLR RxByte
+    MOVBZ R8,RL0
+    CALLR RxByte
+    MOVBZ R1,RL0
+    SHL R1,#8
+    OR R8,R1
+    CMP R8,#0
+    JMPR cc_EQ,Invalid
+    CMP R8,#07C0H
+    JMPR cc_UGT,Invalid
+    CALLR RxByte
+    MOVBZ R10,RL0
+    MOV R6,#0E000H
+    MOV R7,#0
+Copy:
+    CALLR RxByte
+    MOVB [R6],RL0
+    XORB RL7,RL0
+    ADD R6,#1
+    SUB R8,#1
+    JMPR cc_NE,Copy
+    CMP R7,R10
+    JMPR cc_NE,Invalid
+    JMPS 0,0E000H
+Invalid:
+    SRST
+Main ENDP
+RxByte:
+    CMP R12,#0
+    JMPR cc_NE,Buffered
+    MOV R15,#200
+Timeout:
+    MOV R11,#0
+Wait:
+    SRVWDT
+    MOV R1,0EE20H
+    AND R1,#0200H
+    JMPR cc_NE,Received
+    SUB R11,#1
+    JMPR cc_NE,Wait
+    SUB R15,#1
+    JMPR cc_NE,Timeout
+    JMPR cc_UC,Invalid
+Received:
+    MOVBZ R2,0EE27H
+    MOV R12,R2
+    AND R12,#7
+    JMPR cc_EQ,Invalid
+    MOV R3,R2
+    SHR R3,#3
+    AND R3,#0FH
+    CMP R3,R14
+    JMPR cc_NE,Invalid
+    MOV R1,#0
+Save:
+    MOVB RL4,[R1+#0EE28H]
+    MOVB [R1+#0C000H],RL4
+    ADD R1,#1
+    CMP R1,R12
+    JMPR cc_C,Save
+    MOV R1,#05595H
+    MOV 0EE20H,R1
+    ADD R14,#1
+    AND R14,#0FH
+    MOV R13,#0C000H
+    AND R2,#080H
+    JMPR cc_EQ,Buffered
+    MOV R1,#05A95H
+    MOV 0EE10H,R1
+    MOVB RL1,#0
+    MOVB 0EE17H,RL1
+    MOVB 0EE18H,RL3
+    MOV R1,#06795H
+    MOV 0EE10H,R1
+TxWait:
+    SRVWDT
+    MOV R1,0EE10H
+    AND R1,#01000H
+    JMPR cc_EQ,TxWait
+Buffered:
+    MOVB RL0,[R13+]
+    SUB R12,#1
+    RET
+CAN_LOADER ENDS
+END

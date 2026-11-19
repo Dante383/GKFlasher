@@ -1,11 +1,14 @@
 import os, sys
+import time
 from datetime import datetime
 from functools import partial
+from concurrent.futures import Future
 
 import plyer
 from PyQt5 import QtWidgets, uic
+from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import QFileDialog, QMessageBox
-from PyQt5.QtCore import QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot, QTimer
+from PyQt5.QtCore import Qt, QThreadPool, QObject, pyqtSignal, QRunnable, pyqtSlot, QTimer, QThread
 from plyer import notification
 import gkbus, yaml, traceback, logging
 from gkbus.device import Bus, DeviceABC, discover
@@ -14,8 +17,9 @@ from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, 
 from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.commands import *
 from gkbus.protocol.kwp2000.enums import *
-from flasher.ecu import enable_security_access, fetch_ecu_identification, identify_ecu, negotiate_timing, release_timing, ECUIdentificationException, ECU, DesiredBaudrate
-from flasher.memory import read_memory, write_memory, dynamic_find_end
+from flasher.ecu import KWP_RESPONSE_TIMEOUT, enable_security_access, configure_serial_kline, fetch_ecu_identification, identify_ecu, negotiate_timing, end_diagnostic_session, ECUIdentificationException, ECU, DesiredBaudrate
+from flasher.baudrate import discover_baudrate
+from flasher.memory import read_memory, write_memory, prepare_flash_payloads, prepare_write_memory
 from flasher.checksum import *
 from flasher.immo import immo_status
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, AccessLevel
@@ -24,11 +28,37 @@ from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin, set_gui_log_handler as set_lineswap_log_handler
 from flasher.smartra import calculate_smartra_pin
 from flasher.rsw import rsw_handler
-from flasher.mtos import mtos_handler
+from flasher.mtos import mtos_handler, MTOS_MODES, WRITE_MODES
 from flasher import bsl
-from flasher.kernel import KERNEL_TIMING
+from flasher.kernel import KERNEL_TIMING, available_filename
+from flasher.progress import Progress as TransferProgress, transfer_summary
 
 BUS_NAMES = {Bus.KLINE: 'K-Line', Bus.CANBUS: 'CAN bus'}
+
+
+def configure_appearance(app):
+	"""Keep native Windows rendering and load bundled fonts on other platforms."""
+	root = os.path.dirname(os.path.abspath(__file__))
+	if os.name != 'nt':
+		for filename in ('DejaVuSans.ttf', 'DejaVuSans-Bold.ttf', 'DejaVuSansMono.ttf'):
+			path = os.path.join(root, 'assets', 'fonts', filename)
+			if QFontDatabase.addApplicationFont(path) == -1:
+				raise RuntimeError('Could not load bundled GUI font: {}'.format(path))
+		app.setStyle('Fusion')
+		font = QFont('DejaVu Sans')
+		font.setPixelSize(11)
+		font.setHintingPreference(QFont.PreferFullHinting)
+		app.setFont(font)
+	app.setAttribute(Qt.AA_DontUseNativeDialogs, os.name != 'nt')
+	with open(os.path.join(root, 'flasher', 'gkflasher.qss'), encoding='utf-8') as stylesheet:
+		style = stylesheet.read()
+	if os.name == 'nt':
+		style = style.replace('"DejaVu Sans"', '"MS Shell Dlg 2"').replace('"DejaVu Sans Mono"', '"Consolas"')
+	else:
+		# DejaVu's wider glyphs need slightly less padding to fit all tab headings.
+		style += '\nQTabBar::tab { padding: 6px 7px; }\n'
+	style = style.replace('url("assets/', 'url("{}/assets/'.format(root.replace('\\', '/')))
+	app.setStyleSheet(style)
 
 #
 # @TODO: ... man, I don't even know. Start by separating this mess into controllers and views?
@@ -59,48 +89,7 @@ except KeyboardInterrupt:
 except Exception as e:
 	print('[!] Couldn\'t create or set the log file: {}'.format(str(e)))
 
-class Progress(object):
-
-	def __init__(self, progress_callback, max_value: int):
-
-		self.progress_callback = progress_callback
-		self.max_value = max_value
-		self.current_value = 0
-
-		self.progress_callback.emit((100, 0))
-		self.progress_callback.emit((0,))
-
-	def __call__(self, value: int):
-
-		# ==========================================
-		# DIRECT PERCENTAGE MODE
-		# Used by rsw.py
-		# ==========================================
-
-		if self.max_value == 100:
-
-			percent = value
-
-		# ==========================================
-		# INCREMENTAL MODE
-		# Used for flashing with memory.py
-		# ==========================================
-
-		else:
-
-			self.current_value += value
-
-			percent = int(
-				(self.current_value / self.max_value) * 100
-			)
-
-		if percent > 100:
-			percent = 100
-
-		self.progress_callback.emit((percent,))
-
-	def title(self, title: str):
-		pass
+Progress = partial(TransferProgress, incremental=True)
 
 class WorkerSignals(QObject):
     finished = pyqtSignal()
@@ -128,6 +117,8 @@ class Worker(QRunnable):
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
+        except KeyboardInterrupt:
+            self.signals.log.emit('[!] Interrupted')
         except Exception as e:
             #traceback.print_exc()
             #exctype, value = sys.exc_info()[:2]
@@ -150,7 +141,7 @@ class InterfaceDiscoveryWorker(QRunnable):
         self.signals.result.emit(discover({Bus.KLINE, Bus.CANBUS}))
 
 class Ui(QtWidgets.QMainWindow):
-	VALIDATION_INTERVAL = 180 # Validation routine Animation duration.
+	VALIDATION_INTERVAL = 180 # Validation routine animation tick, in milliseconds.
 	ERASE_INTERVAL = 20 # Erase routine animation duration.
 
 	request_pin_signal1 = pyqtSignal(object, object)  # Signal to request PIN from the main thread. # Pass `log_callback` and `ecu`  
@@ -161,14 +152,19 @@ class Ui(QtWidgets.QMainWindow):
 	request_new_password_signal = pyqtSignal(object, object, str)  # For requesting the new password. Three arguments: log_callback, ecu, current_password
 	request_vin_signal = pyqtSignal(object, object)  # For requesting the Write VIN Input
 	request_vin_to_pin_signal = pyqtSignal(object)  # For requesting the VIN to PIN Input
+	mtos_warning_requested = pyqtSignal(str, object)
+	automatic_baudrate_selected = pyqtSignal(int)
 	log_signal = pyqtSignal(str)  # Define a signal for logging
 
 	def __init__(self):
 		super(Ui, self).__init__()
+		self._operation_running = False
 		self.load_ui()
 		self.previous_baudrate = False
 		self.interfacesBox.currentIndexChanged.connect(self.update_baudrate_state)
 		self.update_baudrate_state()
+		self.mtos_warning_requested.connect(self._show_mtos_warning)
+		self.automatic_baudrate_selected.connect(self.show_automatic_baudrate)
 		self.log_signal.connect(self.log)  # Connect the signal to the `log` method
 
 		# bin <-> sie conversion messages
@@ -201,6 +197,15 @@ class Ui(QtWidgets.QMainWindow):
 
 	def load_ui(self):
 		uic.loadUi(os.path.dirname(os.path.abspath(__file__)) + '/flasher/gkflasher.ui', self)
+		# Keep tab headings clear of the baudrate selector on every platform.
+		self.tabWidget.tabBar().setMaximumWidth(self.ecusBox.x() - self.tabWidget.x() - 10)
+		# Fit checkbox text to the active font, with a small consistent gap.
+		x = self.mtosSkipBackupCheck.x()
+		for checkbox in (self.mtosSkipBackupCheck, self.mtosForceWriteCheck,
+					 self.mtosSkipVerifyCheck, self.mtosOverrideSafetyCheck):
+			checkbox.setFixedWidth(checkbox.sizeHint().width())
+			checkbox.move(x, checkbox.y())
+			x += checkbox.width() + 4
 		self.thread_manager = QThreadPool()
 		self.setWindowTitle('GKFlasher [{}]'.format(__version__))
 		self.show()
@@ -219,6 +224,8 @@ class Ui(QtWidgets.QMainWindow):
 
 		self.load_ecus()
 		self.load_baudrates()
+		self.mtosModeBox.clear()
+		self.mtosModeBox.addItems(MTOS_MODES)
 		self.add_listeners()
 
 	def add_listeners (self):
@@ -269,11 +276,20 @@ class Ui(QtWidgets.QMainWindow):
 		self.mtosRunBtn.clicked.connect(self.handler_run_mtos)
 
 	def click_handler (self, callback):
+		if self._operation_running:
+			self.log_signal.emit('[!] An operation is already running. Wait for it to finish before starting another.')
+			return
+		self._operation_running = True
 		worker = Worker(callback)
 		worker.signals.log.connect(self.log)
 		worker.signals.progress.connect(self.progress_callback)
 		worker.signals.error.connect(self.handle_exception)
+		worker.signals.finished.connect(self._operation_finished)
 		self.thread_manager.start(worker)
+
+	@pyqtSlot()
+	def _operation_finished (self):
+		self._operation_running = False
 
 	def send_notification (self, title: str, body: str) -> None:
 		try:
@@ -283,19 +299,19 @@ class Ui(QtWidgets.QMainWindow):
 
 	def handler_select_file_reading (self):
 		filename = QFileDialog().getSaveFileName()[0]
-		self.readingFileInput.setText(filename)
+		self.readingFileInput.setText(os.path.normpath(filename) if filename else '')
 
 	def handler_select_file_flashing (self):
 		filename = QFileDialog().getOpenFileName()[0]
-		self.flashingFileInput.setText(filename)
+		self.flashingFileInput.setText(os.path.normpath(filename) if filename else '')
 
 	def handler_select_file_checksum (self):
 		filename = QFileDialog().getOpenFileName()[0]
-		self.checksumFileInput.setText(filename)
+		self.checksumFileInput.setText(os.path.normpath(filename) if filename else '')
 
 	def handler_select_bsl_file (self):
 		filename = QFileDialog().getOpenFileName()[0]
-		self.bslFileInput.setText(filename)
+		self.bslFileInput.setText(os.path.normpath(filename) if filename else '')
 
 	def log (self, text):
 		self.logOutput.append(text)
@@ -313,7 +329,7 @@ class Ui(QtWidgets.QMainWindow):
 		self.interfacesBox.clear()
 
 		if len(devices) == 0:
-			self.interfacesBox.addItem('[!] No interfaces found. Connect an interface and restart GKFlasher.')
+			self.interfacesBox.addItem('[!] No interfaces found. Connect an adapter and restart.')
 			return
 
 		# one entry per bus a device supports - not every ECU speaks CAN, so on a device
@@ -337,24 +353,37 @@ class Ui(QtWidgets.QMainWindow):
 			self.ecusBox.addItem('    [{}] {}'.format(index, ecu['ecu']['name']), index)
 
 	def load_baudrates (self):
-		self.baudratesBox.addItem('Desired baudrate (default)', -1)
-		for index, baudrate in BAUDRATES.items():
+		self.bslBaudrateBox.insertItem(0, 'Automatic')
+		self.bslBaudrateBox.setCurrentIndex(0)
+		self.baudratesBox.addItem('Desired Baudrate (automatic)', -1)
+		self.baudratesBox.setItemData(0,
+			'Discover the fastest verified rate for normal KWP or the selected RAM loader.', Qt.ToolTipRole)
+		self._baudrates = {**BAUDRATES, 0x06: 750000}
+		for index, baudrate in self._baudrates.items():
 			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
-
-	def load_baudrates (self):
-		self.baudratesBox.addItem('Desired baudrate (default)', -1)
-		for index, baudrate in BAUDRATES.items():
-			self.baudratesBox.addItem('{} baud'.format(baudrate), index)
+		self.baudratesBox.setItemData(self.baudratesBox.count() - 1,
+			'Normal KWP requires compatible OpenGK firmware. MTOS selects this rate in its RAM payload.', Qt.ToolTipRole)
+		self.baudratesBox.setCurrentIndex(0)
 
 	def update_baudrate_state(self):
 		selected = self.interfacesBox.currentData()
 
 		is_can = bool(selected) and selected[1] == Bus.CANBUS
 
+		was_enabled = self.baudratesBox.isEnabled()
+		self.baudratesBox.setItemText(0, 'Desired Baudrate (500 Kbps)' if is_can
+			else 'Desired Baudrate (automatic)')
 		self.baudratesBox.setEnabled(not is_can)
 
 		if is_can:
-			self.baudratesBox.setCurrentIndex(0)	
+			self.baudratesBox.setCurrentIndex(0)
+		elif not was_enabled:
+			self.baudratesBox.setCurrentIndex(0)
+
+	@pyqtSlot(int)
+	def show_automatic_baudrate(self, baudrate):
+		if self.baudratesBox.isEnabled() and self.baudratesBox.currentData() == -1:
+			self.baudratesBox.setItemText(0, 'Desired Baudrate (auto {:g}k)'.format(baudrate / 1000))
 
 	def get_selected_interface (self) -> tuple[DeviceABC, Bus]:
 		selected = self.interfacesBox.currentData()
@@ -365,30 +394,46 @@ class Ui(QtWidgets.QMainWindow):
 	# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
 	def get_desired_baudrate (self) -> DesiredBaudrate:
 		baudrate_index = self.baudratesBox.currentData()
-		if (baudrate_index == -1
-		or BAUDRATES.get(baudrate_index) == 10400):
+		if self.baudratesBox.isEnabled() and baudrate_index == -1:
+			return DesiredBaudrate(index=-1, baudrate=None)
+		if (not self.baudratesBox.isEnabled()
+		or baudrate_index == -1
+		or self._baudrates.get(baudrate_index) == 10400):
 			return DesiredBaudrate(index=None, baudrate=10400)
-		return DesiredBaudrate(index=baudrate_index, baudrate=BAUDRATES[baudrate_index])
+		return DesiredBaudrate(index=baudrate_index, baudrate=self._baudrates[baudrate_index])
 
 	def progress_callback(self, value):
 		if len(value) > 2:
-			if value[2] == 1:
+			if value[2] == 'baudrate':
+				self.show_automatic_baudrate(value[0])
+				if self.bslBaudrateBox.currentIndex() == 0:
+					self.bslBaudrateBox.setItemText(0, 'Automatic ({:g}k)'.format(value[0] / 1000))
+			elif value[2] == 'bytes':
+				self.progressBar.setValue(value[0])
+				self.progressBar.setFormat('%p% | {:,.0f} B/s'.format(value[1]))
+			elif value[2] == 1:
+				self.validation_timer.stop()
 				self.validation_progress = 0
-				self.progressBar.setMaximum(100)
 				self.progressBar.setValue(0)
-
 				if len(value) > 3 and value[3] == 'erase':
+					self.progressBar.setRange(0, 100)
+					self.progressBar.setFormat('%p%')
 					self.validation_timer.setInterval(self.ERASE_INTERVAL)
+					self.validation_timer.start()
 				else:
+					self.progressBar.setRange(0, 100)
+					self.progressBar.setFormat('Waiting for ECU...')
 					self.validation_timer.setInterval(self.VALIDATION_INTERVAL)
-
-				self.validation_timer.start()
+					self.validation_timer.start()
 
 			elif value[2] == 0:
 				self.validation_timer.stop()
+				self.progressBar.setRange(0, 100)
+				self.progressBar.setFormat('%p%')
 				self.progressBar.setValue(100)
 
 		elif len(value) > 1:
+			self.progressBar.setFormat('%p%')
 			self.progressBar.setMaximum(value[0])
 			self.progressBar.setValue(0)
 		else:
@@ -401,7 +446,9 @@ class Ui(QtWidgets.QMainWindow):
 
 	def _close_bus (self, log_callback) -> None:
 		# the device too, it closes the channel opened in _initialize_ecu()
-		for closeable in (getattr(self, 'bus', None), getattr(self, 'device', None)):
+		for name in ('bus', 'device'):
+			closeable = getattr(self, name, None)
+			setattr(self, name, None)
 			if closeable is None:
 				continue
 			try:
@@ -409,7 +456,7 @@ class Ui(QtWidgets.QMainWindow):
 			except GkbusException as e:
 				log_callback.emit('[!] Failed to close the port. This shouldn\'t affect operation. Please report to OpenGK: {}'.format(str(e)))
 
-	def _initialize_ecu (self, log_callback) -> ECU:
+	def _initialize_ecu (self, log_callback, desired_baudrate=None, p4_min=0.001) -> ECU:
 		self._close_bus(log_callback)
 
 		try:
@@ -433,46 +480,53 @@ class Ui(QtWidgets.QMainWindow):
 		# opened here rather than by the transport, so the channel outlives the KWP2000 session
 		# (RSW switches to CCP on it). Closed by _close_bus() along with the device
 		channel.open()
+		configure_serial_kline(channel, p4_min=p4_min)
 
 		self.bus = kwp2000.Kwp2000Protocol(transport)
+		self.bus.transport.set_timeout(KWP_RESPONSE_TIMEOUT)
 		self.bus.init(StartCommunication(), keepalive_command=TesterPresent(ResponseType.REQUIRED), keepalive_delay=2)
 
-		if not self.get_desired_baudrate().index:
+		if desired_baudrate is None:
+			desired_baudrate = self.get_desired_baudrate()
+		automatic_baudrate = bus_type == Bus.KLINE and desired_baudrate.index == -1
+		if automatic_baudrate:
+			desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
+		if not desired_baudrate.index:
 			desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
 			log_callback.emit('[*] Trying to start diagnostic session')
 			self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING))
 		else:
-			desired_baudrate = self.get_desired_baudrate()
 			log_callback.emit('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 			try:
-				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+				self.bus.execute(desired_baudrate.session_command(DiagnosticSession.FLASH_REPROGRAMMING))
 				self.bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 			except TimeoutException:
 				# it's possible that the ecu is already running at the desired baudrate - let's check
 				self.bus.transport.channel.reset_buffers()
 				self.bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
-				self.bus.execute(StartDiagnosticSession(DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+				self.bus.execute(desired_baudrate.session_command(DiagnosticSession.FLASH_REPROGRAMMING))
 
-		self.bus.transport.set_timeout(12)
-
-		log_callback.emit('[*] Set timing parameters to maximum')
-		if not negotiate_timing(self.bus):
-			log_callback.emit('[!] Not supported on this ECU!')
+		if not automatic_baudrate:
+			log_callback.emit('[*] Set timing parameters to maximum')
+			if not negotiate_timing(self.bus):
+				log_callback.emit('[!] Not supported on this ECU!')
 
 		log_callback.emit('[*] Security Access')
 		enable_security_access(self.bus)
 
 		log_callback.emit('[*] Trying to identify ECU.. ')
 		if self.ecusBox.currentData() == -1:
-			try:
-				ecu = identify_ecu(self.bus)
-			except ECUIdentificationException:
-				log_callback.emit('[*] Failed to identify ECU! Please select it from the dropdown and try again.')
-				return False
+			ecu = identify_ecu(self.bus)
 		else:
 			ecu = ECU(**ECU_IDENTIFICATION_TABLE[self.ecusBox.currentData()]['ecu'])
 			ecu.set_bus(self.bus)
 		
+		if automatic_baudrate:
+			desired_baudrate = discover_baudrate(ecu, log_callback.emit)
+			log_callback.emit('[*] Set timing parameters to maximum')
+			if not negotiate_timing(self.bus):
+				log_callback.emit('[!] Not supported on this ECU!')
+			self.automatic_baudrate_selected.emit(desired_baudrate.baudrate)
 		ecu.set_desired_baudrate(desired_baudrate)
 		ecu.diagnostic_session_type = DiagnosticSession.FLASH_REPROGRAMMING
 		ecu.access_level = AccessLevel.HYUNDAI_0x1
@@ -481,23 +535,40 @@ class Ui(QtWidgets.QMainWindow):
 		
 		return ecu
 
-	def initialize_ecu (self, log_callback) -> ECU:
+	def initialize_ecu (self, log_callback, desired_baudrate=None, p4_min=0.001) -> ECU:
 		try:
-			return self._initialize_ecu(log_callback)
+			ecu = self._initialize_ecu(log_callback, desired_baudrate=desired_baudrate, p4_min=p4_min)
+			if ecu:
+				return ecu
 		except TimeoutException:
-			log_callback.emit('[*] Timeout! Try again. Maybe the ECU isn\'t connected properly?')
-		except Exception as e:
-			log_callback.emit('[*] Exception occurred: {}'.format(str(e)))
-
+			message = '[!] Timeout! Check the ECU connection and selected baudrate.'
+		except ECUIdentificationException:
+			message = '[!] Failed to identify ECU! Please select it from the dropdown and try again.'
+		except Exception as exc:
+			message = '[!] Exception occurred: {}'.format(exc)
+		else:
+			message = None
+		# Finish teardown before announcing that another attempt can start.
+		bus = getattr(self, 'bus', None)
+		if bus is not None:
+			bus.transport.set_timeout(0.5)
+			bus._stop_keepalive()
+			try:
+				if isinstance(bus.transport, Kwp2000OverKLineTransport):
+					bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT))
+					bus.transport.channel.set_baudrate(10400)
+			except (GkbusException, kwp2000.Kwp2000Exception, AttributeError):
+				pass
+		self._close_bus(log_callback)
+		if message:
+			log_callback.emit(message)
 		return False
 
 	def disconnect_ecu (self, ecu: ECU) -> None:
-		release_timing(ecu.bus)
 		try:
-			ecu.bus.execute(StopCommunication())
-		except (kwp2000.Kwp2000NegativeResponseException, TimeoutException, AttributeError):
-			pass
-		ecu.bus.close()
+			end_diagnostic_session(ecu.bus)
+		finally:
+			self._close_bus(self.log_signal)
 
 	def gui_read_eeprom (self, ecu: ECU, address_start: int = 0x000000, address_stop: int = None, escalate_privileges: bool = False, output_filename: str = None, log_callback=None, progress_callback=None):
 		eeprom_size = ecu.get_eeprom_size_bytes()
@@ -523,7 +594,8 @@ class Ui(QtWidgets.QMainWindow):
 		requested_size = address_stop-address_start
 		eeprom = bytearray([0xFF]*eeprom_size)
 
-		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=Progress(progress_callback, requested_size))
+		progress = Progress(progress_callback, requested_size)
+		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=progress)
 
 		eeprom_start = ecu.calculate_bin_offset(address_start)
 		eeprom_end = eeprom_start + len(fetched)
@@ -542,14 +614,11 @@ class Ui(QtWidgets.QMainWindow):
 		with open(output_filename, "wb") as file:
 			file.write(bytes(eeprom))
 
-		# Display user friendly path based on OS
-		if os.name == 'nt':
-			log_callback.emit('[*] saved to {}'.format(home + "\\" + output_filename))
-		else: # nix
-			log_callback.emit('[*] saved to {}'.format(home + "/" + output_filename))
+		log_callback.emit(transfer_summary('Read', len(fetched), progress.started_at))
+		log_callback.emit('[*] Saved to {}'.format(os.path.abspath(output_filename)))
 
 		log_callback.emit('[*] Done!')
-		self.send_notification('Reading finished', 'Saved to {}'.format(home + "\\" + output_filename))
+		self.send_notification('Reading finished', 'Saved to {}'.format(os.path.abspath(output_filename)))
 
 	def gui_flash_eeprom (self, ecu: ECU, input_filename: str, flash_calibration: bool = True, flash_program: bool = True, log_callback=None, progress_callback=None):
 		log_callback.emit('[*] Loading up {}'.format(input_filename))
@@ -562,8 +631,20 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[!] Error: File not found.')
 			return self.disconnect_ecu(ecu)
 
+		try:
+			payloads = prepare_flash_payloads(ecu, eeprom, flash_calibration, flash_program)
+		except ValueError as exc:
+			log_callback.emit('[!] Error: {}'.format(exc))
+			return
+
+		prepare_write_memory(ecu)
+		ecu.bus._stop_keepalive()
+		ecu.bus.transport.set_timeout(12)  # Erase timeout; verification has its own longer wait.
+		started_at = time.monotonic()
+		written_bytes = 0
+
 		if flash_program:
-			log_callback.emit('[*] start routine 0x00 (erase program code section)')
+			log_callback.emit('[*] Start routine 0x00 (erase program code section)')
 			# Start the estimated erase progress animation.
 			progress_callback.emit((0, 0, 1, 'erase'))
 			try:
@@ -572,45 +653,33 @@ class Ui(QtWidgets.QMainWindow):
 				# Stop the animation when the erase routine finishes.
 				progress_callback.emit((0, 0, 0))
 
-			# we need to start 16 bytes later as the program section starts with a flag that we can't write.
-			payload_start = ecu.calculate_bin_offset(ecu.get_region('program').write.address) + 16
-			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('program').write.size-16)])
-			payload = eeprom[payload_start:payload_stop]
-
-			if payload_stop == payload_start:
-				log_callback.emit('[!!!] Adjusted payload has a length of 0. This most probably means you\'re trying to flash an empty file, or trying to flash a zone from a file that doesn\'t have it.')
+			payload = payloads['program']
 
 			flash_start = ecu.get_region('program').write.address + 16
-			flash_size = payload_stop-payload_start
+			flash_size = len(payload)
 
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			written_bytes += len(payload)
 
 		if flash_calibration:
-			log_callback.emit('[*] start routine 0x01 (erase calibration section)')
+			log_callback.emit('[*] Start routine 0x01 (erase calibration section)')
 			ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-			payload_start = ecu.calculate_bin_offset(ecu.get_region('calibration').write.address)
-			# we need to shave 16 bytes off the top as this is where a flag that we can't write is located.
-			payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('calibration').write.size-16)])
-			payload = eeprom[payload_start:payload_stop]
-
-			if payload_stop == payload_start:
-				log_callback.emit('[!!!] Adjusted payload has a length of 0. This most probably means you\'re trying to flash an empty file, or trying to flash a zone from a file that doesn\'t have it.')
+			payload = payloads['calibration']
 
 			flash_start = ecu.calculate_memory_write_offset(ecu.get_region('calibration').write.address)
-			flash_size = payload_stop-payload_start
+			flash_size = len(payload)
 
 			log_callback.emit('[*] Uploading data to the ECU')
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=Progress(progress_callback, flash_size))
+			written_bytes += len(payload)
 
+		flash_summary = transfer_summary('Flashed', written_bytes, started_at)
 		ecu.bus.transport.set_timeout(300)
-		log_callback.emit('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
+		log_callback.emit('[*] Start routine 0x02 (verify blocks and mark as ready to execute)')
 
-		# Sends a signal from the flashing worker to the GUI, telling it to start the validation progress animation.
-		# The bar advances to 95% based on elapsed time, not actual ECU-reported progress. It reaches 100% when the validation routine returns.
-		# (0, 0, 1) → start the progress animation.
-		# (0, 0, 0) → stop the animation and mark progress as 100%.
+		# Show activity until the ECU reports validation complete.
 		progress_callback.emit((0, 0, 1))
 
 		try:
@@ -626,7 +695,8 @@ class Ui(QtWidgets.QMainWindow):
 
 		progress_callback.emit((0, 0, 0))
 
-		log_callback.emit('[*] ecu reset')
+		log_callback.emit(flash_summary)
+		log_callback.emit('[*] ECU Reset')
 		log_callback.emit('[*] Done!')
 		self.send_notification('Flashing finished', 'Turn off your ignition for 10 seconds')
 		
@@ -703,8 +773,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Reading diagnostic trouble codes')
-		ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT,
-																ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 		dtcs_raw = ecu.bus.execute(
 			kwp2000.commands.ReadDTCsByStatus(
@@ -746,7 +815,7 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('            [ASCII]: {}'.format(value_ascii))
 			log_callback.emit('')
 
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 		except kwp2000.Kwp2000NegativeResponseException as e:
@@ -910,7 +979,7 @@ class Ui(QtWidgets.QMainWindow):
 		
 		log_callback.emit('[*] Querying additional parameters,  this might take a few seconds..')
 
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 		
 		try:
 			immo_data = ecu.bus.execute(StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
@@ -937,7 +1006,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		log_callback.emit('[*] Checking Immobilizer status...')
 		try:
@@ -999,7 +1068,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		# Check the ECU status
 		try:
@@ -1058,7 +1127,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		log_callback.emit('[*] Starting SMARTRA neutralization...')
 		# Check the ECU status with BEFORE_SMARTRA_NEUTRALIZE
@@ -1128,7 +1197,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		log_callback.emit('[*] Teaching immobilizer keys...')
 		#log_callback.emit('[*] starting routine 0x14')
@@ -1213,7 +1282,7 @@ class Ui(QtWidgets.QMainWindow):
 		log_callback.emit('[*] Starting limp home password teaching...')
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		# Check ECU status
 		try:
@@ -1301,7 +1370,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		try:
 			cmd = kwp2000.Kwp2000Command()
@@ -1324,7 +1393,7 @@ class Ui(QtWidgets.QMainWindow):
 			return
 		
 		log_callback.emit('[*] Starting default diagnostic session...')
-		ecu.bus.execute(StartDiagnosticSession(DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+		ecu.bus.execute(ecu.get_desired_baudrate().session_command(DiagnosticSession.DEFAULT))
 
 		log_callback.emit('[*] Starting VIN writing process...')
 
@@ -1402,20 +1471,29 @@ class Ui(QtWidgets.QMainWindow):
 		if not self.bslFileInput.text().strip():
 			self.log('[!] Select the whole flash image to write')
 			return
+		skip_backup = self.bslSkipBackupCheck.isChecked()
+		force = self.bslForceWriteCheck.isChecked()
+		skip_verify = self.bslSkipVerifyCheck.isChecked()
+		details = ('No backup file will be saved. ' if skip_backup else
+			'The flash is read and saved first (GKFlasher Files folder). ')
+		details += ('Every sector is erased and rewritten, even if it already matches. ' if force else
+			'Only sectors that differ from the image are erased and rewritten. ')
+		details += ('Read-back verification is disabled.' if skip_verify else
+			'Written sectors and the whole flash are verified.')
 		confirmed = QMessageBox.warning(
 			self,
 			'BSL write',
 			'This rewrites the whole external flash, the boot sectors included.\n\n'
-			'The flash is read and saved first (GKFlasher Files folder). Then every sector that differs from the image '
-			'is erased and rewritten, and the whole flash verified.\n\n'
-			'If it fails, run the write again: BSL doesn\'t depend on what\'s in the flash. Continue?',
+			+ details + '\n\nIf it fails, run the write again: BSL doesn\'t depend on what\'s in the flash.\n\nContinue?',
 			QMessageBox.Yes | QMessageBox.No,
 			QMessageBox.No
 		) == QMessageBox.Yes
 		if confirmed:
-			self.click_handler(partial(self.run_bsl, 'write', confirmed=True))
+			self.click_handler(partial(self.run_bsl, 'write', confirmed=True,
+				skip_backup=skip_backup, force=force, skip_verify=skip_verify))
 
-	def run_bsl (self, mode, progress_callback=None, log_callback=None, confirmed=False):
+	def run_bsl (self, mode, progress_callback=None, log_callback=None, confirmed=False,
+	             skip_backup=False, force=False, skip_verify=False):
 		try:
 			device, bus_type = self.get_selected_interface()
 		except IndexError:
@@ -1443,18 +1521,18 @@ class Ui(QtWidgets.QMainWindow):
 			return True
 
 		driver = self.bslDriverBox.currentText().lower()
-		baudrate = int(self.bslBaudrateBox.currentText())
+		baudrate = None if self.bslBaudrateBox.currentIndex() == 0 else int(self.bslBaudrateBox.currentText())
 
 		self._close_bus(log_callback)
 		self.device = device
 		log_callback.emit('[*] Interface {} ({})'.format(device.description(), BUS_NAMES[bus_type]))
 		channel = None
 		try:
-			channel = device.kline(baudrate=baudrate, timing=KERNEL_TIMING)
+			channel = device.kline(baudrate=baudrate or 57600, timing=KERNEL_TIMING)
 			channel.open()
 			bsl.bsl_handler(channel, mode, image_filename=filename if mode == 'write' else None,
 				output_filename=output_filename, driver=driver, confirm=confirm,
-				skip_verify=self.bslSkipVerifyCheck.isChecked(),
+				skip_verify=skip_verify, skip_backup=skip_backup, force=force, auto_baudrate=baudrate is None,
 				log_callback=log_callback, progress_callback=progress_callback)
 		except Exception as e:
 			log_callback.emit('[!] BSL failed: {}'.format(str(e)))
@@ -1495,7 +1573,7 @@ class Ui(QtWidgets.QMainWindow):
 		)
 
 		if filename:
-			self.rswFileInput.setText(filename)
+			self.rswFileInput.setText(os.path.normpath(filename) if filename else '')
 
 	# ==========================================================
 	# GENERIC RSW HANDLER
@@ -1505,7 +1583,21 @@ class Ui(QtWidgets.QMainWindow):
 
 		log_callback = self.get_rsw_logger(log_callback)
 
-		ecu = self.initialize_ecu(log_callback)
+		try:
+			_, bus_type = self.get_selected_interface()
+			kline = bus_type == Bus.KLINE
+			if kline and mode == 'virginize':
+				raise ValueError('K-Line virginize is not supported by the native RSW sector table')
+			key = int(self.rswKeyInput.text().strip(), 0) if kline and self.rswKeyInput.text().strip() else None
+			if kline and (key is None or not 0 <= key <= 0xFFFFFFFF):
+				raise ValueError('K-Line RSW requires a four-byte Siemens key')
+			baudrate = self.get_desired_baudrate().baudrate
+		except ValueError as exc:
+			log_callback.emit('[!] {}'.format(exc))
+			return
+		ecu = self.initialize_ecu(log_callback,
+			desired_baudrate=DesiredBaudrate(index=None, baudrate=10400) if kline else None,
+			p4_min=0 if kline else 0.001)
 
 		if ecu == False:
 			self._close_bus(log_callback)
@@ -1523,13 +1615,15 @@ class Ui(QtWidgets.QMainWindow):
 				return
 
 		try:
-			rsw_handler(ecu, mode=mode, bin_file=filename, log_callback=log_callback, progress_callback=progress_callback)
+			rsw_handler(ecu, mode=mode, bin_file=filename, key=key, baudrate=baudrate, log_callback=log_callback, progress_callback=progress_callback)
 
 		except Exception as e:
 
 			log_callback.emit(f'[!] RSW flash failed: {str(e)}')
 		finally:
-			# RSW owns the CAN bus now; the original KWP socket is no longer usable.
+			# Only pre-handoff failures can leave the original KWP transport open.
+			if ecu.bus.transport.is_open():
+				end_diagnostic_session(ecu.bus)
 			ecu.bus.close()
 
 	# ==========================================================
@@ -1555,7 +1649,7 @@ class Ui(QtWidgets.QMainWindow):
 	# ==========================================================
 
 	def handler_select_mtos_file (self):
-		if self.mtosModeBox.currentText() == 'read':
+		if self.mtosModeBox.currentText() in ('read', 'read-calibration'):
 			filename, _ = QFileDialog.getSaveFileName(self, "Save the flash read as", "", "BIN Files (*.bin);;All Files (*)")
 		else:
 			filename, _ = QFileDialog.getOpenFileName(
@@ -1566,33 +1660,75 @@ class Ui(QtWidgets.QMainWindow):
 			)
 
 		if filename:
-			self.mtosFileInput.setText(filename)
+			self.mtosFileInput.setText(os.path.normpath(filename) if filename else '')
+
+	def confirm_mtos_warning(self, message):
+		answer = Future()
+		if QThread.currentThread() == self.thread():
+			self._show_mtos_warning(message, answer)
+		else:
+			self.mtos_warning_requested.emit(message, answer)
+		return answer.result()
+
+	@pyqtSlot(str, object)
+	def _show_mtos_warning(self, message, answer):
+		try:
+			result = QMessageBox.warning(self, 'MTOS Safety Check', message.removesuffix(' Continue?') +
+				'\n\nOnly continue if this image is intended for this ECU.\n\nContinue?',
+				QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes
+			answer.set_result(result)
+		except Exception as exc:
+			answer.set_exception(exc)
+
+	def _mtos_options(self):
+		mode = self.mtosModeBox.currentText()
+		filename = self.mtosFileInput.text().strip()
+		filename = os.path.normpath(filename) if filename else ''
+		if mode in ('read', 'read-calibration'):
+			if not filename:
+				filename = os.path.join(home, 'mtos_{}_{}.bin'.format(
+					mode, datetime.now().strftime('%Y%m%d_%H%M%S')))
+			filename = os.path.abspath(os.path.expanduser(filename))
+			if not os.path.isdir(filename):
+				filename = available_filename(filename)
+			self.mtosFileInput.setText(os.path.normpath(filename) if filename else '')
+		return dict(mode=mode, filename=filename, key_text=self.mtosKeyInput.text().strip(),
+			baudrate=self.get_desired_baudrate().baudrate,
+			address_text=self.mtosAddressInput.text(), length_text=self.mtosLengthInput.text(),
+			skip_verify=mode in WRITE_MODES and self.mtosSkipVerifyCheck.isChecked(),
+			skip_backup=mode in WRITE_MODES and self.mtosSkipBackupCheck.isChecked(),
+			force=mode in WRITE_MODES and self.mtosForceWriteCheck.isChecked(),
+			override_safety_checks=mode in WRITE_MODES and self.mtosOverrideSafetyCheck.isChecked())
 
 	def handler_run_mtos (self):
 		confirmed = False
-		if self.mtosModeBox.currentText() == 'fullflash':
-			if not self.mtosFileInput.text().strip():
-				self.log('[!] fullflash mode requires a full 512 KB flash image')
+		options = self._mtos_options()
+		mode = options['mode']
+		if mode in WRITE_MODES:
+			if not options['filename']:
+				self.log('[!] {} mode requires a full 4/8 Mbit BIN image'.format(mode))
 				return
+			details = ('Only the calibration region is rewritten; boot and program are preserved. '
+				if mode == 'flash-calibration' else
+				'The whole flash is rewritten, including the bootloader. ')
 			confirmed = QMessageBox.warning(
-				self,
-				'MTOS full flash',
-				'This rewrites the whole flash, the bootloader included.\n\n'
-				'The flash is read and saved first. Then every sector that differs from the image is erased '
-				'and rewritten, the boot sectors last. If it fails or the ECU loses power while those are written, '
-				'the ECU won\'t start until it\'s recovered over BSL.\n\n'
-				'Keep the ECU powered until GKFlasher says it\'s done. Continue?',
-				QMessageBox.Yes | QMessageBox.No,
-				QMessageBox.No
+				self, 'MTOS Safety Check',
+				details + ('No backup file will be saved. ' if options['skip_backup'] else 'The flash is backed up first. ') +
+				('All selected sectors will be rewritten. ' if options['force'] else 'Only changed sectors will be rewritten. ') +
+				('Read-back verification is disabled. ' if options['skip_verify'] else 'Writes will be verified. ') +
+				'Keep the ECU powered until completion.\n\nContinue?',
+				QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
 			) == QMessageBox.Yes
 			if not confirmed:
 				return
 		self.click_handler(lambda progress_callback, log_callback: self.run_mtos(
-			progress_callback=progress_callback, log_callback=log_callback, confirmed=confirmed))
+			progress_callback=progress_callback, log_callback=log_callback, confirmed=confirmed, options=options))
 
-	def run_mtos (self, progress_callback=None, log_callback=None, confirmed=False):
+	def run_mtos (self, progress_callback=None, log_callback=None, confirmed=False, options=None):
 
 		log_callback = self.get_rsw_logger(log_callback)
+		if options is None:
+			options = self._mtos_options()
 
 		def parse_hex (text, default):
 			text = text.strip()
@@ -1604,9 +1740,9 @@ class Ui(QtWidgets.QMainWindow):
 				log_callback.emit('[!] Invalid number {!r}, falling back to 0x{:X}'.format(text, default))
 				return default
 
-		mode = self.mtosModeBox.currentText()
+		mode = options['mode']
 
-		key_text = self.mtosKeyInput.text().strip()
+		key_text = options['key_text']
 		if not key_text:
 			log_callback.emit('[!] MTOS key is required (e.g. 0x2d381c78)')
 			return
@@ -1617,60 +1753,59 @@ class Ui(QtWidgets.QMainWindow):
 			log_callback.emit('[!] Invalid MTOS key: {}'.format(key_text))
 			return
 
-		filename = self.mtosFileInput.text().strip()
-		if mode in ('payload', 'loader', 'fullflash') and not filename:
+		filename = options['filename']
+		if mode in ('payload', 'loader', *WRITE_MODES) and not filename:
 			log_callback.emit('[!] {} mode requires a {}'.format(
-				mode, 'full 512 KB flash image' if mode == 'fullflash' else 'payload file'))
+				mode, 'full 4/8 Mbit BIN image' if mode in WRITE_MODES else 'payload file'))
 			return
-		if mode == 'fullflash' and not confirmed:
+		if mode in WRITE_MODES and not confirmed:
 			return
+		if mode in ('read', 'read-calibration'):
+			if os.path.isdir(filename) or not os.path.isdir(os.path.dirname(filename)):
+				log_callback.emit('[!] Select an output BIN file in an existing directory.')
+				return
 
 		def confirm (message):
 			log_callback.emit('[*] {} Confirmed before starting'.format(message))
 			return True
 
 		def warn_check (message):
-			result = QMessageBox.warning(
-				self, 'MTOS Safety Check',
-				'⚠️  WARNING ⚠️\n\n'
-				'{}\n\n'
-				'If you aren\'t COMPLETELY sure what you\'re doing, you could BRICK your ECU.\n'
-				'If in doubt, ask on the OpenGK Discord'.format(message),
-				QMessageBox.Yes | QMessageBox.No,
-				QMessageBox.No
-			) == QMessageBox.Yes
+			result = self.confirm_mtos_warning(message)
 			if result:
 				log_callback.emit('[*] User confirmed dangerous operation')
 			else:
 				log_callback.emit('[!] User aborted dangerous operation')
 			return result
 
-		baudrate_index = self.get_desired_baudrate().index
-		attach_hint = 'python gkflasher.py -p kline -i <this adapter> --mtos --mtos-mode {} --mtos-attach{}{}'.format(
-			mode,
-			' --mtos-payload "{}"'.format(filename) if mode == 'fullflash' else '',
-			' --desired-baudrate 0x{:02X}'.format(baudrate_index) if baudrate_index else '')
 
-		address = parse_hex(self.mtosAddressInput.text(), 0x000000)
-		length = parse_hex(self.mtosLengthInput.text(), 0x40)
+		address = parse_hex(options['address_text'], 0x000000)
+		length = parse_hex(options['length_text'], 0x40)
 
-		ecu = self.initialize_ecu(log_callback)
+		ecu = self.initialize_ecu(log_callback, desired_baudrate=DesiredBaudrate(index=None, baudrate=10400), p4_min=0)
 
 		if ecu == False:
 			self._close_bus(log_callback)
 			return
 
+		attach_hint = 'python gkflasher.py -p {} -i <this adapter> --mtos --mtos-mode {} --mtos-attach{}'.format(
+			'canbus' if isinstance(ecu.bus.transport, Kwp2000OverCanTransport) else 'kline', mode,
+			' --mtos-payload "{}"'.format(filename) if mode in WRITE_MODES else '')
+		if isinstance(ecu.bus.transport, Kwp2000OverKLineTransport):
+			attach_hint += ' --desired-baudrate 0x06 --session-baudrate {}'.format(options['baudrate'])
+
+
 		try:
 			mtos_handler(
 				ecu, mtos_key, mode=mode, payload_filename=filename or None,
 				address=address, length=length,
-				output_filename=(filename or None) if mode == 'read' else None,
+				output_filename=(filename or None) if mode in ('read', 'read-calibration') else None,
 				confirm_callback=confirm, warn_check=warn_check, attach_hint=attach_hint,
-				skip_verify=self.mtosSkipVerifyCheck.isChecked(),
-				log_callback=log_callback, progress_callback=progress_callback
+				skip_verify=options['skip_verify'], skip_backup=options['skip_backup'], force=options['force'],
+				override_safety_checks=options['override_safety_checks'],
+				log_callback=log_callback, progress_callback=progress_callback, baudrate=options['baudrate']
 			)
 		except Exception as e:
-			log_callback.emit('[!] MTOS failed: {}'.format(str(e)))
+			log_callback.emit('[!] MTOS failed: {}'.format(str(e) or type(e).__name__))
 		finally:
 			# the 0xFA routine tears the diagnostic session down, so just drop the bus
 			self._close_bus(log_callback)
@@ -1682,13 +1817,11 @@ def packet2hex (packet: RawPacket) -> str:
 	return parsed
 
 if __name__ == "__main__":
+	# Render at the display's resolution instead of scaling a low-resolution window.
+	QtWidgets.QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+	QtWidgets.QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
 	app = QtWidgets.QApplication(sys.argv)
-	stylesheet_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'flasher', 'gkflasher.qss')
-	if os.path.exists(stylesheet_path):
-		with open(stylesheet_path, "r") as stylesheet:
-			app.setStyleSheet(stylesheet.read())
-	else:
-		print(f"Stylesheet not found at {stylesheet_path}")
+	configure_appearance(app)
 	window = Ui()
 
 	status = app.exec_()

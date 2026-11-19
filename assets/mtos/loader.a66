@@ -6,14 +6,34 @@
 ; It copies the program to STAGE2, calls it there with a far call (the
 ; program ends with RETS), and returns to the firmware.
 ; payload_loader() in flasher/mtos_asm.py sets STAGE2. See docs/mtos.md.
+; FAST=1 adds the MT75/ACK baud handshake and restores the UART on return.
 
 $MOD167
 $INCLUDE (REG167.INC)
 
 STAGE2  EQU     0E000H          ; free RAM (XRAM) for the program
+FAST    EQU     0
+ENTRY_RELOAD EQU 71            ; 10400-baud handshake on the 24 MHz platform
+BAUD_RELOAD EQU 5              ; selected transfer rate, default 125000 baud
 
 MTOS    SECTION CODE AT 0C014H
 Main    PROC    FAR
+IF FAST
+        PUSH R0
+        PUSH R1
+        PUSH R2
+        PUSH R3
+        PUSH R4
+        PUSH R6
+        PUSH R7
+        PUSH S0TIC
+        PUSH S0RIC
+        PUSH S0BG
+        PUSH S0CON
+        CALLS SEG FastStart,SOF FastStart
+        CMP R2,#0
+        JMPA cc_EQ,Restore
+ENDIF
         BCLR    S0RIE           ; received bytes come to us, not to the firmware
         BCLR    S0TIE           ; and the program may transmit
         MOVB    RL0, S0RBUF     ; drop a byte that may still be waiting
@@ -43,9 +63,29 @@ Rx3:    SRVWDT
         SUB     R6, #1
         JMPR    cc_NE, Rx3
         CALLS   SEG STAGE2, SOF STAGE2
+IF FAST
+        MOVB RL1,#0
+        CALLS SEG FastEcho,SOF FastEcho
+Restore:
+        POP S0CON
+        POP S0BG
+        POP S0RIC
+        POP S0TIC
+        POP R7
+        POP R6
+        POP R4
+        POP R3
+        POP R2
+        POP R1
+        POP R0
+ELSE
         BSET    S0RIE           ; give the UART back to the firmware
         BSET    S0TIE
+ENDIF
         RET
 Main    ENDP
+IF FAST
+$INCLUDE (fast_link.inc)
+ENDIF
 MTOS    ENDS
         END

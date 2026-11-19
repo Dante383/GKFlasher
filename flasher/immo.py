@@ -14,7 +14,7 @@ immo_status = {
 }
 
 def cli_immo_info (ecu: ECU) -> None:
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 	try:
 		immo_data = ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.QUERY_IMMO_INFO.value)).get_data()
 	except (kwp2000.Kwp2000NegativeResponseException):
@@ -38,7 +38,7 @@ def cli_immo_info (ecu: ECU) -> None:
 
 def cli_limp_home (ecu: ECU) -> None:
 	print('[*] starting default diagnostic session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 	try:
 		data = ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME.value)).get_data()
 	except kwp2000.Kwp2000NegativeResponseException as e:
@@ -70,7 +70,7 @@ def cli_limp_home (ecu: ECU) -> None:
 
 def cli_immo_reset (ecu: ECU) -> None:
 	print('[*] starting default diagnostic session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x15')
 	try:
@@ -102,7 +102,7 @@ def cli_immo_reset (ecu: ECU) -> None:
 
 def cli_smartra_neutralize (ecu: ECU) -> None:
 	print('[*] starting default diagnostic session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x25')
 	data = ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_SMARTRA_NEUTRALIZE.value)).get_data()
@@ -129,7 +129,7 @@ def cli_smartra_neutralize (ecu: ECU) -> None:
 
 def cli_immo_teach_keys (ecu: ECU) -> None:
 	print('[*] starting default diagnostic session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	print('[*] starting routine 0x14')
 	data = ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_IMMO_KEY_TEACHING.value)).get_data()
@@ -154,7 +154,7 @@ def cli_immo_teach_keys (ecu: ECU) -> None:
 
 def cli_read_vin (ecu: ECU) -> None:
 	print('[*] reverting to default session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	cmd = kwp2000.Kwp2000Command()
 	cmd.set_service_identifier(0x09).set_data(b'\x02') # OBD2 service
@@ -172,7 +172,7 @@ def cli_read_vin (ecu: ECU) -> None:
 
 def cli_write_vin (ecu: ECU) -> None:
 	print('[*] starting flash reprogramming session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	vin = input('Enter VIN. WARNING! No validation!: ')
 
@@ -186,7 +186,7 @@ def cli_write_vin (ecu: ECU) -> None:
 
 def cli_limp_home_teach (ecu: ECU) -> None:
 	print('[*] starting default diagnostic session')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	status = ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.BEFORE_LIMP_HOME_TEACHING.value)).get_data()[1]
 	print('[*] Current ECU status: {}'.format(immo_status[status]))

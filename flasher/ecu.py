@@ -1,10 +1,12 @@
 import logging
+import time
 from typing import Self
 from gkbus.protocol import kwp2000
-from gkbus.channel import KLineChannel, KLineTiming
+from gkbus.channel import KLineChannel
+from gkbus.device import SerialKLineChannel
 from gkbus.exceptions import TimeoutException
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, IOIdentifier, AccessLevel
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +54,23 @@ def calculate_key (concat11_seed):
 # @todo - after moving ecu definitions to classes, either start 
 # with an empty ECU object that'll implement security access (and then fill the object upon identification),
 # or better, come up with an identification way that doesn't require memory reading access
+def request_security_seed (bus: kwp2000.Kwp2000Protocol, access_level: int = 1, timeout: float = 30.0):
+	'''Wait for an ECU-required security delay; propagate every other refusal.'''
+	deadline = time.perf_counter() + timeout
+	waiting = False
+	while True:
+		try:
+			return bus.execute(kwp2000.commands.SecurityAccess().request_seed(access_level=access_level)).get_data()[1:]
+		except kwp2000.Kwp2000NegativeResponseException as exc:
+			if exc.status.identifier != 0x37 or time.perf_counter() >= deadline:
+				raise
+			if not waiting:
+				logger.info('ECU security delay active; waiting for permission to request a seed')
+				waiting = True
+			time.sleep(0.5)
+
 def enable_security_access (bus: kwp2000.Kwp2000Protocol):
-	seed = bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
+	seed = request_security_seed(bus)
 
 	if (sum(seed) == 0):
 		logging.info('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
@@ -65,8 +82,17 @@ def enable_security_access (bus: kwp2000.Kwp2000Protocol):
 
 # the SIMK43 advertises p3min=0 in the flash session but drops requests that arrive too soon
 # after its response (measured on a bench: 7 ms fails, 10 ms works), so keep a margin floor.
-# 20 ms gives ~2x headroom and still cuts a 254-byte read at 125000 baud from ~140 ms to ~50 ms
-P3_MIN_FLOOR_MS = 20.0
+# 10 ms passed repeated full reads; keep this floor above the unreliable 7 ms case.
+KWP_RESPONSE_TIMEOUT = 2.0
+P3_MIN_FLOOR_MS = 10.0
+
+def configure_serial_kline(channel, p4_min: float = 0.001) -> None:
+	"""Pace serial writes by their echoes and enable bounded read recovery."""
+	if isinstance(channel, SerialKLineChannel):
+		timing = replace(channel.get_timing(), p4_min=p4_min, p4_max=18.0 if p4_min > 0 else None)
+		channel.default_timing = timing
+		channel.set_timing(timing)
+
 
 def negotiate_timing (bus: kwp2000.Kwp2000Protocol) -> bool:
 	'''
@@ -95,7 +121,7 @@ def negotiate_timing (bus: kwp2000.Kwp2000Protocol) -> bool:
 		# p2min p2max >p3min< p3max p4min, 0.5 ms per bit: the flash session's default p3min
 		# of 0x6e is the 55 ms the SIMK43 was measured to need
 		ecu_p3min = limits[2] / 2
-		channel.set_timing(KLineTiming(p3_min=max(ecu_p3min, P3_MIN_FLOOR_MS)))
+		channel.set_timing(replace(channel.get_timing(), p3_min=max(ecu_p3min, P3_MIN_FLOOR_MS)))
 	return True
 
 def release_timing (bus: kwp2000.Kwp2000Protocol) -> None:
@@ -118,13 +144,51 @@ def release_timing (bus: kwp2000.Kwp2000Protocol) -> None:
 	finally:
 		bus.transport.set_timeout(timeout)
 
+
+def end_diagnostic_session(bus: kwp2000.Kwp2000Protocol) -> bool:
+	"""Release normal diagnostics so the other interface can connect immediately.
+
+	Only call while KWP owns the ECU, never against a running MTOS/BSL kernel.
+	CAN uses the default session; StopCommunication is absent on some SIMK CAN paths.
+	"""
+	if not bus.transport.is_open():
+		return True
+	bus._stop_keepalive()
+	timeout = bus.transport.get_timeout()
+	bus.transport.set_timeout(1)
+	try:
+		release_timing(bus)
+		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT))
+		channel = bus.transport.channel
+		if isinstance(channel, KLineChannel):
+			channel.set_baudrate(10400)
+			try:
+				bus.execute(kwp2000.commands.StopCommunication())
+			except kwp2000.Kwp2000NegativeResponseException:
+				# Returning to the default session still restores the normal timeout.
+				logger.debug('StopCommunication is not supported by this ECU')
+		return True
+	except (IOError, kwp2000.Kwp2000Exception, AttributeError) as exc:
+		logger.warning('Could not end diagnostic communication: %s', str(exc) or type(exc).__name__)
+		return False
+	finally:
+		bus.transport.set_timeout(timeout)
+
+
 @dataclass
 class DesiredBaudrate:
 	'''
 	Index is the value sent with StartDiagnosticSession, baudrate is the serial interface baudrate
 	'''
 	index: int
-	baudrate: int
+	baudrate: int | None
+
+	def session_command (self, session_type: kwp2000.enums.DiagnosticSession) -> kwp2000.commands.StartDiagnosticSession:
+		'''Build a session request, including the three-byte rate for selector 0x06.'''
+		command = kwp2000.commands.StartDiagnosticSession(session_type, self.index)
+		if self.index == 0x06:
+			command.append_data(self.baudrate.to_bytes(3, 'big'))
+		return command
 
 @dataclass
 class RegionOffsets:
@@ -209,7 +273,7 @@ class ECU:
 		return (0x80000 << 4) + offset
 
 	def _security_access_hyundai (self) -> None:
-		seed = self.bus.execute(kwp2000.commands.SecurityAccess().request_seed()).get_data()[1:]
+		seed = request_security_seed(self.bus)
 
 		if (sum(seed) == 0):
 			logging.info('ECU returned seed=0. Either it\'s unlocked, or previous diagnostics session was still active')
@@ -222,7 +286,7 @@ class ECU:
 	def _security_access_siemens (self) -> bool:
 		logger.info('Attempting privilege escalation via the IOCLID')
 		
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, self.desired_baudrate.index))
+		self.bus.execute(self.desired_baudrate.session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 		
 		try:
 			self.bus.execute(
@@ -248,7 +312,7 @@ class ECU:
 		Back to the ECU's own diagnostic session after a detour to the default one. The session
 		change dropped the negotiated timing, so negotiate it again to keep bulk reads fast
 		'''
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(self.diagnostic_session_type, self.desired_baudrate.index))
+		self.bus.execute(self.desired_baudrate.session_command(self.diagnostic_session_type))
 		if self.diagnostic_session_type == kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING:
 			negotiate_timing(self.bus)
 
@@ -297,12 +361,30 @@ class ECU:
 		return data
 
 	def clear_adaptive_values (self):
-		self.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, self.desired_baudrate.index))
+		self.bus.execute(self.desired_baudrate.session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 		self.bus.execute(kwp2000.commands.InputOutputControlByLocalIdentifier(IOIdentifier.ADAPTIVE_VALUES.value, kwp2000.enums.InputOutputControlParameter.RESET_TO_DEFAULT))
 		self._restore_session()
 
 class ECUIdentificationException (Exception):
 	pass
+
+def identify_ecu_layout(read, size: int) -> ECU:
+	"""Resolve an image layout using the signatures in ecu_definitions.py."""
+	for identifier in ECU_IDENTIFICATION_TABLE:
+		definition = identifier['ecu']
+		if definition['eeprom_size_bytes'] != size:
+			continue
+		offset = identifier.get('image_offset', identifier['offset'] + definition['bin_offset'])
+		if offset < 0:
+			continue
+		if any(read(offset, len(expected)) == expected for expected in identifier['expected']):
+			return ECU(**definition)
+	raise ECUIdentificationException('BIN identification does not match ecu_definitions.py')
+
+
+def identify_ecu_image(image: bytes) -> ECU:
+	return identify_ecu_layout(lambda offset, size: image[offset:offset + size], len(image))
+
 
 def identify_ecu (bus: kwp2000.Kwp2000Protocol) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:

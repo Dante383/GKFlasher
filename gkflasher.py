@@ -1,21 +1,26 @@
 import argparse, time, yaml, logging, sys, os, traceback
 from datetime import datetime
+from dataclasses import replace
 from alive_progress import alive_bar
-from gkbus.device import Bus, DeviceABC, discover, find_device
+from gkbus.device import Bus, DeviceABC, SerialKLineChannel, discover, find_device
 from gkbus.exceptions import DeviceException, GkbusException, TimeoutException
 from gkbus.transport import Kwp2000OverKLineTransport, Kwp2000OverCanTransport, RawPacket, PacketDirection
 from gkbus.protocol import kwp2000
-from flasher.memory import read_memory, write_memory, dynamic_find_end
-from flasher.ecu import ECU, identify_ecu, fetch_ecu_identification, enable_security_access, negotiate_timing, release_timing, ECUIdentificationException, DesiredBaudrate
+from gkbus.channel import KLineTiming, KLineChannel
+from flasher.memory import read_memory, write_memory, prepare_flash_payloads, prepare_write_memory
+from flasher.ecu import KWP_RESPONSE_TIMEOUT, ECU, identify_ecu, fetch_ecu_identification, enable_security_access, configure_serial_kline, negotiate_timing, end_diagnostic_session, ECUIdentificationException, DesiredBaudrate
+from flasher.baudrate import discover_baudrate
 from flasher.checksum import correct_checksum
 from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, ReprogrammingStatus, AccessLevel
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
 from flasher.rsw import rsw_handler
-from flasher.mtos import mtos_handler, attach_session, KERNEL_MODES
+from flasher.mtos import mtos_handler, attach_session, KERNEL_MODES, MTOS_MODES, WRITE_MODES, MTOS_BAUDRATE
+from flasher.mtos_asm import mtos_baudrate
 from flasher import bsl
 from flasher.kernel import KERNEL_TIMING
+from flasher.progress import transfer_summary
 from _version import __version__
 
 def strip (string):
@@ -43,6 +48,7 @@ def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, addr
 	requested_size = address_stop-address_start
 	eeprom = bytearray([0xFF]*eeprom_size)
 
+	started_at = time.monotonic()
 	with alive_bar(requested_size, unit='B') as bar:
 		fetched = read_memory(ecu, address_start=address_start, address_stop=address_stop, progress_callback=bar)
 
@@ -63,56 +69,65 @@ def cli_read_eeprom (ecu: ECU, eeprom_size: int, address_start: int = None, addr
 	with open (output_filename, "wb") as file:
 		file.write(bytes(eeprom))
 
-	print('[*] saved to {}'.format(output_filename))
+	print(transfer_summary('Read', len(fetched), started_at))
+	print('[*] Saved to {}'.format(os.path.abspath(output_filename)))
 
 	print('[*] Done!')
 
 def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program=True):
 	print('\n[*] Loading up {}'.format(input_filename))
 
-	with open(input_filename, 'rb') as file:
-		eeprom = file.read()
+	try:
+		with open(input_filename, 'rb') as file:
+			eeprom = file.read()
+	except FileNotFoundError:
+		print('[!] Error: File not found.')
+		return
 
 	print('[*] Loaded {} bytes'.format(len(eeprom)))
+	try:
+		payloads = prepare_flash_payloads(ecu, eeprom, flash_calibration, flash_program)
+	except ValueError as exc:
+		print('[!] Error: {}'.format(exc))
+		return
 
 	if (input('[?] Ready to flash! Do you wish to continue? [y/n]: ') != 'y'):
 		print('[!] Aborting!')
 		return
+
+	prepare_write_memory(ecu)
+	ecu.bus._stop_keepalive()
+	ecu.bus.transport.set_timeout(12)  # Erase can take longer than ordinary diagnostics.
 
 	if flash_program:
 		print('[*] start routine 0x00 (erase program code section)')
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_PROGRAM.value))
 
 
-		# we need to start 16 bytes later as the program section starts with a flag that we can't write
-		payload_start = ecu.calculate_bin_offset(ecu.get_region('program').write.address) + 16
-		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('program').write.size-16)])
-		payload = eeprom[payload_start:payload_stop]
+		payload = payloads['program']
 
 		flash_start = ecu.get_region('program').write.address + 16
-		flash_size = payload_stop-payload_start
+		flash_size = len(payload)
 
 		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	if flash_calibration:
-		print('[*] start routine 0x01 (erase calibration section)')
+		print('[*] Start routine 0x01 (erase calibration section)')
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.ERASE_CALIBRATION.value))
 
-		payload_start = ecu.calculate_bin_offset(ecu.get_region('calibration').write.address)
-		# we need to shave 16 bytes off the top as this is where a flag that we can't write is located
-		payload_stop = payload_start + dynamic_find_end(eeprom[payload_start:(payload_start+ecu.get_region('calibration').write.size-16)])
-		payload = eeprom[payload_start:payload_stop]
+		payload = payloads['calibration']
 
 		flash_start = ecu.calculate_memory_write_offset(ecu.get_region('calibration').write.address)
-		flash_size = payload_stop-payload_start
+		flash_size = len(payload)
 
 		with alive_bar(flash_size, unit='B') as bar:
 			write_memory(ecu, payload, flash_start, flash_size, progress_callback=bar)
 
 	ecu.bus.transport.set_timeout(300)
 
-	print('[*] start routine 0x02 (verify blocks and mark as ready to execute)')
+	print('[*] Start routine 0x02 (verify blocks and mark as ready to execute)')
+	print('[*] Waiting for ECU...')
 	try:
 		ecu.bus.execute(kwp2000.commands.StartRoutineByLocalIdentifier(Routine.VERIFY_BLOCKS.value))
 	except kwp2000.Kwp2000NegativeResponseException as e:
@@ -129,11 +144,12 @@ def cli_flash_eeprom (ecu, input_filename, flash_calibration=True, flash_program
 		print(str(reprogramming_status))
 
 		print('[!] Your ECU is now soft-bricked. There\'s no need to panic, all you need to do is flash a valid file.')
+		return
 
-	ecu.bus.transport.set_timeout(12)
+	ecu.bus.transport.set_timeout(KWP_RESPONSE_TIMEOUT)
 
-	print('[*] ecu reset')
-	print('[*] done!')
+	print('[*] ECU Reset')
+	print('[*] Done!')
 	ecu.bus.execute(kwp2000.commands.ECUReset(kwp2000.enums.ResetMode.POWER_ON_RESET)).get_data()
 	ecu.bus.close()
 	
@@ -144,7 +160,7 @@ def cli_clear_adaptive_values (ecu):
 
 def cli_read_dtcs (ecu):
 	print('[*] Reading diagnostic trouble codes')
-	ecu.bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.DEFAULT, ecu.get_desired_baudrate().index))
+	ecu.bus.execute(ecu.get_desired_baudrate().session_command(kwp2000.enums.DiagnosticSession.DEFAULT))
 
 	dtcs_raw = ecu.bus.execute(
 		kwp2000.commands.ReadDTCsByStatus(
@@ -172,7 +188,13 @@ def load_arguments ():
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
 	parser.add_argument('-i', '--interface', help='Linux: can0 for socketCAN. | Windows: gs_usb:0, slcan:COM69, pcan:PCAN_USBBUS1, vector:0 | J2534: j2534, j2534:openport')
 	parser.add_argument('-b', '--baudrate', type=int)
-	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0))
+	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0),
+		help='ECU baudrate selector; omitted = automatic normal K-Line discovery. Normal KWP 0x06 requires --session-baudrate. '
+		'Also selects MTOS/RSW transfer speed (automatic by default, 0x06 = 750000)')
+	parser.add_argument('--session-baudrate', type=int,
+		help='Override the selected K-Line rate; with MTOS/RSW, selects transfer speed without changing startup baud')
+	parser.add_argument('--kline-p4-min', type=float,
+		help='Request-byte gap in milliseconds (0..20); serial adapters wait for each byte echo when nonzero')
 	parser.add_argument('-f', '--flash', help='Filename to full flash')
 	parser.add_argument('--flash-calibration', help='Filename to flash calibration zone from')
 	parser.add_argument('--flash-program', help='Filename to flash program zone from')
@@ -197,28 +219,51 @@ def load_arguments ():
 	parser.add_argument('--rsw-asw', help='Flash ASW using RSW bootstrap')
 	parser.add_argument('--rsw-cal', help='Flash CAL using RSW bootstrap')
 	parser.add_argument('--rsw-full', help='Flash full image set using RSW bootstrap')
-	parser.add_argument('--rsw-virginize', help='Virginize ECU using RSW bootstrap')
-	parser.add_argument('--mtos',  help='Mini Test Operating System', action='store_true')
-	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader, '
-		'probe/read/fullflash (BSL kernel: dry run, whole flash read, whole flash write incl. boot sectors)',
-		default='hello', choices=['hello', 'dump', 'payload', 'loader', 'probe', 'read', 'fullflash'])
-	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode), second stage (loader mode) or full 512 KB image (fullflash mode)')
+	parser.add_argument('--rsw-virginize', help='Virginize ECU using CAN RSW bootstrap', action='store_true')
+	parser.add_argument('--rsw-key', help='Four-byte Siemens key for the K-Line RSW RAM bootstrap', type=lambda x: int(x, 0))
+	parser.add_argument('--mtos', help='Mini Test Operating System. Write options: '
+		'[--no-verify] [--skip-backup] [--force-write] [--override-safety-checks]', action='store_true')
+	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader, read-calibration (flow-controlled RAM stream), '
+		'probe/read/flash-calibration/fullflash (BSL kernel: dry run, whole flash read, whole flash write incl. boot sectors)',
+		default='hello', choices=MTOS_MODES)
+	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode), second stage (loader mode) or full 4/8 Mbit BIN (fullflash/flash-calibration modes)')
 	parser.add_argument('--mtos-key', help='Key to use for Siemens access level', type=lambda x: int(x,0))
-	parser.add_argument('--mtos-attach', help='Pick up the BSL kernel a failed probe/read/fullflash left running (ECU still powered). '
-		'Use the same --desired-baudrate as that session', action='store_true')
+	parser.add_argument('--mtos-attach', help='Pick up an MTOS kernel left running after a failed kernel job (ECU still powered). '
+		'Reconnect at the automatic BSL entry rate, or use the explicit --desired-baudrate in the recovery command', action='store_true')
 	parser.add_argument('--bsl', help='Bootstrap loader: ECU in boot mode, on the K-line interface', action='store_true')
 	parser.add_argument('--bsl-mode', help='BSL mode: hwinfo (CPU and flash chip), read (external flash), readint (internal ROM), '
 		'write (whole external flash incl. boot sectors, changed sectors only)', default='hwinfo', choices=bsl.MODES)
 	parser.add_argument('--bsl-image', help='Whole flash image to write (write mode)')
-	parser.add_argument('--bsl-baudrate', help='Baudrate (default: {})'.format(bsl.DEFAULT_BAUDRATE), type=int, default=bsl.DEFAULT_BAUDRATE)
+	parser.add_argument('--bsl-baudrate', help='Explicit BSL baudrate; omitted = automatic kernel discovery and UART qualification', type=int)
 	parser.add_argument('--bsl-driver', help='Flash driver: i4 (SIMK43 2.0) or v6. Default: detect it', default='auto', choices=bsl.DRIVER_CHOICES)
 	parser.add_argument('--bsl-rom-size', help='Internal ROM size to read (readint mode, default: 0x{:X})'.format(bsl.INTERNAL_ROM_SIZE),
 		type=lambda x: int(x,0), default=bsl.INTERNAL_ROM_SIZE)
-	parser.add_argument('--no-verify', help='Skip all read-back verification after an MTOS or BSL write. Normally each sector is '
-		'read back and checked right after it\'s written, then the whole flash is re-read and checked at the end; this drops both. '
+	parser.add_argument('--no-verify', '--skip-verify', help='Skip all read-back verification after an MTOS or BSL write. Normally each sector is '
+		'read back and checked right after it\'s written, full-image writes also verify the whole flash at the end. '
 		'The sectors are still programmed, this only skips the slow read-back passes over the K-line',
 		action='store_true')
+	parser.add_argument('--skip-backup', help='Do not save the initial BSL or MTOS flash backup (write modes)', action='store_true')
+	parser.add_argument('--force-write', help='Rewrite all selected BSL or MTOS sectors, including sectors that already match', action='store_true')
+	parser.add_argument('--override-safety-checks', action='store_true',
+		help='Allow unrecognized MTOS BIN identifiers; size, reset-vector and hardware checks remain')
 	args = parser.parse_args()
+	rsw_count = sum(bool(getattr(args, name)) for name in (
+		'rsw_boot1', 'rsw_boot2', 'rsw_asw', 'rsw_cal', 'rsw_full', 'rsw_virginize'))
+	args.rsw = rsw_count > 0
+	if rsw_count > 1 or (args.rsw and args.mtos):
+		parser.error('Select one RSW operation, without --mtos')
+	if args.rsw_key is not None and not 0 <= args.rsw_key <= 0xFFFFFFFF:
+		parser.error('--rsw-key must be a four-byte value')
+	if (args.skip_backup or args.force_write) and not ((args.bsl and args.bsl_mode == 'write') or
+		(args.mtos and args.mtos_mode in WRITE_MODES)):
+		parser.error('--skip-backup and --force-write require a BSL or MTOS write operation')
+
+	if args.override_safety_checks and not (args.mtos and args.mtos_mode in WRITE_MODES):
+		parser.error('--override-safety-checks requires an MTOS write operation')
+
+	if args.no_verify and not ((args.bsl and args.bsl_mode == 'write') or
+		(args.mtos and args.mtos_mode in WRITE_MODES)):
+		parser.error('--no-verify/--skip-verify requires a BSL or MTOS write operation')
 
 	logging_levels = [logging.WARNING, logging.INFO, logging.DEBUG]
 	logging.basicConfig(level=logging_levels[min(args.verbose, len(logging_levels) -1)])
@@ -228,9 +273,49 @@ def load_arguments ():
 
 	if args.protocol:
 			GKFlasher_config['protocol'] = args.protocol
+	if args.session_baudrate is not None or args.kline_p4_min is not None:
+		if GKFlasher_config['protocol'] != 'kline' or args.bsl or (args.mtos and args.kline_p4_min is not None):
+			parser.error('--session-baudrate requires K-Line; --kline-p4-min requires normal K-Line diagnostics')
+	if args.session_baudrate is not None:
+		if args.session_baudrate <= 0 or (args.desired_baudrate != 0x06 and
+			(args.desired_baudrate not in BAUDRATES or BAUDRATES[args.desired_baudrate] == 10400)):
+			parser.error('--session-baudrate requires a positive speed and a higher-speed --desired-baudrate selector')
+	if args.desired_baudrate == 0x06:
+		if (args.session_baudrate is None and not (args.mtos or args.rsw)) or (args.session_baudrate is not None and args.session_baudrate > 0xFFFFFF):
+			parser.error('--desired-baudrate 0x06 requires --session-baudrate between 1 and 16777215')
+	if args.mtos:
+		if args.desired_baudrate is not None and args.desired_baudrate not in (*BAUDRATES, 0x06):
+			parser.error('Unsupported MTOS baudrate selector')
+		try:
+			args.mtos_baudrate = mtos_baudrate(args.session_baudrate or (
+				750000 if args.desired_baudrate == 0x06 else BAUDRATES.get(args.desired_baudrate, MTOS_BAUDRATE)))
+			if args.desired_baudrate is None and args.session_baudrate is None:
+				args.mtos_baudrate = None
+		except ValueError as exc:
+			parser.error(str(exc))
+	if args.rsw:
+		if args.desired_baudrate is not None and args.desired_baudrate not in (*BAUDRATES, 0x06):
+			parser.error('Unsupported RSW baudrate selector')
+		try:
+			args.rsw_baudrate = mtos_baudrate(args.session_baudrate or (
+				750000 if args.desired_baudrate == 0x06 else BAUDRATES.get(args.desired_baudrate, MTOS_BAUDRATE)))
+			if args.desired_baudrate is None and args.session_baudrate is None:
+				args.rsw_baudrate = None
+		except ValueError as exc:
+			parser.error(str(exc))
+	if args.kline_p4_min is not None:
+		if not 0 <= args.kline_p4_min < 18:
+			parser.error('--kline-p4-min must be at least 0 and less than 18 milliseconds')
+		GKFlasher_config['kline']['p4_min'] = args.kline_p4_min
 
 	if args.interface:
 		GKFlasher_config[GKFlasher_config['protocol']]['interface'] = args.interface
+
+	if args.rsw and GKFlasher_config['protocol'] == 'kline':
+		if args.rsw_virginize:
+			parser.error('K-Line virginize is not supported by the native RSW sector table')
+		if args.rsw_key is None:
+			parser.error('K-Line RSW requires --rsw-key')
 
 	return GKFlasher_config, args
 
@@ -268,12 +353,13 @@ def initialize_bus (protocol: str, protocol_config: dict) -> tuple[DeviceABC, kw
 		channel = device.canbus(protocol_config['bitrate'])
 		transport = Kwp2000OverCanTransport(channel, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
 	else:
-		channel = device.kline()
+		channel = device.kline(timing=KLineTiming(p4_min=protocol_config.get('p4_min', 0)))
 		transport = Kwp2000OverKLineTransport(channel, tx_id=protocol_config['tx_id'], rx_id=protocol_config['rx_id'])
 
 	# opened here rather than by the transport, so the channel outlives the KWP2000 session
 	# (RSW switches to CCP on it). Closed by device.close()
 	channel.open()
+	configure_serial_kline(channel, p4_min=protocol_config.get('p4_min', 0.001))
 
 	return device, kwp2000.Kwp2000Protocol(transport)
 
@@ -314,38 +400,56 @@ def cli_identify_ecu (bus: kwp2000.Kwp2000Protocol):
 	return ecu
 
 def main(bus: kwp2000.Kwp2000Protocol, args):
+	channel = getattr(bus.transport, 'channel', None)
+	ram_loader = args.mtos or (args.rsw and isinstance(channel, KLineChannel))
+	automatic_baudrate = isinstance(channel, KLineChannel) and not ram_loader and args.desired_baudrate is None
+	if ram_loader:
+		configure_serial_kline(channel, p4_min=0)
+	paced_timing = None
+	if isinstance(channel, SerialKLineChannel) and args.kline_p4_min is not None and args.kline_p4_min > 0:
+		# Keep startup frames contiguous; enable guarded pacing after the baud handoff.
+		paced_timing = replace(channel.get_timing(), p4_max=18.0)
+		channel.default_timing = replace(channel.default_timing, p4_min=0)
+		channel.reset_timing()
+	bus.transport.set_timeout(KWP_RESPONSE_TIMEOUT)
 	bus.init(kwp2000.commands.StartCommunication(), keepalive_command=kwp2000.commands.TesterPresent(kwp2000.enums.ResponseType.REQUIRED), keepalive_delay=1.5)
 	bus.transport.set_buffer_size(20)
 
-	if args.desired_baudrate and BAUDRATES.get(args.desired_baudrate) != 10400:
+	if not ram_loader and args.desired_baudrate and BAUDRATES.get(args.desired_baudrate) != 10400:
 		try:
-			desired_baudrate = DesiredBaudrate(index=args.desired_baudrate, baudrate=BAUDRATES[args.desired_baudrate])
+			baudrate = args.session_baudrate if args.desired_baudrate == 0x06 else BAUDRATES[args.desired_baudrate]
+			desired_baudrate = DesiredBaudrate(index=args.desired_baudrate, baudrate=baudrate)
+			if args.session_baudrate is not None:
+				desired_baudrate.baudrate = args.session_baudrate
 		except KeyError:
 			print('[!] Selected baudrate is invalid! Available baudrates:')
 			for key, baudrate in BAUDRATES.items():
 				print('{} - {}'.format(hex(key), baudrate))
+			print('0x06 - custom (requires --session-baudrate)')
 			return
 
 		print('[*] Trying to start diagnostic session with baudrate {}'.format(desired_baudrate.baudrate))
 		try:
-			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+			bus.execute(desired_baudrate.session_command(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 			bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
 		except TimeoutException:
 			# it's possible that the bus is already running at the desired baudrate - let's check
 			bus.transport.channel.reset_buffers()
 			bus.transport.channel.set_baudrate(desired_baudrate.baudrate)
-			bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING, desired_baudrate.index))
+			bus.execute(desired_baudrate.session_command(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 	else:
 		# @todo: not ideal, but its a bridge towards moving this completely to the ECU class. it was a mess
 		desired_baudrate = DesiredBaudrate(index=None, baudrate=10400)
 		print('[*] Trying to start diagnostic session')
 		bus.execute(kwp2000.commands.StartDiagnosticSession(kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING))
 		
-	bus.transport.set_timeout(12)
-
-	print('[*] Set timing parameters to maximum')
-	if not negotiate_timing(bus):
-		print('[!] Not supported on this ECU!')
+	if paced_timing is not None:
+		channel.default_timing = paced_timing
+		channel.set_timing(paced_timing)
+	if not automatic_baudrate:
+		print('[*] Set timing parameters to maximum')
+		if not negotiate_timing(bus):
+			print('[!] Not supported on this ECU!')
 
 	# this stays for now instead of the method built in the ECU class
 	# @todo - after moving ecu definitions to classes, either start 
@@ -358,6 +462,11 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 	if not ecu:
 		return
 
+	if automatic_baudrate:
+		desired_baudrate = discover_baudrate(ecu)
+		print('[*] Set timing parameters to maximum')
+		if not negotiate_timing(bus):
+			print('[!] Not supported on this ECU!')
 	ecu.set_desired_baudrate(desired_baudrate)
 	ecu.diagnostic_session_type = kwp2000.enums.DiagnosticSession.FLASH_REPROGRAMMING
 	ecu.access_level = AccessLevel.HYUNDAI_0x1
@@ -416,22 +525,22 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 		logger(ecu)
 
 	if (args.rsw_boot1):
-		rsw_handler(ecu, mode='boot1', bin_file=args.rsw_boot1)
+		rsw_handler(ecu, mode='boot1', bin_file=args.rsw_boot1, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.rsw_boot2):
-		rsw_handler(ecu, mode='boot2', bin_file=args.rsw_boot2)
+		rsw_handler(ecu, mode='boot2', bin_file=args.rsw_boot2, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.rsw_asw):
-		rsw_handler(ecu, mode='asw', bin_file=args.rsw_asw)
+		rsw_handler(ecu, mode='asw', bin_file=args.rsw_asw, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.rsw_cal):
-		rsw_handler(ecu, mode='cal', bin_file=args.rsw_cal)
+		rsw_handler(ecu, mode='cal', bin_file=args.rsw_cal, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.rsw_full):
-		rsw_handler(ecu, mode='full', bin_file=args.rsw_full)
+		rsw_handler(ecu, mode='full', bin_file=args.rsw_full, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.rsw_virginize):
-		rsw_handler(ecu, mode='virginize', bin_file=args.rsw_virginize)
+		rsw_handler(ecu, mode='virginize', bin_file=args.rsw_virginize, key=args.rsw_key, baudrate=args.rsw_baudrate)
 
 	if (args.mtos):
 		mtos_address = args.address_start if args.address_start is not None else 0x000000
@@ -441,8 +550,9 @@ def main(bus: kwp2000.Kwp2000Protocol, args):
 			mtos_length = 0x40
 		mtos_handler(ecu, args.mtos_key, mode=args.mtos_mode,
 			payload_filename=args.mtos_payload, address=mtos_address, length=mtos_length,
-			output_filename=args.output, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify)
-	bus.close()
+			output_filename=args.output, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify,
+			skip_backup=args.skip_backup, force=args.force_write, override_safety_checks=args.override_safety_checks,
+			baudrate=args.mtos_baudrate)
 
 def mtos_attach_hint (args) -> str:
 	'''
@@ -452,20 +562,20 @@ def mtos_attach_hint (args) -> str:
 		GKFlasher_config['protocol'], GKFlasher_config[GKFlasher_config['protocol']]['interface'], args.mtos_mode)
 	if args.mtos_payload:
 		command += ' --mtos-payload {}'.format(args.mtos_payload)
-	if args.desired_baudrate:
-		command += ' --desired-baudrate 0x{:02X}'.format(args.desired_baudrate)
+	if GKFlasher_config['protocol'] == 'kline' and args.mtos_baudrate is not None:
+		command += ' --desired-baudrate 0x06 --session-baudrate {}'.format(args.mtos_baudrate)
 	return command
 
 def mtos_attach (bus, args) -> None:
 	if args.mtos_mode not in KERNEL_MODES:
 		print('[!] --mtos-attach works with --mtos-mode {}'.format(', '.join(KERNEL_MODES)))
 		return
-	if args.mtos_mode == 'fullflash' and not args.mtos_payload:
-		print('[!] fullflash mode requires --mtos-payload (the full 512 KB image)')
+	if args.mtos_mode in WRITE_MODES and not args.mtos_payload:
+		print('[!] {} mode requires --mtos-payload (the full 4/8 Mbit BIN)'.format(args.mtos_mode))
 		return
-	baudrate = BAUDRATES.get(args.desired_baudrate, 10400) if args.desired_baudrate else 10400
 	attach_session(bus, args.mtos_mode, image_filename=args.mtos_payload, output_filename=args.output,
-		baudrate=baudrate, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify)
+		baudrate=args.mtos_baudrate, attach_hint=mtos_attach_hint(args), skip_verify=args.no_verify,
+			skip_backup=args.skip_backup, force=args.force_write, override_safety_checks=args.override_safety_checks)
 
 def bsl_main (args) -> int:
 	'''
@@ -478,10 +588,11 @@ def bsl_main (args) -> int:
 	print('[*] Interface: {}'.format(device.description()))
 	channel = None
 	try:
-		channel = device.kline(baudrate=args.bsl_baudrate, timing=KERNEL_TIMING)
+		channel = device.kline(baudrate=args.bsl_baudrate or 57600, timing=KERNEL_TIMING)
 		channel.open()
 		finished = bsl.bsl_handler(channel, args.bsl_mode, image_filename=args.bsl_image, output_filename=args.output,
-			driver=args.bsl_driver, rom_size=args.bsl_rom_size, skip_verify=args.no_verify)
+			driver=args.bsl_driver, rom_size=args.bsl_rom_size, skip_verify=args.no_verify,
+			skip_backup=args.skip_backup, force=args.force_write, auto_baudrate=args.bsl_baudrate is None)
 		return 0 if finished else 1
 	except GkbusException as e:
 		print('[!] K-line interface: {}'.format(e))
@@ -503,7 +614,15 @@ def packet2hex (packet: RawPacket) -> str:
 	parsed = 'RawPacket({}, ts={}, data={})'.format(direction, packet.timestamp, data)
 	return parsed
 
+def cli_exception_hook(exception_type, exception, traceback):
+	if issubclass(exception_type, KeyboardInterrupt):
+		print('\n[!] Interrupted', flush=True)
+	else:
+		sys.__excepthook__(exception_type, exception, traceback)
+
+
 if __name__ == '__main__':
+	sys.excepthook = cli_exception_hook
 	GKFlasher_config, args = load_arguments()
 
 	print('[*] GKFlasher v{}'.format(__version__))
@@ -537,15 +656,16 @@ if __name__ == '__main__':
 		else:
 			main(bus, args)
 	except KeyboardInterrupt:
-		pass
+		print('\n[!] Interrupted')
 	except Exception:
 		print('\n\n[!] Exception in main thread!')
 		print(traceback.format_exc())
 		print('[*] Dumping buffer:\n')
 		print('\n'.join([packet2hex(packet) for packet in bus.transport.buffer_dump()]))
 		print('\n[!] Shutting down due to an exception in the main thread. For exception details, see above')
-	if not args.mtos:
-		release_timing(bus)
+	if not args.mtos and bus.transport.is_open():
+		end_diagnostic_session(bus)
 	bus.close()
 	device.close()
+	sys.stdout.flush()
 	os._exit(0)

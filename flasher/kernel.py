@@ -21,6 +21,9 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from .progress import Progress, transfer_summary
+from .ecu import identify_ecu_image, ECUIdentificationException
+
 from gkbus.channel import KLineTiming
 from gkbus.exceptions import TimeoutException
 
@@ -134,12 +137,19 @@ def read_block_size (baudrate: int) -> int:
 	return size
 
 
-def identification (flash: bytes, offset: int = IDENTIFICATION) -> str:
+def identification (flash: bytes, offset: int | None = None) -> str:
 	'''
 	The calibration a SIMK43 image identifies with, at 0x10040
 	'''
+	if offset is None:
+		try:
+			layout = identify_ecu_image(flash)
+			region = layout.get_region('calibration').read
+			offset = layout.calculate_bin_offset(region.address) + 0x40
+		except ECUIdentificationException:
+			return 'unknown'
 	ident = flash[offset:offset + IDENTIFICATION_LENGTH].split(b'\xff')[0]
-	if not ident.startswith(b'ca66'):
+	if not ident or any(byte < 32 or byte > 126 for byte in ident):
 		return 'unknown'
 	return ident.decode('latin-1', 'replace')
 
@@ -154,11 +164,13 @@ def available_filename (filename: str) -> str:
 	return '{}_{}{}'.format(root, time.strftime('%Y%m%d_%H%M%S'), extension or '.bin')
 
 
-def save (filename: str, data: bytes, log_callback=None) -> str:
+def save (filename: str, data: bytes, log_callback=None, *, started_at: float | None = None) -> str:
 	filename = available_filename(filename)
 	with open(filename, 'wb') as file:
 		file.write(data)
-	log('[*] Saved {} bytes to {}'.format(len(data), filename), log_callback)
+	if started_at is not None:
+		log(transfer_summary('Read', len(data), started_at), log_callback)
+	log('[*] Saved to {}'.format(os.path.abspath(filename)), log_callback)
 	return filename
 
 
@@ -203,23 +215,52 @@ class KernelLink:
 
 	CHUNK = 255
 
-	def __init__ (self, channel) -> None:
+	@property
+	def rate(self):
+		return self.channel.get_baudrate()
+
+	@property
+	def description(self):
+		return '{} baud'.format(self.rate)
+
+	def synchronize(self):
+		'''Transport-level recovery, when the link has its own framing.'''
+		pass
+
+	def __init__ (self, channel, burst_limit: int | None = None) -> None:
+		if burst_limit is not None and not 2 <= burst_limit <= self.CHUNK:
+			raise ValueError('Kernel burst limit must be between 2 and {}'.format(self.CHUNK))
 		self.channel = channel
+		self.burst_limit = burst_limit
 		self._serial = callable(getattr(channel, '_port', None)) and callable(getattr(channel, '_read', None))
 
-	def send (self, data, check_echo: bool = True) -> None:
+	def send (self, data, check_echo: bool = True, progress=None) -> None:
 		data = bytes(data)
-		for start in range(0, len(data), self.CHUNK):
-			chunk = data[start:start + self.CHUNK]
+		chunk_size = min(self.CHUNK, self.burst_limit) if self.burst_limit is not None else self.CHUNK
+		for start in range(0, len(data), chunk_size):
+			chunk = data[start:start + chunk_size]
 			if not self._serial:
 				self.channel.write(chunk)
-				continue
-			self.channel._port().write(chunk)
-			echo = self.channel._read(len(chunk), len(chunk) * 10 / self.channel.get_baudrate() + 0.5)
-			if check_echo and echo != chunk:
-				raise KernelError('K-line echo mismatch: sent {}, got {}'.format(chunk.hex(' '), echo.hex(' ')))
+			else:
+				self.channel._port().write(chunk)
+				echo = self.read(len(chunk), len(chunk) * 10 / self.channel.get_baudrate() + 0.5)
+				if check_echo and echo != chunk:
+					raise KernelError('K-line echo mismatch: sent {}, got {}'.format(chunk.hex(' '), echo.hex(' ')))
+			if progress is not None:
+				progress(start + len(chunk))
 
 	def read (self, size: int, timeout: float) -> bytes:
+		if self._serial:
+			# Keep Windows' configured read timeout: changing it for each kernel
+			# exchange can block inside the FTDI driver (SetCommMask).
+			out = bytearray()
+			deadline = time.monotonic() + timeout
+			while len(out) < size and time.monotonic() < deadline:
+				chunk = self.channel._port().read(size - len(out))
+				if chunk:
+					out.extend(chunk)
+					self.channel._last_rx = time.perf_counter()
+			return bytes(out)
 		return read_partial(self.channel, size, timeout)
 
 	def drain (self, quiet: float = 0.3, limit: float = 3.0) -> bytes:
@@ -267,31 +308,6 @@ class InterruptGuard:
 			raise KernelAbort('Stopped by the user')
 
 
-class Progress:
-	def __init__ (self, progress_callback, total: int, label: str) -> None:
-		self.progress_callback = progress_callback
-		self.total = max(total, 1)
-		self.label = label
-		self._last = -1
-		if progress_callback:
-			progress_callback.emit((self.total, 0))
-			progress_callback.emit((0,))
-
-	def __call__ (self, done: int) -> None:
-		if self.progress_callback:
-			self.progress_callback.emit((done,))
-			return
-		percent = done * 100 // self.total
-		if percent != self._last:
-			self._last = percent
-			print('\r[*] {}: {}%  '.format(self.label, percent), end='', flush=True)
-
-	def finish (self) -> None:
-		if not self.progress_callback and self._last >= 0:
-			print('')
-			self._last = -1
-
-
 class Kernel:
 	'''
 	The BSL kernel at the other end of `link`: its commands, and memory reads and writes
@@ -303,8 +319,12 @@ class Kernel:
 		self.guard = InterruptGuard()
 		self.log_callback = log_callback
 		self.progress_callback = progress_callback
-		self.baudrate = link.channel.get_baudrate()
+		self.baudrate = link.rate
 		self.block_size = read_block_size(self.baudrate)
+		if link.burst_limit is not None:
+			# A reply includes one checksum byte; keep it inside the same FIFO budget.
+			while self.block_size + 1 > link.burst_limit:
+				self.block_size //= 2
 		# set by the first erase: from then on a failure leaves the kernel running
 		self.flash_modified = False
 		# set while a sector is between erase and verify: a stop request waits
@@ -441,6 +461,7 @@ class Kernel:
 
 		Not covered: a CALL that got part of its address (bytes lost on the line)
 		'''
+		self.link.synchronize()
 		self.link.drain(quiet=1.0, limit=20.0)
 		filler = RESYNC_PREFIX + b'\x00' * 29
 		sent = 0
@@ -564,6 +585,8 @@ class Flash:
 	'''
 	The external flash, through `driver` uploaded next to the kernel
 	'''
+	buffer_address = DATA_BUFFER
+	program_block_size = PROGRAM_BLOCK
 
 	def __init__ (self, kernel: Kernel, driver: Driver, chip: Chip | None = None) -> None:
 		self.kernel = kernel
@@ -641,18 +664,21 @@ class Flash:
 		raise KernelError('SA{} erase timed out'.format(number))
 
 	def program_block (self, offset: int, data: bytes) -> None:
-		address = FLASH_READ_BASE + offset
-		self.kernel.write_memory(DATA_BUFFER, data)
-		registers = [FC_PROG, len(data), DATA_BUFFER, 0, address >> 16, address & 0xFFFF, address >> 16, 1]
-		result = self.kernel.call(DRIVER_ENTRY, registers)[7]
+		result = self._program_block(offset, data)
 		if result != 0:
 			raise KernelError('Programming 0x{:05X} failed (0x{:02X})'.format(offset, result))
+
+	def _program_block(self, offset, data):
+		address = FLASH_READ_BASE + offset
+		self.kernel.write_memory(self.buffer_address, data)
+		registers = [FC_PROG, len(data), self.buffer_address, 0, address >> 16, address & 0xFFFF, address >> 16, 1]
+		return self.kernel.call(DRIVER_ENTRY, registers)[7]
 
 	def write_sector (self, number: int, image: bytes, verify: bool = True) -> None:
 		_, offset, size = self.chip.sectors[number]
 		target = image[offset:offset + size]
-		blocks = [start for start in range(0, size, PROGRAM_BLOCK)
-			if target[start:start + PROGRAM_BLOCK].count(0xFF) != PROGRAM_BLOCK]
+		blocks = [start for start in range(0, size, self.program_block_size)
+			if target[start:start + self.program_block_size].count(0xFF) != self.program_block_size]
 
 		self.kernel.guard.check()
 		self.kernel.critical = True
@@ -672,8 +698,10 @@ class Flash:
 				progress = Progress(kernel.progress_callback, size * 2 if verify else size, label)
 				try:
 					for index, start in enumerate(blocks):
-						self.program_block(offset + start, target[start:start + PROGRAM_BLOCK])
+						self.program_block(offset + start, target[start:start + self.program_block_size])
 						progress((index + 1) * size // len(blocks))
+					if verify:
+						self.log('[*] Verifying eeprom...')
 					written = kernel.read_memory(FLASH_READ_BASE + offset, size, progress, done=size) if verify else None
 				finally:
 					progress.finish()
@@ -701,36 +729,74 @@ class Flash:
 # -- jobs -------------------------------------------------------------------
 
 def read_flash (flash: Flash, output_filename: str) -> str:
+	started_at = time.monotonic()
 	data = flash.read('Reading flash')
 	flash.log('[*] Identification: {}'.format(identification(data)))
-	return save(output_filename, data, flash.kernel.log_callback)
+	return save(output_filename, data, flash.kernel.log_callback, started_at=started_at)
 
 
 def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, order=None,
-                 boot_sectors=(), skip_verify: bool = False) -> bool:
+                 boot_sectors=(), skip_verify: bool = False, skip_backup: bool = False,
+                 force: bool = False, write_range: tuple[int, int] | None = None) -> bool:
 	'''
-	Backup, then every sector that differs from `image` in `order` (by default the one
-	with the reset vector last), then a full verify. False if nothing needed writing or
-	the user said no.
+	Optionally back up, write differing sectors (or all sectors when forced), then
+	verify. The default order puts the reset vector last. False if nothing needed
+	writing or the user said no.
 
 	:param order: sector numbers in write order, or a function of (current flash, image)
 		that returns them
 	:param boot_sectors: sectors the ECU can't start without, the user is warned about
 		them. Or a function of (current flash, image) that returns them
 	:param skip_verify: skip all read-back verification. Normally every sector is read
-		back and checked right after it's written, and then the whole flash is re-read
-		and checked at the end; this drops both. The sectors are still programmed (and
+		back and checked right after it's written. Full-image writes also re-read
+		the whole flash at the end; calibration-only writes need no second pass. The sectors are still programmed (and
 		the driver still acknowledges each erase and program), so this only skips the
 		read-back passes - a big time saver over a slow K-line
+	:param skip_backup: do not save a backup file. The initial read is still needed
+		for sector comparison unless force=True and the write order needs no current data
+	:param force: rewrite every sector, including sectors that already match
 	'''
 	flash.check_writable()
 	sectors = flash.chip.sectors
 	if len(image) != flash.chip.size:
-		raise KernelError('The image is {} bytes, the {} is {}'.format(len(image), flash.chip.name, flash.chip.size))
+		raise KernelError('The image is {} bytes, the {} is {} bytes'.format(len(image), flash.chip.name, flash.chip.size))
 
-	flash.log('[*] Reading the whole flash first')
-	current = flash.read('Backup')
-	save(backup_filename, current, flash.kernel.log_callback)
+	if write_range is not None:
+		start, size = write_range
+		end = start + size
+		selected = [sector for sector in sectors if sector[1] < end and start < sector[1] + sector[2]]
+		if not 0 <= start < end <= len(image):
+			raise KernelError('Requested write range is outside the flash')
+		if not any(byte != 0xFF for byte in image[start:end]) or not any(image[start:end]):
+			raise KernelError('Calibration region is empty; nothing erased')
+
+	current = None
+	started_at = time.monotonic()
+	if write_range is not None and skip_backup and not callable(order) and not callable(boot_sectors):
+		# Only affected physical sectors need reading to preserve partial-sector
+		# bytes and compare calibration. A requested backup still reads all flash.
+		flash.log('[*] Reading calibration sectors first')
+		current = bytearray(image)
+		progress = Progress(flash.kernel.progress_callback, sum(size for _, _, size in selected), 'Reading calibration')
+		done = 0
+		try:
+			for _, offset, size in selected:
+				current[offset:offset + size] = flash.kernel.read_memory(FLASH_READ_BASE + offset, size, progress, done=done)
+				done += size
+		finally:
+			progress.finish()
+		current = bytes(current)
+	elif write_range is not None or not (skip_backup and force) or callable(order) or callable(boot_sectors):
+		flash.log('[*] Reading the whole flash first')
+		current = flash.read('Reading' if skip_backup else 'Backup')
+	if not skip_backup:
+		save(backup_filename, current, flash.kernel.log_callback, started_at=started_at)
+	else:
+		flash.log('[*] Skipping backup file')
+
+	if write_range is not None:
+		# Preserve bytes outside the requested range within every affected sector.
+		image = current[:start] + image[start:end] + current[end:]
 
 	if order is None:
 		order = tuple(number for number, _, _ in sectors[1:]) + (0,)
@@ -741,8 +807,14 @@ def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, orde
 	if sorted(order) != [number for number, _, _ in sectors]:
 		raise KernelError('The write order {} isn\'t every sector once'.format(order))
 
-	changed = flash.changed_sectors(current, image)
-	flash.log('[*] ECU: {}, image: {}'.format(identification(current), identification(image)))
+	changed = [number for number, _, _ in sectors] if force else flash.changed_sectors(current, image)
+	if write_range is not None:
+		allowed = {number for number, _, _ in selected}
+		changed = [number for number in changed if number in allowed]
+	if current is not None:
+		flash.log('[*] ECU: {}, image: {}'.format(identification(current), identification(image)))
+	else:
+		flash.log('[*] Image: {}'.format(identification(image)))
 	if not changed:
 		flash.log('[+] The flash already matches the image')
 		return False
@@ -757,27 +829,42 @@ def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, orde
 		flash.log('[!] Aborted, nothing written')
 		return False
 
+	write_started_at = time.monotonic()
+	written_bytes = sum(size for number, _, size in sectors if number in changed)
 	if skip_verify:
 		flash.log('[!] Skipping all read-back verification (sectors are programmed but not read back)')
 
 	for number in order:
 		if number in changed:
 			flash.write_sector(number, image, verify=not skip_verify)
+	write_elapsed = time.monotonic() - write_started_at
 
 	if skip_verify:
+		log(transfer_summary('Flashed', written_bytes, write_started_at), flash.kernel.log_callback)
+		return True
+
+	if write_range is not None:
+		# Each rewritten physical sector was already read back and compared by
+		# write_sector. Do not re-read unrelated boot/program regions as well.
+		flash.log('[+] Calibration sectors written and verified')
+		log(transfer_summary('Flashed', written_bytes, write_started_at, elapsed=write_elapsed), flash.kernel.log_callback)
 		return True
 
 	for attempt in range(3):
+		flash.log('[*] Verifying eeprom...')
 		bad = flash.changed_sectors(flash.read('Verifying'), image)
 		if not bad:
 			flash.log('[+] The whole flash matches the image')
+			log(transfer_summary('Flashed', written_bytes, write_started_at, elapsed=write_elapsed), flash.kernel.log_callback)
 			return True
 		if attempt == 2:
 			break
 		flash.log('[!] Verify failed in {}, rewriting'.format(', '.join('SA{}'.format(n) for n in bad)))
+		retry_started_at = time.monotonic()
 		for number in order:
 			if number in bad:
 				flash.write_sector(number, image)
+		write_elapsed += time.monotonic() - retry_started_at
 	raise KernelError('The flash still doesn\'t match the image')
 
 
@@ -795,15 +882,15 @@ def run_session (kernel: Kernel, job, reset_when_done: bool, attached: bool = Fa
 	'''
 	with kernel.guard:
 		try:
-			kernel.log('[*] Kernel at {} baud, reading in 0x{:X} byte blocks'.format(kernel.baudrate, kernel.block_size))
+			kernel.log('[*] Kernel at {}, reading in 0x{:X} byte blocks'.format(kernel.link.description, kernel.block_size))
 			kernel.arm_trap()
 			job(kernel)
 		except BaseException as e:
 			touched = kernel.flash_modified or attached
-			if isinstance(e, KeyboardInterrupt):
+			if isinstance(e, (KeyboardInterrupt, KernelAbort)):
 				kernel.log('\n[!] Interrupted')
 			else:
-				kernel.log('\n[!] {}'.format(e))
+				kernel.log('[!] {}'.format(e))
 			if touched:
 				kernel.log('[!] The flash may be partly written. The kernel is left running: keep the ECU powered')
 				if attach_hint:
@@ -813,7 +900,7 @@ def run_session (kernel: Kernel, job, reset_when_done: bool, attached: bool = Fa
 					kernel.log('[*] The flash wasn\'t touched, the ECU was reset')
 					return False
 				kernel.log('[!] The flash wasn\'t touched: switch the ECU off and on again')
-			if not isinstance(e, KernelError):
+			if not isinstance(e, (KernelError, KeyboardInterrupt)):
 				raise
 			return False
 

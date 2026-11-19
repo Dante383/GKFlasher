@@ -366,11 +366,13 @@ def logger(ecu: ECU) -> None:
 	try:
 		while True:
 			data.append([int(time.time()*1000)] + poll(ecu))
-	except (KeyboardInterrupt, AttributeError):
+	except (KeyboardInterrupt, AttributeError) as exc:
 		with open('log.csv', 'w') as csvfile:
 			logwriter = csv.writer(csvfile)
 			for entry in data:
 				logwriter.writerow(entry)
+		if isinstance(exc, KeyboardInterrupt):
+			raise
 
 # log only raw bytes for XDL conversion
 # inefficient, ugly and the file format makes no sense
@@ -406,4 +408,4 @@ def logger_raw (ecu: ECU) -> None:
 					frames = []
 					print('\033[Fframes: {}'.format(i))
 		except KeyboardInterrupt: # up to 10 last frames might be lost here
-			pass
+			raise

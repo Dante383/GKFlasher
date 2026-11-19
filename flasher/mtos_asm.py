@@ -51,8 +51,12 @@ MTOS_SIGNATURE_ADDRESS = 0x3FE8  # flash location of the 6-byte reference signat
 MTOS_SIGNATURE_LENGTH = 6
 CRC_SEED = 0x544D  # the 'MT' word; firmware seeds the CRC with it
 CRC_POLY = 0xA001
+MTOS_BAUDRATE = 125000
+MTOS_TRANSFER_SIZE = 240  # room for ACK echo and final CRC in a 256-byte receive FIFO
+# The firmware uses diagnostic RAM from here; reader code must stay below it.
+MTOS_CODE_LIMIT = 0xC166
 
-# A convenient, known-executable scratch area for a second stage (XRAM 0xE000-0xEEFF).
+# A convenient, known-executable scratch area for a second stage (XRAM 0xE000-0xE7FF).
 # bsl_shim.a66 and stage2_hello.a66 are assembled for it
 STAGE2_ADDRESS = 0xE000
 
@@ -117,17 +121,17 @@ KLINE_HELLO = b'MTOS'
 _DRIVER_POLL = bytes.fromhex('dc02a851')   # exts r2,#1 ; mov r5,[r1]
 
 
-def _assemble(name: str, **values: int):
-	'''Assemble assets/mtos/<name>.a66 with openc166 and return its openc166.Result.
+def _assemble(name: str, source_directory: str = MTOS_SOURCES, **values: int):
+	'''Assemble <source_directory>/<name>.a66 and return its openc166.Result.
 
 	Keil A166 can't set a symbol from outside, so each of `values` goes into the
 	source instead, in place of the value on that symbol's EQU line: START=0x86000
 	turns `START EQU 8100H` into `START EQU 086000H`. Raises
 	openc166.AssemblyError if the source has errors'''
-	# only MTOS needs the assembler, so the rest of GKFlasher runs without it
+	# Assemble RAM helpers lazily; ordinary diagnostics do not need the assembler.
 	import openc166
 
-	path = resource_path('{}/{}.a66'.format(MTOS_SOURCES, name))
+	path = resource_path('{}/{}.a66'.format(source_directory, name))
 	with open(path, 'rb') as file:
 		source = file.read().decode('ascii')
 	for symbol, value in values.items():
@@ -148,6 +152,8 @@ def _code(name: str, address: int, **values: int) -> bytes:
 	image = _assemble(name, **values).image()
 	if image.base != address:
 		raise ValueError('{}.a66 starts at 0x{:X}, not 0x{:X}'.format(name, image.base, address))
+	if address == MTOS_ENTRY and address + len(image.data) > MTOS_CODE_LIMIT:
+		raise ValueError('MTOS payload overlaps firmware diagnostic RAM')
 	return image.data
 
 
@@ -160,9 +166,17 @@ def payload_marker(marker: int = 0xBEEF, address: int = 0xC002) -> bytes:
 	return _code('marker', MTOS_ENTRY, MARKER=marker, TARGET=address)
 
 
-def payload_kline_hello() -> bytes:
+def mtos_baudrate(baudrate: int) -> int:
+	'''Nearest ASC0 rate on the supported 24 MHz platform, with BRS=0.'''
+	if not 10400 <= baudrate <= 750000:
+		raise ValueError('MTOS baudrate must be between 10400 and 750000')
+	return round(750000 / round(750000 / baudrate))
+
+
+def payload_kline_hello(fast: bool = False, entry_baudrate: int = 10400, baudrate: int = MTOS_BAUDRATE) -> bytes:
 	"""Proof-of-I/O: send KLINE_HELLO over the K-line, then return."""
-	return _code('kline_hello', MTOS_ENTRY)
+	return _code('kline_hello', MTOS_ENTRY, FAST=int(fast), ENTRY_RELOAD=round(750000 / entry_baudrate) - 1,
+		BAUD_RELOAD=round(750000 / mtos_baudrate(baudrate)) - 1)
 
 
 def payload_memory_dump(address: int, length: int) -> bytes:
@@ -177,7 +191,16 @@ def payload_memory_dump(address: int, length: int) -> bytes:
 	return _code('memory_dump', MTOS_ENTRY, START=address, LENGTH=length)
 
 
-def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
+def payload_calibration_read(address: int, length: int, entry_baudrate: int = 10400, baudrate: int = MTOS_BAUDRATE) -> bytes:
+	'''CRC-protected, flow-controlled memory stream on the 24 MHz C167 platform.'''
+	if not 1 <= length <= 0x10000 or not 0 <= address <= 0xFFFFFF - length + 1:
+		raise ValueError('Calibration stream requires 1..65536 bytes within 24-bit memory')
+	return _code('calibration_read', MTOS_ENTRY, START=address, LENGTH=length & 0xFFFF,
+		BAUD_RELOAD=round(750000 / mtos_baudrate(baudrate)) - 1, BLOCK_SIZE=MTOS_TRANSFER_SIZE,
+		ENTRY_RELOAD=round(750000 / entry_baudrate) - 1)
+
+
+def payload_loader(stage2_address: int = STAGE2_ADDRESS, fast: bool = False, entry_baudrate: int = 10400, baudrate: int = MTOS_BAUDRATE) -> bytes:
 	"""Small K-line loader (stage 1).
 
 	MTOS only gives us a tiny RAM window at 0xC000, so instead of uploading a
@@ -185,7 +208,11 @@ def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
 	loader once and then stream the real ("stage 2") code to it over the
 	K-line at full ASC0 speed.
 
-	Protocol (all on the K-line, after StartRoutine(0xFA) launches the loader):
+	With fast=True, the loader sends MT75 at entry baud, switches to the selected baudrate,
+	and waits for A5 before receiving stage 2. It restores the UART when stage 2 returns.
+	The default retains the original loader protocol for externally authored tooling.
+
+	Protocol (after the optional handshake):
 
 	    host -> ecu : u16 length, little-endian
 	    host -> ecu : <length> bytes of stage-2 machine code
@@ -203,7 +230,9 @@ def payload_loader(stage2_address: int = STAGE2_ADDRESS) -> bytes:
 	"""
 	if not (0xC000 <= stage2_address <= 0xFBFF):
 		raise ValueError('stage2 must sit in the DPP3 window (0xC000-0xFBFF)')
-	return _code('loader', MTOS_ENTRY, STAGE2=stage2_address)
+	return _code('loader', MTOS_ENTRY, STAGE2=stage2_address, FAST=int(fast),
+		ENTRY_RELOAD=round(750000 / entry_baudrate) - 1,
+		BAUD_RELOAD=round(750000 / mtos_baudrate(baudrate)) - 1)
 
 
 def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
@@ -234,7 +263,7 @@ def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
 		raise ValueError('kernel must be a non-empty, even number of bytes')
 
 	stage2 = _code('bsl_shim', STAGE2_ADDRESS) + bytes(kernel)
-	if STAGE2_ADDRESS + len(stage2) > 0xEF00:
+	if STAGE2_ADDRESS + len(stage2) > 0xE800:
 		raise ValueError('second stage does not fit the XRAM scratch area')
 	return stage2
 

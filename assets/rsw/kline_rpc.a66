@@ -1,0 +1,225 @@
+; Run the relocated native RSW command processor through the existing kernel UART.
+; MTOS/kernel provide transport only; erase/program/checksum remain native RSW.
+; R8..R11=CRO, R12=CRC16, R14=5257h permits writes, R15=0 init / 1 command.
+; Returns R8..R11=CRM, R12=CRC16, R13=length, R15=bridge status.
+$MOD167
+$INCLUDE (REG167.INC)
+RSW_BASE EQU 0C400H
+BRIDGE_ADDRESS EQU 0E400H
+RSW_RPC SECTION CODE AT BRIDGE_ADDRESS
+Entry PROC FAR
+    CMP R15,#2
+    JMPA cc_EQ,Batch
+    PUSH R0
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH R7
+    PUSH DPP0
+    PUSH DPP1
+    PUSH DPP2
+    PUSH DPP3
+    PUSH PSW
+    BCLR IEN
+    MOV DPP0,#024H
+    MOV DPP1,#028H
+    MOV DPP2,#025H
+    MOV DPP3,#3
+    MOV R0,#0F400H
+    CMP R15,#0
+    JMPR cc_NE,Command
+    MOV R12,#0
+    CALLS 0,RSW_BASE+018H
+    MOV R7,#0FFFFH
+QualifyVoltage:
+    SRVWDT
+    CALLS 0,RSW_BASE+09A4H
+    MOV R4,0C122H
+    CMP R4,#0FFFFH
+    JMPR cc_NE,VoltageReady
+    SUB R7,#1
+    JMPR cc_NE,QualifyVoltage
+    JMPA cc_UC,BadFrame
+VoltageReady:
+    CMP R4,#0C4H
+    JMPA cc_ULT,BadFrame
+    MOV R15,#0
+    JMPA cc_UC,Exit
+Command:
+    MOV 0C0FCH,R8
+    MOV 0C0FEH,R9
+    MOV 0C100H,R10
+    MOV 0C102H,R11
+    MOV R4,#0C0FCH
+    MOV R6,#8
+    CALLA cc_UC,Crc
+    CMP R10,R12
+    JMPA cc_NE,BadFrame
+    CALLS 0,RSW_BASE+09A4H
+    CMP R14,#05257H
+    JMPR cc_NE,ReadOnly
+    MOV R4,0C122H
+    CMP R4,#0C4H
+    JMPA cc_ULT,BadFrame
+    JMPR cc_UC,Dispatch
+ReadOnly:
+    MOVB RL4,0C0FCH
+    CMPB RL4,#2
+    JMPR cc_EQ,Dispatch
+    CMPB RL4,#4
+    JMPR cc_EQ,Dispatch
+    CMPB RL4,#5
+    JMPA cc_NE,BadFrame
+Dispatch:
+    MOVB RL4,#8
+    MOVB 0C104H,RL4
+    MOVB 0C106H,ONES
+    MOVB 0C107H,ZEROS
+    MOV 0C108H,ZEROS
+    MOV 0C10AH,ZEROS
+    MOV 0C10CH,ZEROS
+    MOVB 0C10EH,ZEROS
+    CALLS 0,RSW_BASE+02ECH
+    MOVBZ R13,0C10EH
+    CMP R13,#3
+    JMPR cc_ULT,BadFrame
+    CMP R13,#8
+    JMPR cc_UGT,BadFrame
+    MOV R4,#0C106H
+    MOV R6,R13
+    CALLA cc_UC,Crc
+    MOV R12,R10
+    MOV R8,0C106H
+    MOV R9,0C108H
+    MOV R10,0C10AH
+    MOV R11,0C10CH
+    MOV R15,#0
+    JMPR cc_UC,Exit
+BadFrame:
+    MOV R15,#1
+Exit:
+    MOV WDTCON,#1
+    SRVWDT
+    POP PSW
+    POP DPP3
+    POP DPP2
+    POP DPP1
+    POP DPP0
+    POP R7
+    POP R6
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    POP R0
+    RETS
+Entry ENDP
+Crc PROC NEAR
+    MOV R10,#0FFFFH
+CrcByteLoop:
+    MOVB RL5,[R4+]
+    MOVBZ R5,RL5
+    XOR R10,R5
+    MOV R8,#8
+CrcBitLoop:
+    SHR R10,#1
+    JMPR cc_NC,NextBit
+    XOR R10,#0A001H
+NextBit:
+    SUB R8,#1
+    JMPR cc_NE,CrcBitLoop
+    SUB R6,#1
+    JMPR cc_NE,CrcByteLoop
+    RET
+Crc ENDP
+; Batch only Program6Bytes frames. Reuse Entry so every command receives the
+; same register/DPP/software-stack setup and voltage checks as a single RPC.
+; R8=D500, R9=byte count (8..768), R12=CRC16, R14=write token, R15=2.
+Batch PROC FAR
+    PUSH R1
+    PUSH R2
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH DPP3
+    PUSH PSW
+    BCLR IEN
+    MOV DPP3,#3
+    CMP R14,#05257H
+    JMPA cc_NE,BatchBad
+    CMP R8,#0D500H
+    JMPA cc_NE,BatchBad
+    CMP R9,#0
+    JMPA cc_EQ,BatchBad
+    CMP R9,#0300H
+    JMPA cc_UGT,BatchBad
+    MOV R4,R9
+    AND R4,#7
+    JMPA cc_NE,BatchBad
+    MOV R1,R8
+    MOV R2,R9
+    MOV R4,R1
+    MOV R6,R2
+    CALLA cc_UC,Crc
+    CMP R10,R12
+    JMPA cc_NE,BatchBad
+    MOV R4,R1
+    MOV R6,R2
+BatchCheck:
+    MOVB RL5,[R4]
+    CMPB RL5,#022H
+    JMPA cc_NE,BatchBad
+    ADD R4,#8
+    SUB R6,#8
+    JMPR cc_NE,BatchCheck
+BatchNext:
+    MOV R4,R1
+    MOV R6,#8
+    CALLA cc_UC,Crc
+    MOV R12,R10
+    MOV R4,R1
+    MOV R8,[R4+]
+    MOV R9,[R4+]
+    MOV R10,[R4+]
+    MOV R11,[R4]
+    MOV R14,#05257H
+    MOV R15,#1
+    CALLS 0,Entry
+    CMP R15,#0
+    JMPA cc_NE,BatchBad
+    CMP R13,#3
+    JMPA cc_ULT,BatchBad
+    CMP R13,#8
+    JMPA cc_UGT,BatchBad
+    MOVB RL5,0C107H
+    CMPB RL5,#0
+    JMPR cc_EQ,BatchCounter
+    CMPB RL5,#0FFH
+    JMPA cc_NE,BatchBad
+BatchCounter:
+    MOV R4,R1
+    MOVB RL5,[R4+#1]
+    CMPB RL5,0C108H
+    JMPA cc_NE,BatchBad
+    ADD R1,#8
+    SUB R2,#8
+    JMPR cc_NE,BatchNext
+    JMPR cc_UC,BatchExit
+BatchBad:
+    MOV R15,#2
+BatchExit:
+    POP PSW
+    POP DPP3
+    POP R6
+    POP R5
+    POP R4
+    POP R2
+    POP R1
+    RETS
+Batch ENDP
+RSW_RPC ENDS
+END

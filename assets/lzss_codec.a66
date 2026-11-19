@@ -1,0 +1,316 @@
+; Independent LZSS blocks: 1 KiB history, lengths 3..66, LSB-first flags.
+; Encode: R8/R9=source offset/segment, R10=maximum input, R11=output,
+; R12=output capacity. Returns R8=consumed, R9=packed size, R10=CRC16.
+; Decode: R8=input, R9=packed size, R10=output, R11=output size, R12=CRC16.
+; R15=0 on success. R0..R7 are preserved. No flash operation in the codec.
+$MOD167
+$INCLUDE (REG167.INC)
+CODE_ADDRESS EQU 0E400H
+WITH_ENCODER EQU 1
+WITH_PROGRAM EQU 1
+DRIVER EQU 0F640H
+LZSS_CODE SECTION CODE AT CODE_ADDRESS
+
+IF WITH_ENCODER
+Encode PROC FAR
+    PUSH R0
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH R7
+    SUB SP,#8
+    NOP
+    MOV R0,SP
+    MOV R1,R8
+    MOV R2,R9
+    MOV R3,R10
+    MOV R4,R11
+    MOV [R0],R1
+    MOV [R0+#2],R4
+    MOV R5,R4
+    ADD R5,R12
+    MOV [R0+#4],R5
+    MOV R6,#0
+    MOV R10,#0FFFFH
+    MOV R15,#1
+    CMP R3,#0
+    JMPA cc_EQ,EncodeExit
+    CMP R3,#0800H
+    JMPA cc_UGT,EncodeExit
+    CMP R2,#0FFH
+    JMPA cc_UGT,EncodeExit
+    CMP R12,#3
+    JMPA cc_ULT,EncodeExit
+    MOV R5,R1
+    ADD R5,R3
+    JMPR cc_NC,EncodeToken
+    CMP R5,#0
+    JMPA cc_NE,EncodeExit
+EncodeToken:
+    SRVWDT
+    CMP R3,#0
+    JMPA cc_EQ,EncodeDone
+    MOV R5,R4
+    ADD R5,#3
+    MOV R8,[R0+#4]
+    CMP R5,R8
+    JMPA cc_UGT,EncodeDone
+    CMP R6,#0
+    JMPR cc_NE,EncodeSearch
+    MOV R7,R4
+    MOV R5,#0
+    MOVB [R4],RL5
+    ADD R4,#1
+    MOV R6,#1
+EncodeSearch:
+    MOV R11,#0
+    MOV R14,R3
+    CMP R14,#66
+    JMPR cc_ULE,EncodeHistory
+    MOV R14,#66
+EncodeHistory:
+    MOV R15,R1
+    SUB R15,[R0]
+    CMP R15,#64
+    JMPR cc_ULE,EncodeCandidates
+    MOV R15,#64
+EncodeCandidates:
+    MOV R9,#1
+EncodeCandidate:
+    CMP R9,R15
+    JMPA cc_UGT,EncodeChoose
+    MOV R12,R1
+    SUB R12,R9
+    MOV R13,#0
+EncodeCompare:
+    CMP R13,R14
+    JMPR cc_UGE,EncodeMatch
+    EXTS R2,#1
+    MOVB RL5,[R12+]
+    MOVBZ R8,RL5
+    MOV R5,R1
+    ADD R5,R13
+    EXTS R2,#1
+    MOVB RL5,[R5]
+    MOVBZ R5,RL5
+    CMP R5,R8
+    JMPR cc_NE,EncodeMatch
+    ADD R13,#1
+    JMPR cc_UC,EncodeCompare
+EncodeMatch:
+    CMP R13,R11
+    JMPR cc_ULE,EncodeNext
+    MOV R11,R13
+    MOV [R0+#6],R9
+    CMP R11,R14
+    JMPR cc_EQ,EncodeChoose
+EncodeNext:
+    ADD R9,#1
+    JMPR cc_UC,EncodeCandidate
+EncodeChoose:
+    CMP R11,#3
+    JMPR cc_ULT,EncodeLiteral
+    MOV R5,R11
+    SUB R5,#3
+    SHL R5,#10
+    MOV R8,[R0+#6]
+    SUB R8,#1
+    OR R5,R8
+    MOVB [R4],RL5
+    MOVB [R4+#1],RH5
+    ADD R4,#2
+    JMPR cc_UC,EncodeAdvance
+EncodeLiteral:
+    MOVB RL5,[R7]
+    ORB RL5,RL6
+    MOVB [R7],RL5
+    EXTS R2,#1
+    MOVB RL5,[R1]
+    MOVB [R4],RL5
+    ADD R4,#1
+    MOV R11,#1
+EncodeAdvance:
+    EXTS R2,#1
+    MOVB RL5,[R1+]
+    MOVBZ R5,RL5
+    CALLA cc_UC,CrcByte
+    SUB R3,#1
+    SUB R11,#1
+    JMPR cc_NE,EncodeAdvance
+    SHL R6,#1
+    CMP R6,#0100H
+    JMPA cc_NE,EncodeToken
+    MOV R6,#0
+    JMPA cc_UC,EncodeToken
+EncodeDone:
+    MOV R8,R1
+    SUB R8,[R0]
+    MOV R9,R4
+    MOV R5,[R0+#2]
+    SUB R9,R5
+    MOV R15,#0
+EncodeExit:
+    ADD SP,#8
+    NOP
+    POP R7
+    POP R6
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    POP R0
+    RETS
+Encode ENDP
+ENDIF
+
+Decode PROC FAR
+    PUSH R0
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH R7
+    SUB SP,#4
+    NOP
+    MOV R0,SP
+    MOV [R0],R12
+    MOV [R0+#2],R10
+    MOV R1,R8
+    MOV R2,R10
+    MOV R3,R1
+    ADD R3,R9
+    MOV R4,R2
+    ADD R4,R11
+    MOV R15,#1
+    CMP R9,#0
+    JMPA cc_EQ,DecodeExit
+    CMP R9,#0900H
+    JMPA cc_UGT,DecodeExit
+    CMP R11,#0
+    JMPA cc_EQ,DecodeExit
+    CMP R11,#0800H
+    JMPA cc_UGT,DecodeExit
+    MOV R7,#0
+DecodeToken:
+    SRVWDT
+    CMP R2,R4
+    JMPA cc_EQ,DecodeComplete
+    CMP R1,R3
+    JMPA cc_UGE,DecodeExit
+    CMP R7,#0
+    JMPR cc_NE,DecodeFlags
+    MOVB RL5,[R1+]
+    MOVBZ R6,RL5
+    MOV R7,#8
+    CMP R1,R3
+    JMPA cc_UGE,DecodeExit
+DecodeFlags:
+    SUB R7,#1
+    SHR R6,#1
+    JMPR cc_NC,DecodeMatch
+    MOVB RL5,[R1+]
+    MOVB [R2],RL5
+    ADD R2,#1
+    JMPR cc_UC,DecodeToken
+DecodeMatch:
+    MOV R8,R1
+    ADD R8,#2
+    CMP R8,R3
+    JMPA cc_UGT,DecodeExit
+    MOVB RL5,[R1+]
+    MOVB RH5,[R1+]
+    MOV R8,R5
+    SHR R8,#10
+    ADD R8,#3
+    AND R5,#03FFH
+    ADD R5,#1
+    MOV R11,R2
+    SUB R11,R5
+    JMPA cc_C,DecodeExit
+    MOV R5,[R0+#2]
+    CMP R11,R5
+    JMPA cc_ULT,DecodeExit
+    MOV R12,R2
+    ADD R12,R8
+    CMP R12,R4
+    JMPA cc_UGT,DecodeExit
+DecodeCopy:
+    MOVB RL5,[R11+]
+    MOVB [R2],RL5
+    ADD R2,#1
+    SUB R8,#1
+    JMPR cc_NE,DecodeCopy
+    JMPR cc_UC,DecodeToken
+DecodeComplete:
+    CMP R1,R3
+    JMPR cc_NE,DecodeExit
+    MOV R1,[R0+#2]
+    MOV R10,#0FFFFH
+DecodeCrc:
+    MOVB RL5,[R1+]
+    MOVBZ R5,RL5
+    CALLA cc_UC,CrcByte
+    CMP R1,R4
+    JMPR cc_NE,DecodeCrc
+    CMP R10,[R0]
+    JMPR cc_NE,DecodeExit
+    MOV R15,#0
+DecodeExit:
+    ADD SP,#4
+    NOP
+    POP R7
+    POP R6
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    POP R0
+    RETS
+Decode ENDP
+
+; CRC16/Modbus, seed FFFF. R5 is one input byte; R10 accumulates CRC.
+CrcByte PROC NEAR
+    XOR R10,R5
+    MOV R8,#8
+CrcBit:
+    SHR R10,#1
+    JMPR cc_NC,CrcNext
+    XOR R10,#0A001H
+CrcNext:
+    SUB R8,#1
+    JMPR cc_NE,CrcBit
+    RET
+CrcByte ENDP
+
+IF WITH_PROGRAM
+; Decode arguments as above; R13/R14 are the destination flash offset/segment.
+Program PROC FAR
+    PUSH R10
+    PUSH R11
+    PUSH R13
+    PUSH R14
+    CALLS SEG Decode,SOF Decode
+    POP R14
+    POP R13
+    POP R9
+    POP R10
+    CMP R15,#0
+    JMPR cc_NE,ProgramExit
+    MOV R8,#0
+    MOV R11,#0
+    MOV R12,R14
+    MOV R15,#1
+    CALLS 0,DRIVER
+ProgramExit:
+    RETS
+Program ENDP
+ENDIF
+LZSS_CODE ENDS
+END
