@@ -1,35 +1,42 @@
 name: Build Workflow
 on:
   push:
-    tags:
-      - 'v*.*.*'
     branches:
+      - main
       - 'test-*[0-9][0-9]-u[0-9]*'
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      tag:
-        required: true
-        type: string
 
 permissions:
   contents: write
 
+# Reserve one version at a time across main and test branches.
+concurrency:
+  group: gkflasher-release
+  cancel-in-progress: false
+  queue: max
+
 jobs:
   build-windows:
     runs-on: windows-2022
-    if: ${{ inputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
 
-      - name: Get Build Version from git tag
-        id: get_build_version
+      - name: Calculate next version
+        shell: pwsh
         run: |
-          echo "target version is ${{ inputs.tag }}"
+          $latest = git tag --list --sort=-version:refname |
+            Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } |
+            Select-Object -First 1
+          if ($LASTEXITCODE -ne 0) { throw "Could not read version tags" }
+          if (-not $latest) { $latest = 'v1.0.59' }
+          $version = [version]$latest.Substring(1)
+          $tag = "v$($version.Major).$($version.Minor).$($version.Build + 1)"
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
+          Write-Output "Building $tag from $env:GITHUB_SHA"
 
       - name: Install Python
         uses: actions/setup-python@v6
@@ -45,9 +52,12 @@ jobs:
       - name: Assemble loader assets
         run: python tools/build.py
 
+      - name: Verify generated binaries
+        run: python tools/build.py --check
+
       - name: Embed version into package
         run: |
-          echo "__version__ = '${{ inputs.tag }}'" > _version.py
+          echo "__version__ = '$env:RELEASE_TAG'" > _version.py
       - name: Install Build Environment Prerequisites
         run: |
           pip install pyinstaller==6.16.0 pyinstaller-hooks-contrib==2025.9
@@ -71,8 +81,8 @@ jobs:
       - name: Build MSI Package
         shell: pwsh
         run: |
-          $tag = '${{ inputs.tag }}'
-          if (-not $tag) { throw "inputs.tag is empty" }
+          $tag = $env:RELEASE_TAG
+          if (-not $tag) { throw "RELEASE_TAG is empty" }
 
           # Trim leading "v" and enforce MSI-friendly A.B.C
           $ver = $tag.TrimStart('v')
@@ -93,12 +103,22 @@ jobs:
                 -out "./GKFlasher-$tag-amd64.msi" `
                 ./dialog.wixobj ./ui.wixobj ./product.wixobj
 
+      - name: Create release tag
+        shell: pwsh
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git tag -a $env:RELEASE_TAG $env:GITHUB_SHA -m "Release $env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Could not create release tag" }
+          git push origin "refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Could not push release tag" }
+
       - name: Upload MSI to Releases
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: ${{ inputs.tag }}
+          automatic_release_tag: ${{ env.RELEASE_TAG }}
           prerelease: false
-          title: ${{ inputs.tag }}
+          title: ${{ env.RELEASE_TAG }}
           files: |
-            GKFlasher-${{ inputs.tag }}-amd64.msi
+            GKFlasher-${{ env.RELEASE_TAG }}-amd64.msi
