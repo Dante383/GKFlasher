@@ -89,13 +89,27 @@
                         <Directory Id="KERNELASSETSDIR" Name="kernel">
                             <Component Id="KernelSourceFiles" Guid="*">
                                 <File Id="KernelProtocolSource" Source="assets\kernel\protocol.inc" KeyPath="yes" />
-                                <File Id="KernelCommandSource" Source="assets\kernel\kernel.inc" />
-                                <File Id="KernelFlashDriverSource" Source="assets\kernel\flash_driver.inc" />
-                                <File Id="KernelBootstrapSource" Source="assets\kernel\simk4x_bootstrap.a66" />
-                                <File Id="KernelUartSource" Source="assets\kernel\simk4x_kernel.a66" />
-                                <File Id="KernelCanSource" Source="assets\kernel\simk4x_kernel_can.a66" />
-                                <File Id="KernelI4DriverSource" Source="assets\kernel\simk4x_driver_i4_a29fx00bx.a66" />
-                                <File Id="KernelV6DriverSource" Source="assets\kernel\simk4x_driver_v6_a29fx00bx.a66" />
+                            </Component>
+                            <Component Id="KernelCommandSourceComponent" Guid="*">
+                                <File Id="KernelCommandSource" Source="assets\kernel\kernel.inc" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelFlashDriverSourceComponent" Guid="*">
+                                <File Id="KernelFlashDriverSource" Source="assets\kernel\flash_driver.inc" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelBootstrapSourceComponent" Guid="*">
+                                <File Id="KernelBootstrapSource" Source="assets\kernel\simk4x_bootstrap.a66" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelUartSourceComponent" Guid="*">
+                                <File Id="KernelUartSource" Source="assets\kernel\simk4x_kernel.a66" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelCanSourceComponent" Guid="*">
+                                <File Id="KernelCanSource" Source="assets\kernel\simk4x_kernel_can.a66" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelI4DriverSourceComponent" Guid="*">
+                                <File Id="KernelI4DriverSource" Source="assets\kernel\simk4x_driver_i4_a29fx00bx.a66" KeyPath="yes" />
+                            </Component>
+                            <Component Id="KernelV6DriverSourceComponent" Guid="*">
+                                <File Id="KernelV6DriverSource" Source="assets\kernel\simk4x_driver_v6_a29fx00bx.a66" KeyPath="yes" />
                             </Component>
                         </Directory>
                         <Directory Id="FONTSDIR" Name="fonts">
@@ -110,7 +124,9 @@
                         <Directory Id="RSWASSETSDIR" Name="rsw">
                             <Component Id="RswAssetFiles" Guid="*">
                                 <File Id="RswKlineRpcAsset" Source="assets\rsw\kline_rpc.a66" KeyPath="yes" />
-                                <File Id="RswNativeSource" Source="assets\rsw\simk43_rsw_fl2.a66" />
+                            </Component>
+                            <Component Id="RswNativeSourceComponent" Guid="*">
+                                <File Id="RswNativeSource" Source="assets\rsw\simk43_rsw_fl2.a66" KeyPath="yes" />
                             </Component>
                         </Directory>
                         <Directory Id="MTOSDIR" Name="mtos">
@@ -230,7 +246,15 @@
             <ComponentRef Id="ApplicationFilesK" />
             <ComponentRef Id="FontFiles" />
             <ComponentRef Id="RswAssetFiles" />
+            <ComponentRef Id="RswNativeSourceComponent" />
             <ComponentRef Id="KernelSourceFiles" />
+            <ComponentRef Id="KernelCommandSourceComponent" />
+            <ComponentRef Id="KernelFlashDriverSourceComponent" />
+            <ComponentRef Id="KernelBootstrapSourceComponent" />
+            <ComponentRef Id="KernelUartSourceComponent" />
+            <ComponentRef Id="KernelCanSourceComponent" />
+            <ComponentRef Id="KernelI4DriverSourceComponent" />
+            <ComponentRef Id="KernelV6DriverSourceComponent" />
             <ComponentRef Id="SvgIconPlugin" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
