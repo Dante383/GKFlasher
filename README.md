@@ -19,12 +19,19 @@ Clone the repository
 
 `git clone https://github.com/Dante383/GKFlasher`
 
-Install Python 3.10 for your specific operating system
-https://www.python.org/downloads/release/python-31011/
+Install Python 3.12 for your specific operating system
+https://www.python.org/downloads/
 
 Install required packages
 
 `python3 -m pip install -r requirements.txt`
+
+Assemble the loader binaries from source (required when running from a checkout):
+
+`python3 tools/build.py`
+
+Alternatively, `make build` runs the same build process. Release packages already
+include the generated assets.
 
 Confirm that no errors ocurred
 
@@ -134,21 +141,11 @@ and echo pacing:
 python gkflasher.py --protocol kline --interface COM69 --desired-baudrate 0x05 --session-baudrate 107143 --kline-p4-min 0.2 --read-calibration
 ```
 
-On the CA663057/COM69 bench, guarded pacing and bounded read recovery completed
-repeated verified 64 KiB calibration reads at approximately 3 kB/s. Recovery handles
-occasional lost requests; this is not a guarantee of stall-free transmission on every setup.
-
-To test the custom selector at the previously accepted 32609-baud request:
-
 ```powershell
 python gkflasher.py --protocol kline --interface COM69 --desired-baudrate 0x06 --session-baudrate 32609 --read-calibration
 ```
 
-The wire request is `10 85 06 00 7F 61`. The generic option accepts a positive
-24-bit rate; actual ECU support varies. CA663057 accepted this request but rejected
-an explicit 125000-baud request with NRC `0x22`. Its custom-rate parser has limitations;
-an accepted baud request does not guarantee a timeout-free read. `0x06` is currently
-a CLI option; it is not a fixed-rate entry in the GUI dropdown.
+ Note: `0x06` is currently a CLI option; it is not a fixed-rate entry in the GUI dropdown.
 
 `-i --interface {interface}` - for example `/dev/ttyUSB0` or `COM3` (K-Line), `can0` (SocketCAN), `pcan:PCAN_USBBUS1` (python-can interface:channel) or `j2534:openport` (J2534 adapter, K-Line and CAN; `j2534` for the first installed one). If the interface isn't found, GKFlasher lists the available ones to choose from
 
@@ -183,11 +180,8 @@ a CLI option; it is not a fixed-rate entry in the GUI dropdown.
 `--bsl` - Bootstrap loader, with the ECU in boot mode: read/write the whole external flash (boot sectors included) or read the internal ROM, on the K-line interface. See [docs/bsl.md](docs/bsl.md). Use with `--bsl-mode {hwinfo,read,readint,write}`, `--bsl-image {file}`, `--bsl-baudrate`, `--bsl-driver {auto,i4,v6}`.
 
 BSL defaults to automatic discovery: it connects at the 57600-baud entry rate,
-then qualifies the fastest supported candidate up to 750000.
-The trial restores the entry UART before committing a passed rate. Serial writes use a verified 2 KiB XRAM staging buffer
-at higher speeds. After successful automatic operations, the kernel returns to
-57600 without resetting, ready for the next command. Existing manually selected
-or interrupted kernels require their explicit rate.
+then qualifies the fastest supported candidate up to 750k baud.
+
 See the BSL wiring instructions before connecting an adapter to the board.
 
 `--mtos` - Mini Test Operating System - upload and execute a small routine in ECU RAM. See [docs/mtos.md](docs/mtos.md). Use with `--mtos-key`, `--mtos-mode {hello,dump,payload,loader,probe,read,read-calibration,flash-calibration,fullflash}`, and `--mtos-payload {file}` for write/payload modes.
@@ -261,42 +255,8 @@ not define that erase region.
 
 ### OpenGK high-speed K-Line
 
-OpenGK firmware with the 125k baud preset and fast KWP echo handler supports:
-
-```powershell
-python gkflasher.py --protocol kline --interface COM69 --desired-baudrate 0x05 --read-calibration
-```
-
-Serial requests use echo pacing by default, and timing negotiation retains a
-10 ms minimum between requests. `--kline-p4-min` remains available for an
-explicit override. The updated OpenGK firmware is required for the 125000-baud
-preset; unmodified CA663057 uses a different physical rate.
-
-The matching custom boot receiver and gkbus serial burst support also accelerate
-`--flash-calibration` and `--flash-program`. GKFlasher checks the receiver's
-capability before erasing; ordinary speeds and other firmware keep the normal
-write path. The matching custom receiver is required: host pacing alone cannot
-fix an older receiver that blocks boot housekeeping at 10400 baud.
-After erase, download setup uses the channel's normal turnaround interval;
-bulk transfers resume the negotiated timing. This applies equally to GUI and CLI.
-Bench transfers reached about 5,500 B/s writing and 5,050 B/s reading at 125k.
-KWP completion messages time erase and transfer, stopping before the final
-`0x02` verification routine. The result is displayed after verification succeeds.
-
-For MTOS, start at 10400 baud and use `--mtos-mode read-calibration` or choose
-`read-calibration` in the GUI's MTOS tab. The stream uses the selected Desired
-Baudrate and checks CRC16 before saving. Add `--desired-baudrate 0x06` for 750000
-baud; MTOS does not require a firmware high-speed KWP selector.
-
-
-MTOS `read`, `fullflash` and `flash-calibration` support matching 4/8 Mbit BINs.
-The MTOS modes and write options are shared by CLI and GUI. MTOS and BSL write
-checkboxes have CLI equivalents: `--skip-backup`, `--force-write`, and
-`--no-verify` (also `--skip-verify`).
-
-MTOS also offers `--override-safety-checks` / **Override BIN checks** to allow
-unrecognized BIN identifiers. Size, reset-vector and hardware checks remain.
-Temporary OpenGK definitions cover complete 512 KiB and 1 MiB images.
+See [OpenGK high-speed K-Line](docs/high-speed-kline.md) for firmware requirements,
+transfer timing and MTOS options.
 
 ### Optional KWP compression
 
@@ -306,3 +266,10 @@ option is needed. Other firmware retains standard KWP transfers. Compressed
 blocks fit the existing KWP frame size; write acknowledgements are never blindly
 replayed. The matching custom firmware extension is required for KWP, whereas
 BSL uploads its shared codec to RAM without changing ECU firmware.
+
+### Kernel sources
+
+The OpenGK bootstrap, command kernel, flash drivers and SIMK43 RSW are maintained
+as assembly source. The build generates their binaries and the MTOS CAN stage
+under `build/out`; GitHub builds them before packaging.
+See the [kernel and build instructions](docs/kernel.md) and [flash-driver documentation](docs/driver.md).

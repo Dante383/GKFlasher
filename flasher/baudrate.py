@@ -2,7 +2,6 @@
 import time
 
 from gkbus.protocol import kwp2000
-from gkbus.protocol.kwp2000.kwp2000_command import Kwp2000Command
 
 from .ecu import DesiredBaudrate, enable_security_access
 
@@ -26,10 +25,8 @@ def _discover_baudrate(ecu, log):
         data = bytearray()
         for offset in range(0, 1024, 254):
             command = kwp2000.commands.ReadMemoryByAddress(address + offset, min(254, 1024 - offset))
-            # Use the standard encoding, without the library's memory-read replay:
-            # a recovered timeout must not qualify an unreliable baudrate.
-            probe = Kwp2000Command(command.get_data()).set_service_identifier(command.get_service_identifier())
-            part = bytes(bus.execute(probe).get_data())
+            # Retries are disabled by default: a recovered timeout must not qualify a baudrate.
+            part = bytes(bus.execute(command).get_data())
             if len(part) != min(254, 1024 - offset):
                 raise ValueError('Incomplete baud discovery read')
             data.extend(part)

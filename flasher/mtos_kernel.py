@@ -1,7 +1,7 @@
 '''
-MTOS full flash: the BSL kernel and the I4 flash driver (kernel.py), run on a live SIMK43.
+MTOS full flash: the OpenGK kernel and the I4 flash driver (kernel.py), run on a live SIMK43.
 
-The MTOS loader streams a short prologue plus the BSL kernel into XRAM
+The MTOS loader streams a short prologue plus the OpenGK kernel into XRAM
 (mtos_asm.payload_bsl_kernel_shim). From then on the ECU speaks the BSL protocol over the
 K-line at 750 kbaud after the loader's handshake. What's different from the BSL: the firmware
 set the bus up, but its flash write strobe isn't where the driver writes, and the
@@ -21,7 +21,7 @@ from .kernel import (
 	run_session as run_kernel_session, write_flash,
 )
 from .mtos_asm import patch_driver_watchdog
-from .ecu import identify_ecu_image, identify_ecu_layout, ECUIdentificationException
+from .ecu import calibration_identification, identify_ecu_image, identify_ecu_layout, ECUIdentificationException
 from .memory import prepare_flash_payloads
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
@@ -177,13 +177,7 @@ def probe (kernel: Kernel, signature: bytes | None = None) -> None:
 			raise KernelError('The kernel stopped answering')
 		time.sleep(0.5)
 	head = kernel.read_memory(FLASH_READ_BASE, 4)
-	try:
-		layout = identify_ecu_layout(lambda offset, size: kernel.read_memory(FLASH_READ_BASE + offset, size), flash.chip.size)
-		region = layout.get_region('calibration').read
-		offset = layout.calculate_bin_offset(region.address) + 0x40
-		ident = kernel.read_memory(FLASH_READ_BASE + offset, 0x16).split(b'\xff')[0].decode('latin-1', 'replace')
-	except ECUIdentificationException:
-		ident = 'unknown'
+	ident = calibration_identification(lambda offset, size: kernel.read_memory(FLASH_READ_BASE + offset, size), flash.chip.size)
 	kernel.log('[*] Reset vector {}, identification {}'.format(head.hex(), ident))
 	kernel.log('[+] Probe passed: kernel, driver, read and write path all good')
 

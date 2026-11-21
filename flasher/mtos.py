@@ -29,7 +29,7 @@ from .mtos_asm import (
 )
 from ecu_definitions import AccessLevel, Routine
 
-#: modes that run the BSL kernel - see mtos_kernel
+#: modes that run the OpenGK kernel - see mtos_kernel
 KERNEL_MODES = ('probe', 'read', 'flash-calibration', 'fullflash')
 WRITE_MODES = ('flash-calibration', 'fullflash')
 MTOS_MODES = ('hello', 'dump', 'payload', 'loader', 'probe', 'read', 'read-calibration', *WRITE_MODES)
@@ -381,7 +381,7 @@ def run_loader (ecu: ECU, signature: bytes, stage2: bytes, mtos_key: int | None 
 
 
 def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_callback=None, progress_callback=None, baudrate: int | None = None):
-	'''Turn the ECU over to the BSL kernel: the loader, then the kernel as its
+	'''Turn the ECU over to the OpenGK kernel: the loader, then the kernel as its
 	second stage (mtos_asm.payload_bsl_kernel_shim). Returns the channel, with
 	the kernel answering at the selected rate and kernel timing set.
 
@@ -395,7 +395,7 @@ def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_
 		entry_baudrate=ecu.bus.transport.channel.get_baudrate(), baudrate=baudrate), signature)
 	upload_blob(ecu, blob, log_callback=log_callback, progress_callback=progress_callback)
 
-	log('[*] Starting the loader, sending it the BSL kernel ({} bytes)'.format(len(stage2)), log_callback)
+	log('[*] Starting the loader, sending it the OpenGK kernel ({} bytes)'.format(len(stage2)), log_callback)
 	channel = execute(ecu, raw=True, mtos_key=mtos_key, log_callback=log_callback, fast_marker=b'MT75', baudrate=baudrate)
 	link = KernelLink(channel)
 	_upload_stage2(link, stage2, 'Uploading kernel', log_callback, progress_callback)
@@ -407,7 +407,7 @@ def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_
 		log('[!] Kernel start not seen ({}), looking for it'.format(started.hex() or 'nothing'), log_callback)
 		if not kernel.resync():
 			raise KernelError('The kernel didn\'t start. Switch the ECU off and on again - the flash wasn\'t touched')
-	log('[+] BSL kernel running', log_callback)
+	log('[+] OpenGK kernel running', log_callback)
 	if automatic:
 		from .loader_baudrate import discover_loader_baudrate
 		discover_loader_baudrate(kernel)
@@ -477,7 +477,7 @@ def cli_warn_check (warning: str) -> bool:
 def attach_session (bus, mode: str, image_filename: str | None = None, output_filename: str | None = None,
                     baudrate: int | None = None, confirm=cli_confirm, warn_check=cli_warn_check, attach_hint: str | None = None,
                     skip_verify: bool = False, skip_backup: bool = False, force: bool = False, override_safety_checks: bool = False, log_callback=None, progress_callback=None) -> bool:
-	'''Pick up a BSL kernel an earlier session left running (the ECU still
+	'''Pick up a OpenGK kernel an earlier session left running (the ECU still
 	powered, at that session's baudrate) and run `mode` on it. No KWP2000 on
 	the way in, the firmware isn't running'''
 	channel = bus.transport.channel

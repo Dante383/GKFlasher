@@ -1,4 +1,4 @@
-; RAM-only UART qualification for the running MTOS/BSL kernel.
+; RAM-only UART qualification for the running OpenGK kernel.
 ; Trial round-trips 256 bytes and always restores the original UART before
 ; accepting A5 at the original rate. Commit is allowed only after a passed trial.
 ; R8=reload, R10=0 trial / 1 commit, R11=entry reload.

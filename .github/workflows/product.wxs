@@ -64,17 +64,55 @@
                             <File Id="ApplicationFile57" Source="flasher\mtos_kernel.py" />
                             <File Id="ApplicationFile58" Source="flasher\kernel.py" />
                             <File Id="ApplicationFile59" Source="flasher\bsl.py" />
+                            <File Id="BaudrateModule" Source="flasher\baudrate.py" />
+                            <File Id="LoaderBaudrateModule" Source="flasher\loader_baudrate.py" />
+                            <File Id="KwpCompressionModule" Source="flasher\kwp_compression.py" />
+                            <File Id="LzssModule" Source="flasher\lzss.py" />
+                            <File Id="MtosCanModule" Source="flasher\mtos_can.py" />
+                            <File Id="ProgressModule" Source="flasher\progress.py" />
+                            <File Id="RswKlineModule" Source="flasher\rsw_kline.py" />
+                            <File Id="UtilsModule" Source="flasher\utils.py" />
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
                         <Component Id="ApplicationFilesC" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
                             <File Id="ApplicationFile39" Source="assets\Siemens_T_Logo.ico" />
-                            <File Id="ApplicationFile40" Source="assets\simk4x_bootstrap.bin" />
-                            <File Id="ApplicationFile41" Source="assets\simk4x_kernel.bin" />
-                            <File Id="ApplicationFile42" Source="assets\simk4x_driver_i4_a29fx00bx.bin" />
-                            <File Id="ApplicationFile43" Source="assets\simk4x_driver_v6_a29fx00bx.bin" />
-                            <File Id="ApplicationFile44" Source="assets\simk43_rsw_fl2.bin" />
+                            <File Id="ApplicationFile40" Source="build\out\assets\simk4x_bootstrap.bin" />
+                            <File Id="ApplicationFile41" Source="build\out\assets\simk4x_kernel.bin" />
+                            <File Id="ApplicationFile42" Source="build\out\assets\simk4x_driver_i4_a29fx00bx.bin" />
+                            <File Id="ApplicationFile43" Source="build\out\assets\simk4x_driver_v6_a29fx00bx.bin" />
+                            <File Id="ApplicationFile44" Source="build\out\assets\simk43_rsw_fl2.bin" />
+                            <File Id="MtosCanStage2Binary" Source="build\out\assets\mtos_can_stage2.bin" />
+                            <File Id="CheckmarkAsset" Source="assets\checkmark.svg" />
+                            <File Id="LzssCodecAsset" Source="assets\lzss_codec.a66" />
                         </Component>
+                        <Directory Id="KERNELASSETSDIR" Name="kernel">
+                            <Component Id="KernelSourceFiles" Guid="*">
+                                <File Id="KernelProtocolSource" Source="assets\kernel\protocol.inc" KeyPath="yes" />
+                                <File Id="KernelCommandSource" Source="assets\kernel\kernel.inc" />
+                                <File Id="KernelFlashDriverSource" Source="assets\kernel\flash_driver.inc" />
+                                <File Id="KernelBootstrapSource" Source="assets\kernel\simk4x_bootstrap.a66" />
+                                <File Id="KernelUartSource" Source="assets\kernel\simk4x_kernel.a66" />
+                                <File Id="KernelCanSource" Source="assets\kernel\simk4x_kernel_can.a66" />
+                                <File Id="KernelI4DriverSource" Source="assets\kernel\simk4x_driver_i4_a29fx00bx.a66" />
+                                <File Id="KernelV6DriverSource" Source="assets\kernel\simk4x_driver_v6_a29fx00bx.a66" />
+                            </Component>
+                        </Directory>
+                        <Directory Id="FONTSDIR" Name="fonts">
+                            <Component Id="FontFiles" Guid="{B9A845D7-2D23-4EF8-A63C-419E03D726F1}">
+                                <File Id="DejaVuSansFont" Source="assets\fonts\DejaVuSans.ttf" KeyPath="yes" />
+                                <File Id="DejaVuSansBoldFont" Source="assets\fonts\DejaVuSans-Bold.ttf" />
+                                <File Id="DejaVuSansMonoFont" Source="assets\fonts\DejaVuSansMono.ttf" />
+                                <File Id="DejaVuLicense" Source="assets\fonts\LICENSE_DEJAVU" />
+                                <File Id="FontsReadme" Source="assets\fonts\README.md" />
+                            </Component>
+                        </Directory>
+                        <Directory Id="RSWASSETSDIR" Name="rsw">
+                            <Component Id="RswAssetFiles" Guid="*">
+                                <File Id="RswKlineRpcAsset" Source="assets\rsw\kline_rpc.a66" KeyPath="yes" />
+                                <File Id="RswNativeSource" Source="assets\rsw\simk43_rsw_fl2.a66" />
+                            </Component>
+                        </Directory>
                         <Directory Id="MTOSDIR" Name="mtos">
                             <!-- MTOS payload sources, assembled at runtime by openc166 -->
                             <Component Id="ApplicationFilesJ" Guid="{07A5D055-DA34-401F-BBBC-094C3AC31004}">
@@ -85,6 +123,13 @@
                                 <File Id="ApplicationFile64" Source="assets\mtos\marker.a66" />
                                 <File Id="ApplicationFile65" Source="assets\mtos\memory_dump.a66" />
                                 <File Id="ApplicationFile66" Source="assets\mtos\stage2_hello.a66" />
+                                <File Id="MtosBaudProbeAsset" Source="assets\mtos\baud_probe.a66" />
+                                <File Id="MtosCalibrationReadAsset" Source="assets\mtos\calibration_read.a66" />
+                                <File Id="MtosCanLinkAsset" Source="assets\mtos\can_link.a66" />
+                                <File Id="MtosCanLoaderAsset" Source="assets\mtos\can_loader.a66" />
+                                <File Id="MtosCanStage2Source" Source="assets\mtos\can_stage2.a66" />
+                                <File Id="MtosKernelEnvironmentSource" Source="assets\mtos\kernel_environment.inc" />
+                                <File Id="MtosFastLinkAsset" Source="assets\mtos\fast_link.inc" />
                             </Component>
                         </Directory>
                     </Directory>
@@ -118,9 +163,15 @@
                                             <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
                                             <File Id="ApplicationFile50" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
                                             <File Id="ApplicationFile51" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                            <File Id="QtSvgLibrary" Source="dist\gui\PyQt5\Qt5\bin\Qt5Svg.dll" />
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
+                                        <Directory Id="ICONENGINESDIR" Name="iconengines">
+                                            <Component Id="SvgIconPlugin" Guid="*">
+                                                <File Id="QtSvgIconPlugin" Source="dist\gui\PyQt5\Qt5\plugins\iconengines\qsvgicon.dll" KeyPath="yes" />
+                                            </Component>
+                                        </Directory>
                                         <Directory Id="PLATFORMDIR" Name="platforms">
                                             <Component Id="ApplicationFilesF" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
                                                 <File Id="ApplicationFile52" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
@@ -134,6 +185,7 @@
                                         <Directory Id="IMAGEFORMATSDIR" Name="imageformats">
                                             <Component Id="ApplicationFilesH" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE2}">
                                                 <File Id="ApplicationFile54" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qico.dll" />
+                                                <File Id="QtSvgImagePlugin" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qsvg.dll" />
                                             </Component>
                                         </Directory>
                                     </Directory>
@@ -176,6 +228,10 @@
             <ComponentRef Id="ApplicationFilesI" />
             <ComponentRef Id="ApplicationFilesJ" />
             <ComponentRef Id="ApplicationFilesK" />
+            <ComponentRef Id="FontFiles" />
+            <ComponentRef Id="RswAssetFiles" />
+            <ComponentRef Id="KernelSourceFiles" />
+            <ComponentRef Id="SvgIconPlugin" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
 

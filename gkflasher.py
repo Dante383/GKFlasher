@@ -224,7 +224,7 @@ def load_arguments ():
 	parser.add_argument('--mtos', help='Mini Test Operating System. Write options: '
 		'[--no-verify] [--skip-backup] [--force-write] [--override-safety-checks]', action='store_true')
 	parser.add_argument('--mtos-mode', help='MTOS mode: hello (safe self-test), dump, payload, loader, read-calibration (flow-controlled RAM stream), '
-		'probe/read/flash-calibration/fullflash (BSL kernel: dry run, whole flash read, whole flash write incl. boot sectors)',
+		'probe/read/flash-calibration/fullflash (OpenGK kernel: dry run, whole flash read, whole flash write incl. boot sectors)',
 		default='hello', choices=MTOS_MODES)
 	parser.add_argument('--mtos-payload', help='BIN file with payload body (payload mode), second stage (loader mode) or full 4/8 Mbit BIN (fullflash/flash-calibration modes)')
 	parser.add_argument('--mtos-key', help='Key to use for Siemens access level', type=lambda x: int(x,0))

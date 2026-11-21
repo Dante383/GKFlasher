@@ -17,7 +17,8 @@ a = Analysis(
     pathex=[],
     # openc166 (assembles the MTOS payloads) loads openc166.dll from its package dir
     binaries=collect_dynamic_libs('openc166'),
-    datas=[('..\\..\\flasher', 'flasher'),('..\\..\\assets', 'assets'),('..\\..\\gkflasher.yml', '.')],
+    datas=[('..\\..\\flasher', 'flasher'),('..\\..\\assets', 'assets'),
+           ('..\\..\\build\\out\\assets', 'assets'),('..\\..\\gkflasher.yml', '.')],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

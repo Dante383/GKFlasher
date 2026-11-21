@@ -1,9 +1,10 @@
-import os
 import time
 from gkbus.channel import CanChannel, KLineChannel
 from gkbus.transport import CcpOverCanTransport
 from gkbus.protocol import ccp
 from .progress import Progress, transfer_summary
+from .kernel import load_asset
+from .memory import dynamic_find_end
 
 # ==========================================================
 # LOGGING
@@ -19,14 +20,19 @@ def log(message, log_callback=None):
     else:
         print(message)
 
+
+def log_running(channel, log_callback=None):
+    if isinstance(channel, CanChannel):
+        link = 'CANBUS at {:g} Kbps'.format(channel.get_bitrate() / 1000)
+    else:
+        link = 'K-Line at {} baud'.format(channel.get_baudrate())
+    log('[+] Native RSW running over {}'.format(link), log_callback)
+
 # ==========================================================
 # RSW LOADER
 # ==========================================================
 
-RSW_FILE = os.path.join(
-    os.path.dirname(__file__),
-    "../assets/simk43_rsw_fl2.bin"
-)
+RSW_ASSET = 'assets/simk43_rsw_fl2.bin'
 
 # ==========================================================
 # CAN CONFIG
@@ -158,6 +164,11 @@ def native_bootstrap():
 # ==========================================================
 
 def flash_rsw(data, progress_callback=None, log_callback=None):
+    # The header ends at the sector table; retain the following status byte.
+    # The remainder of the bundled image is unused erased padding.
+    end = int.from_bytes(data[8:12], 'little') - 0x82000 + 2
+    if 12 <= end <= len(data) and not data[end:].strip(b'\xFF'):
+        data = data[:end]
     started_at = time.monotonic()
     log('[*] Uploading RSW', log_callback)
 
@@ -289,11 +300,9 @@ def _transfer_6byte(data, command, title, progress_callback=None, batch=False):
 
 
 def flash_file_6byte(name, data, progress_callback=None, log_callback=None):
-    if isinstance(getattr(transport, 'channel', None), KLineChannel):
-        # The selected region was erased first. Leave its erased tail alone;
-        # retain a complete native 128-byte staging block before the flush.
-        end = len(data.rstrip(b'\xFF'))
-        data = data[:min(len(data), (end + 127) // 128 * 128)]
+    # Both transports erase the selected region first. Leave its erased tail
+    # alone; retain a complete native 128-byte staging block before the flush.
+    data = data[:dynamic_find_end(data, alignment=128)]
     started_at = time.monotonic()
     log(f'[*] Flashing {name}', log_callback)
     _transfer_6byte(
@@ -397,8 +406,8 @@ def rsw_handler(ecu, mode, bin_file, progress_callback=None, log_callback=None, 
     native_connect()
     native_unlock(0x02)
     native_bootstrap()
-    with open(RSW_FILE, 'rb') as file:
-        flash_rsw(file.read(), progress_callback=progress_callback, log_callback=log_callback)
+    flash_rsw(load_asset(RSW_ASSET), progress_callback=progress_callback, log_callback=log_callback)
+    log_running(channel, log_callback)
     _flash_regions(mode, regions, progress_callback, log_callback)
     finalize()
 

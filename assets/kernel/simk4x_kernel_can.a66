@@ -1,0 +1,14 @@
+; OpenGK SIMK4x CAN byte-stream kernel, assembled from the shared command source.
+; The CAN entry address and I/O targets are supplied by the MTOS stage-2 builder.
+; UART hardware access is omitted; command handling stays shared with K-Line.
+$MOD167
+$SEGMENTED
+$INCLUDE (REG167.INC)
+$INCLUDE (protocol.inc)
+ASSUME DPP3:SYSTEM
+CAN_TRANSPORT EQU 1
+KERNEL_BASE EQU 0E028H
+CAN_TX EQU 0E200H
+CAN_RX EQU 0E200H
+$INCLUDE (kernel.inc)
+END

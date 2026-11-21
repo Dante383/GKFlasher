@@ -1,0 +1,11 @@
+; OpenGK SIMK4x K-Line UART kernel, assembled from the shared command source.
+; Retains the original BSL address, UART echo handling and command protocol.
+$MOD167
+$SEGMENTED
+$INCLUDE (REG167.INC)
+$INCLUDE (protocol.inc)
+ASSUME DPP3:SYSTEM
+CAN_TRANSPORT EQU 0
+KERNEL_BASE EQU 0FA60H
+$INCLUDE (kernel.inc)
+END

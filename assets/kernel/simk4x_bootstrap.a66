@@ -1,0 +1,29 @@
+; OpenGK SIMK4x bootstrap loader.
+; The C167 boot ROM loads these 32 bytes at 0xFA40. Acknowledge startup, receive
+; the command kernel at 0xFA60, then jump to it. K-Line transmission is echoed
+; on receive; the first wait consumes that echo before accepting kernel bytes.
+; The build tool supplies KERNEL_SIZE from the assembled UART kernel.
+$MOD167
+$SEGMENTED
+$INCLUDE (REG167.INC)
+$INCLUDE (protocol.inc)
+ASSUME DPP3:SYSTEM
+KERNEL_SIZE EQU 018AH
+KERNEL_BASE EQU 0FA60H
+BootstrapCode SECTION CODE AT 0FA40H
+BootstrapStart:
+    MOV S0TBUF,#LOADER_STARTED
+WaitEcho:
+    JNB S0RIR,WaitEcho
+    MOV R0,#KERNEL_BASE
+ReceiveNext:
+    BCLR S0RIR
+WaitByte:
+    JNB S0RIR,WaitByte
+    MOVB [R0],S0RBUF
+    CMPI1 R0,#(KERNEL_BASE+KERNEL_SIZE-1)
+    JMPR cc_NE,ReceiveNext
+    JMPA cc_UC,KERNEL_BASE
+BootstrapEnd:
+BootstrapCode ENDS
+END

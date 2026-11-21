@@ -1,5 +1,5 @@
 '''
-The SIMK4x BSL kernel (assets/simk4x_kernel.bin), its flash drivers, and the jobs run on
+The OpenGK SIMK4x kernel (assets/simk4x_kernel.bin), its flash drivers, and the jobs run on
 them: reading, and writing the whole external flash - the boot sectors included.
 
 The same kernel runs two ways, and only how it starts differs:
@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .progress import Progress, transfer_summary
-from .ecu import identify_ecu_image, ECUIdentificationException
+from .ecu import calibration_identification, identify_ecu_image, ECUIdentificationException
 
 from gkbus.channel import KLineTiming
 from gkbus.exceptions import TimeoutException
@@ -53,11 +53,11 @@ FLASH_READ_BASE = 0x800000
 DATA_BUFFER = 0xFC00
 PROGRAM_BLOCK = 0x200
 
-# the stock flash drivers are linked to run at 0xF600, entry point 0xF640
+# the OpenGK flash drivers are linked to run at 0xF600, entry point 0xF640
 DRIVER_ADDRESS = 0x00F600
 DRIVER_ENTRY = 0x00F640
 
-# a `rets` in internal RAM that's free in both BSL and MTOS sessions (the BSL kernel
+# a `rets` in internal RAM that's free in both BSL and MTOS sessions (the OpenGK kernel
 # is at 0xFA60, MTOS' register bank and stack below the driver), for resync's first
 # bytes to point a half-received CALL at. To an idle kernel the bytes are no-ops
 RESYNC_TRAP = 0x00F9F0
@@ -82,8 +82,6 @@ SECTOR_ATTEMPTS = 3
 TRANSFER_ATTEMPTS = 3
 
 # where SIMK43 firmware keeps its identification (ca66...)
-IDENTIFICATION = 0x10040
-IDENTIFICATION_LENGTH = 0x16
 
 # while the host talks to the kernel: no gaps needed, short frames on J2534
 KERNEL_TIMING = KLineTiming(p1_max=5.0, p3_min=0.0, p4_min=0.0)
@@ -106,15 +104,22 @@ def log (message, log_callback=None):
 
 def resource_path (relative_path: str) -> str:
 	'''
-	A file shipped with GKFlasher (assets/...), from a checkout or a PyInstaller build
+	An asset from build/out in a checkout, or bundled assets in a PyInstaller build
 	'''
 	base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+	generated = os.path.join(base, 'build', 'out', relative_path)
+	if os.path.isfile(generated):
+		return generated
 	return os.path.join(base, relative_path)
 
 
 def load_asset (relative_path: str) -> bytes:
-	with open(resource_path(relative_path), 'rb') as file:
-		return file.read()
+	try:
+		with open(resource_path(relative_path), 'rb') as file:
+			return file.read()
+	except FileNotFoundError as exc:
+		hint = 'Reinstall GKFlasher.' if getattr(sys, 'frozen', False) else 'Run python tools/build.py before starting GKFlasher.'
+		raise KernelError('Missing asset {}. {}'.format(relative_path, hint)) from exc
 
 
 def xor_checksum (data: bytes) -> int:
@@ -137,21 +142,8 @@ def read_block_size (baudrate: int) -> int:
 	return size
 
 
-def identification (flash: bytes, offset: int | None = None) -> str:
-	'''
-	The calibration a SIMK43 image identifies with, at 0x10040
-	'''
-	if offset is None:
-		try:
-			layout = identify_ecu_image(flash)
-			region = layout.get_region('calibration').read
-			offset = layout.calculate_bin_offset(region.address) + 0x40
-		except ECUIdentificationException:
-			return 'unknown'
-	ident = flash[offset:offset + IDENTIFICATION_LENGTH].split(b'\xff')[0]
-	if not ident or any(byte < 32 or byte > 126 for byte in ident):
-		return 'unknown'
-	return ident.decode('latin-1', 'replace')
+def identification (flash: bytes, layout=None) -> str:
+	return calibration_identification(lambda offset, size: flash[offset:offset + size], len(flash), layout)
 
 
 def available_filename (filename: str) -> str:
@@ -310,7 +302,7 @@ class InterruptGuard:
 
 class Kernel:
 	'''
-	The BSL kernel at the other end of `link`: its commands, and memory reads and writes
+	The OpenGK kernel at the other end of `link`: its commands, and memory reads and writes
 	that survive a broken exchange
 	'''
 
@@ -559,7 +551,7 @@ CHIPS = {
 @dataclass(frozen=True)
 class Driver:
 	'''
-	A stock SIMK4x flash driver. The I4 board (SIMK43 2.0) has the flash's data lines
+	An OpenGK SIMK4x flash driver. The I4 board (SIMK43 2.0) has the flash's data lines
 	crossed, so its driver writes the chip's commands crossed, and what it reads (the IDs)
 	comes back crossed
 	'''
@@ -812,7 +804,11 @@ def write_flash (flash: Flash, image: bytes, backup_filename: str, confirm, orde
 		allowed = {number for number, _, _ in selected}
 		changed = [number for number in changed if number in allowed]
 	if current is not None:
-		flash.log('[*] ECU: {}, image: {}'.format(identification(current), identification(image)))
+		try:
+			layout = identify_ecu_image(image)
+		except ECUIdentificationException:
+			layout = None
+		flash.log('[*] ECU: {}, image: {}'.format(identification(current, layout), identification(image)))
 	else:
 		flash.log('[*] Image: {}'.format(identification(image)))
 	if not changed:

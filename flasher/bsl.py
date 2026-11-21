@@ -15,15 +15,16 @@ import time
 from .lzss import CompressedFlash, RamCodec, BSL_LAYOUT
 
 from .kernel import (
-	ACK, CHIPS, DONE, DRIVER_I4, DRIVER_V6, DRIVERS, FLASH_READ_BASE, IDENTIFICATION, IDENTIFICATION_LENGTH,
+	ACK, CHIPS, DONE, DRIVER_I4, DRIVER_V6, DRIVERS, FLASH_READ_BASE,
 	KERNEL_ASSET, KERNEL_STARTED, VERIFY_FAILED, Flash, Kernel, KernelError, KernelLink, Progress, enter,
 	identification, load_asset, log, read_flash, run_session, save, write_flash,
 )
+from .ecu import calibration_identification
 
 BOOTSTRAP_ASSET = 'assets/simk4x_bootstrap.bin'
 BOOTSTRAP_SIZE = 32
-# what the bootstrap loader takes, to 0xFA60
-KERNEL_SIZE = 0x18A
+# The generated bootstrap loads the kernel at 0xFA60, below the 0xFC00 data buffer.
+MAX_KERNEL_SIZE = 0xFC00 - 0xFA60
 # the bootstrap loader's first words once it runs
 LOADER_STARTED = 0x01
 
@@ -135,9 +136,9 @@ def bootstrap (kernel: Kernel, initial_reply=None) -> str | None:
 
 	loader = load_asset(BOOTSTRAP_ASSET)
 	code = load_asset(KERNEL_ASSET)
-	if len(loader) != BOOTSTRAP_SIZE or len(code) != KERNEL_SIZE:
-		raise KernelError('Broken install: the bootstrap loader is {} bytes (needs {}), the kernel {} (needs {})'.format(
-			len(loader), BOOTSTRAP_SIZE, len(code), KERNEL_SIZE))
+	if len(loader) != BOOTSTRAP_SIZE or not code or len(code) % 2 or len(code) > MAX_KERNEL_SIZE:
+		raise KernelError('Broken install: bootstrap must be {} bytes; kernel must be nonempty, word-aligned and at most {} bytes'.format(
+			BOOTSTRAP_SIZE, MAX_KERNEL_SIZE))
 
 	kernel.log('[*] Sending the bootstrap loader')
 	link.send(loader)
@@ -221,10 +222,8 @@ def hwinfo (kernel: Kernel, cpu: str | None, driver: str) -> None:
 	kernel.log('[*] CPU: {}'.format(cpu or 'not known, the kernel was already running'))
 	flash = load_flash(kernel, driver)
 	head = kernel.read_memory(FLASH_READ_BASE, 4)
-	ident = b''
-	if flash.chip.size >= IDENTIFICATION + IDENTIFICATION_LENGTH:
-		ident = kernel.read_memory(FLASH_READ_BASE + IDENTIFICATION, IDENTIFICATION_LENGTH)
-	kernel.log('[*] Reset vector {}, identification {}'.format(head.hex(), identification(ident, offset=0)))
+	ident = calibration_identification(lambda offset, size: kernel.read_memory(FLASH_READ_BASE + offset, size), flash.chip.size)
+	kernel.log('[*] Reset vector {}, identification {}'.format(head.hex(), ident))
 
 
 def read (kernel: Kernel, output_filename: str, driver: str) -> None:

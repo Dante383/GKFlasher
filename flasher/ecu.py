@@ -148,7 +148,7 @@ def release_timing (bus: kwp2000.Kwp2000Protocol) -> None:
 def end_diagnostic_session(bus: kwp2000.Kwp2000Protocol) -> bool:
 	"""Release normal diagnostics so the other interface can connect immediately.
 
-	Only call while KWP owns the ECU, never against a running MTOS/BSL kernel.
+	Only call while KWP owns the ECU, never against a running OpenGK kernel.
 	CAN uses the default session; StopCommunication is absent on some SIMK CAN paths.
 	"""
 	if not bus.transport.is_open():
@@ -327,23 +327,32 @@ class ECU:
 		return True
 
 	def get_calibration (self) -> str:
-		calibration = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_region('calibration').read.address, size=8)).get_data()
+		calibration = self.read_memory_by_address(offset=self.get_region('calibration').read.address, size=8)
 		return ''.join([chr(x) for x in list(calibration)])
 
 	def get_calibration_description (self) -> str:
-		description = self.bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=self.get_region('calibration').read.address+0x40, size=8)).get_data()
+		description = self.read_memory_by_address(offset=self.get_region('calibration').read.address+0x40, size=8)
 		return ''.join([chr(x) for x in list(description)])
 
 	def read_memory_by_address (self, offset: int, size: int) -> bytes:
 		data = bytes()
-		
+		channel = self.bus.transport.channel
+		timeout = None
+		if isinstance(channel, KLineChannel) and channel.get_timing().p4_max is not None:
+			# Include reply wire time at low baudrates as well as ECU processing time.
+			wire_time = (size + 6) * 10 / channel.get_baudrate()
+			timeout = min(0.25 + 2 * wire_time, self.bus.transport.get_timeout())
+
 		try:
-			data = self.bus.execute(
+			response = self.bus.execute(
 				kwp2000.commands.ReadMemoryByAddress(
 					offset=offset, 
 					size=size
-				)
-			).get_data()
+				), retries=2, timeout=timeout
+			)
+			data = response.get_data()
+			if response.frame.status != 0x63 or len(data) != size:
+				raise kwp2000.Kwp2000Exception('Unexpected memory-read response')
 		except kwp2000.Kwp2000NegativeResponseException as e:
 			if e.status.identifier == kwp2000.Kwp2000NegativeStatusIdentifierEnum.CANT_UPLOAD_FROM_SPECIFIED_ADDRESS.value:
 				if size == 1:
@@ -386,10 +395,25 @@ def identify_ecu_image(image: bytes) -> ECU:
 	return identify_ecu_layout(lambda offset, size: image[offset:offset + size], len(image))
 
 
+def calibration_identification(read, size: int, layout: ECU | None = None) -> str:
+	"""Format the same eight-byte calibration fields used by ECU diagnostics."""
+	try:
+		layout = identify_ecu_layout(read, size)
+	except ECUIdentificationException:
+		if layout is None or layout.get_eeprom_size_bytes() != size:
+			return 'unknown'
+	start = layout.calculate_bin_offset(layout.get_region('calibration').read.address)
+	fields = []
+	for offset in (start, start + 0x40):
+		data = read(offset, 8)
+		fields.append(data.decode('ascii').strip() if len(data) == 8 and all(32 <= byte <= 126 for byte in data) else 'unknown')
+	return ', '.join(fields)
+
+
 def identify_ecu (bus: kwp2000.Kwp2000Protocol) -> ECU:
 	for ecu_identifier in ECU_IDENTIFICATION_TABLE:
 		try:
-			result = bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0]))).get_data()
+			result = bus.execute(kwp2000.commands.ReadMemoryByAddress(offset=ecu_identifier['offset'], size=len(ecu_identifier['expected'][0])), retries=2).get_data()
 		except kwp2000.Kwp2000NegativeResponseException:
 			continue
 
