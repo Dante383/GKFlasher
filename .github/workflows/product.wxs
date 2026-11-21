@@ -86,47 +86,9 @@
                             <File Id="CheckmarkAsset" Source="assets\checkmark.svg" />
                             <File Id="LzssCodecAsset" Source="assets\lzss_codec.a66" />
                         </Component>
-                        <Directory Id="KERNELASSETSDIR" Name="kernel">
-                            <Component Id="KernelSourceFiles" Guid="*">
-                                <File Id="KernelProtocolSource" Source="assets\kernel\protocol.inc" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelCommandSourceComponent" Guid="*">
-                                <File Id="KernelCommandSource" Source="assets\kernel\kernel.inc" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelFlashDriverSourceComponent" Guid="*">
-                                <File Id="KernelFlashDriverSource" Source="assets\kernel\flash_driver.inc" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelBootstrapSourceComponent" Guid="*">
-                                <File Id="KernelBootstrapSource" Source="assets\kernel\simk4x_bootstrap.a66" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelUartSourceComponent" Guid="*">
-                                <File Id="KernelUartSource" Source="assets\kernel\simk4x_kernel.a66" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelCanSourceComponent" Guid="*">
-                                <File Id="KernelCanSource" Source="assets\kernel\simk4x_kernel_can.a66" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelI4DriverSourceComponent" Guid="*">
-                                <File Id="KernelI4DriverSource" Source="assets\kernel\simk4x_driver_i4_a29fx00bx.a66" KeyPath="yes" />
-                            </Component>
-                            <Component Id="KernelV6DriverSourceComponent" Guid="*">
-                                <File Id="KernelV6DriverSource" Source="assets\kernel\simk4x_driver_v6_a29fx00bx.a66" KeyPath="yes" />
-                            </Component>
-                        </Directory>
-                        <Directory Id="FONTSDIR" Name="fonts">
-                            <Component Id="FontFiles" Guid="{B9A845D7-2D23-4EF8-A63C-419E03D726F1}">
-                                <File Id="DejaVuSansFont" Source="assets\fonts\DejaVuSans.ttf" KeyPath="yes" />
-                                <File Id="DejaVuSansBoldFont" Source="assets\fonts\DejaVuSans-Bold.ttf" />
-                                <File Id="DejaVuSansMonoFont" Source="assets\fonts\DejaVuSansMono.ttf" />
-                                <File Id="DejaVuLicense" Source="assets\fonts\LICENSE_DEJAVU" />
-                                <File Id="FontsReadme" Source="assets\fonts\README.md" />
-                            </Component>
-                        </Directory>
                         <Directory Id="RSWASSETSDIR" Name="rsw">
                             <Component Id="RswAssetFiles" Guid="*">
                                 <File Id="RswKlineRpcAsset" Source="assets\rsw\kline_rpc.a66" KeyPath="yes" />
-                            </Component>
-                            <Component Id="RswNativeSourceComponent" Guid="*">
-                                <File Id="RswNativeSource" Source="assets\rsw\simk43_rsw_fl2.a66" KeyPath="yes" />
                             </Component>
                         </Directory>
                         <Directory Id="MTOSDIR" Name="mtos">
@@ -136,14 +98,10 @@
                                 <File Id="ApplicationFile61" Source="assets\mtos\driver_patch.a66" />
                                 <File Id="ApplicationFile62" Source="assets\mtos\kline_hello.a66" />
                                 <File Id="ApplicationFile63" Source="assets\mtos\loader.a66" />
-                                <File Id="ApplicationFile64" Source="assets\mtos\marker.a66" />
                                 <File Id="ApplicationFile65" Source="assets\mtos\memory_dump.a66" />
-                                <File Id="ApplicationFile66" Source="assets\mtos\stage2_hello.a66" />
                                 <File Id="MtosBaudProbeAsset" Source="assets\mtos\baud_probe.a66" />
                                 <File Id="MtosCalibrationReadAsset" Source="assets\mtos\calibration_read.a66" />
-                                <File Id="MtosCanLinkAsset" Source="assets\mtos\can_link.a66" />
                                 <File Id="MtosCanLoaderAsset" Source="assets\mtos\can_loader.a66" />
-                                <File Id="MtosCanStage2Source" Source="assets\mtos\can_stage2.a66" />
                                 <File Id="MtosKernelEnvironmentSource" Source="assets\mtos\kernel_environment.inc" />
                                 <File Id="MtosFastLinkAsset" Source="assets\mtos\fast_link.inc" />
                             </Component>
@@ -244,17 +202,7 @@
             <ComponentRef Id="ApplicationFilesI" />
             <ComponentRef Id="ApplicationFilesJ" />
             <ComponentRef Id="ApplicationFilesK" />
-            <ComponentRef Id="FontFiles" />
             <ComponentRef Id="RswAssetFiles" />
-            <ComponentRef Id="RswNativeSourceComponent" />
-            <ComponentRef Id="KernelSourceFiles" />
-            <ComponentRef Id="KernelCommandSourceComponent" />
-            <ComponentRef Id="KernelFlashDriverSourceComponent" />
-            <ComponentRef Id="KernelBootstrapSourceComponent" />
-            <ComponentRef Id="KernelUartSourceComponent" />
-            <ComponentRef Id="KernelCanSourceComponent" />
-            <ComponentRef Id="KernelI4DriverSourceComponent" />
-            <ComponentRef Id="KernelV6DriverSourceComponent" />
             <ComponentRef Id="SvgIconPlugin" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
