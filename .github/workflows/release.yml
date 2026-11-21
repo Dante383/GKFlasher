@@ -4,7 +4,6 @@ on:
     branches:
       - main
       - 'test-*[0-9][0-9]-u[0-9]*'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -28,10 +27,11 @@ jobs:
       - name: Calculate next version
         shell: pwsh
         run: |
-          $latest = git tag --list --sort=-version:refname |
+          $tags = @(git tag --list --sort=-version:refname)
+          if ($LASTEXITCODE -ne 0) { throw "Could not read version tags" }
+          $latest = $tags |
             Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } |
             Select-Object -First 1
-          if ($LASTEXITCODE -ne 0) { throw "Could not read version tags" }
           if (-not $latest) { $latest = 'v1.0.59' }
           $version = [version]$latest.Substring(1)
           $tag = "v$($version.Major).$($version.Minor).$($version.Build + 1)"
