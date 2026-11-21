@@ -237,7 +237,7 @@ def payload_loader(stage2_address: int = STAGE2_ADDRESS, fast: bool = False, ent
 
 def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
 	"""Second stage for the loader that turns the halted firmware into a BSL
-	session: a short prologue (bsl_shim.a66) followed by the stock SIMK4x BSL
+	session: a short prologue (bsl_shim.a66) followed by the OpenGK SIMK4x BSL
 	kernel (assets/simk4x_kernel.bin), which then talks the usual BSL protocol
 	over the K-line at the current ASC0 baudrate.
 
@@ -269,7 +269,7 @@ def payload_bsl_kernel_shim(kernel: bytes) -> bytes:
 
 
 def patch_driver_watchdog(driver: bytes) -> bytes:
-	"""Make the stock I4 flash driver service the watchdog while erasing.
+	"""Make the OpenGK I4 flash driver service the watchdog while erasing.
 
 	In the BSL the watchdog is never started, so the driver's erase completion
 	poll (up to several seconds) never services it. Once the firmware has

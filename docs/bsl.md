@@ -7,7 +7,7 @@ the whole external flash, boot sectors included.
 
 The boot ROM is in the CPU, so BSL doesn't depend on what's in the flash. It recovers
 an ECU that doesn't boot anymore, for example after a failed
-[MTOS full flash](mtos.md#full-flash-bsl-kernel-over-mtos).
+[MTOS full flash](mtos.md#full-flash-opengk-kernel-over-mtos).
 
 It runs on the K-line interface: a KKL cable, or a J2534 adapter.
 

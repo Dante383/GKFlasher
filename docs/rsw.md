@@ -38,8 +38,12 @@ be mapped and qualified before a serial implementation can claim to erase it.
 - `flasher/rsw.py` keeps the existing CCP operations and shares region selection,
   preparation and programming between CAN and K-Line. Partial final packets use
   their actual length; a zero-length PROGRAM flushes the RSW staging buffer.
-  K-Line leaves trailing erased bytes unwritten, keeping the last native
-  128-byte staging block. Final readback still covers the complete region.
+  Both transports leave trailing erased bytes unwritten, keeping the last native
+  128-byte staging block. K-Line's final readback still covers the complete region.
+- CAN uploads the native loader through its header-declared end plus the status
+  byte, omitting only unused trailing `0xFF` padding. The complete generated asset
+  remains unchanged. Both transports report when native RSW is running; CAN
+  reports its bitrate in Kbps, and K-Line reports its UART baudrate.
 - `flasher/rsw_kline.py` qualifies a SHA256-pinned copy of the bundled RSW asset,
   applies instruction/table relocations audited in IDA, and loads its 4269-byte
   executable/table section into 0xC400-0xD4AC. The native parser, erase, program

@@ -38,8 +38,7 @@ def available(ecu) -> bool:
 	state = getattr(ecu, 'kwp_compression', None)
 	if state is None:
 		try:
-			data = ecu.bus.execute(kwp2000.commands.ReadMemoryByAddress(
-				CAPABILITY_ADDRESS, len(CAPABILITY))).get_data()
+			data = ecu.read_memory_by_address(CAPABILITY_ADDRESS, len(CAPABILITY))
 			state = bytes(data) == CAPABILITY
 		except (kwp2000.Kwp2000NegativeResponseException, TimeoutException):
 			state = False
@@ -64,7 +63,7 @@ def unpack(packet: bytes, maximum: int) -> bytes:
 
 
 def read(ecu, address: int, maximum: int) -> bytes:
-	packet = ecu.bus.execute(ReadCompressedMemory(address, maximum)).get_data()
+	packet = ecu.bus.execute(ReadCompressedMemory(address, maximum), retries=2).get_data()
 	return unpack(bytes(packet), maximum)
 
 

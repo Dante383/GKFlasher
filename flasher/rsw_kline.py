@@ -247,7 +247,7 @@ def run(ecu, mode, regions, key=None, baudrate=None, progress_callback=None, log
         transport = CcpOverKLineTransport(kernel, writable=True)
         transport.upload()
         rsw.transport, rsw.ccp_client = transport, ccp.CcpProtocol(transport)
-        kernel.log('[+] Native RSW running over K-Line at {} baud'.format(speed))
+        rsw.log_running(channel, log_callback)
         rsw._flash_regions(mode, regions, progress_callback, log_callback)
         for address, data in preserved:
             rsw.ccp_client.execute(ccp.commands.SetMemoryTransferAddress(0, 0, address))

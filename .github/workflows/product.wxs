@@ -64,17 +64,33 @@
                             <File Id="ApplicationFile57" Source="flasher\mtos_kernel.py" />
                             <File Id="ApplicationFile58" Source="flasher\kernel.py" />
                             <File Id="ApplicationFile59" Source="flasher\bsl.py" />
+                            <File Id="BaudrateModule" Source="flasher\baudrate.py" />
+                            <File Id="LoaderBaudrateModule" Source="flasher\loader_baudrate.py" />
+                            <File Id="KwpCompressionModule" Source="flasher\kwp_compression.py" />
+                            <File Id="LzssModule" Source="flasher\lzss.py" />
+                            <File Id="MtosCanModule" Source="flasher\mtos_can.py" />
+                            <File Id="ProgressModule" Source="flasher\progress.py" />
+                            <File Id="RswKlineModule" Source="flasher\rsw_kline.py" />
+                            <File Id="UtilsModule" Source="flasher\utils.py" />
                         </Component>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
                         <Component Id="ApplicationFilesC" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
                             <File Id="ApplicationFile39" Source="assets\Siemens_T_Logo.ico" />
-                            <File Id="ApplicationFile40" Source="assets\simk4x_bootstrap.bin" />
-                            <File Id="ApplicationFile41" Source="assets\simk4x_kernel.bin" />
-                            <File Id="ApplicationFile42" Source="assets\simk4x_driver_i4_a29fx00bx.bin" />
-                            <File Id="ApplicationFile43" Source="assets\simk4x_driver_v6_a29fx00bx.bin" />
-                            <File Id="ApplicationFile44" Source="assets\simk43_rsw_fl2.bin" />
+                            <File Id="ApplicationFile40" Source="build\out\assets\simk4x_bootstrap.bin" />
+                            <File Id="ApplicationFile41" Source="build\out\assets\simk4x_kernel.bin" />
+                            <File Id="ApplicationFile42" Source="build\out\assets\simk4x_driver_i4_a29fx00bx.bin" />
+                            <File Id="ApplicationFile43" Source="build\out\assets\simk4x_driver_v6_a29fx00bx.bin" />
+                            <File Id="ApplicationFile44" Source="build\out\assets\simk43_rsw_fl2.bin" />
+                            <File Id="MtosCanStage2Binary" Source="build\out\assets\mtos_can_stage2.bin" />
+                            <File Id="CheckmarkAsset" Source="assets\checkmark.svg" />
+                            <File Id="LzssCodecAsset" Source="assets\lzss_codec.a66" />
                         </Component>
+                        <Directory Id="RSWASSETSDIR" Name="rsw">
+                            <Component Id="RswAssetFiles" Guid="*">
+                                <File Id="RswKlineRpcAsset" Source="assets\rsw\kline_rpc.a66" KeyPath="yes" />
+                            </Component>
+                        </Directory>
                         <Directory Id="MTOSDIR" Name="mtos">
                             <!-- MTOS payload sources, assembled at runtime by openc166 -->
                             <Component Id="ApplicationFilesJ" Guid="{07A5D055-DA34-401F-BBBC-094C3AC31004}">
@@ -82,9 +98,12 @@
                                 <File Id="ApplicationFile61" Source="assets\mtos\driver_patch.a66" />
                                 <File Id="ApplicationFile62" Source="assets\mtos\kline_hello.a66" />
                                 <File Id="ApplicationFile63" Source="assets\mtos\loader.a66" />
-                                <File Id="ApplicationFile64" Source="assets\mtos\marker.a66" />
                                 <File Id="ApplicationFile65" Source="assets\mtos\memory_dump.a66" />
-                                <File Id="ApplicationFile66" Source="assets\mtos\stage2_hello.a66" />
+                                <File Id="MtosBaudProbeAsset" Source="assets\mtos\baud_probe.a66" />
+                                <File Id="MtosCalibrationReadAsset" Source="assets\mtos\calibration_read.a66" />
+                                <File Id="MtosCanLoaderAsset" Source="assets\mtos\can_loader.a66" />
+                                <File Id="MtosKernelEnvironmentSource" Source="assets\mtos\kernel_environment.inc" />
+                                <File Id="MtosFastLinkAsset" Source="assets\mtos\fast_link.inc" />
                             </Component>
                         </Directory>
                     </Directory>
@@ -118,9 +137,15 @@
                                             <File Id="ApplicationFile49" Source="dist\gui\PyQt5\Qt5\bin\Qt5Core.dll" />
                                             <File Id="ApplicationFile50" Source="dist\gui\PyQt5\Qt5\bin\Qt5Gui.dll" />
                                             <File Id="ApplicationFile51" Source="dist\gui\PyQt5\Qt5\bin\Qt5Widgets.dll" />
+                                            <File Id="QtSvgLibrary" Source="dist\gui\PyQt5\Qt5\bin\Qt5Svg.dll" />
                                         </Component>
                                     </Directory>
                                     <Directory Id="PYQT5PLUGINSDIR" Name="plugins">
+                                        <Directory Id="ICONENGINESDIR" Name="iconengines">
+                                            <Component Id="SvgIconPlugin" Guid="*">
+                                                <File Id="QtSvgIconPlugin" Source="dist\gui\PyQt5\Qt5\plugins\iconengines\qsvgicon.dll" KeyPath="yes" />
+                                            </Component>
+                                        </Directory>
                                         <Directory Id="PLATFORMDIR" Name="platforms">
                                             <Component Id="ApplicationFilesF" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE4}">
                                                 <File Id="ApplicationFile52" Source="dist\gui\PyQt5\Qt5\plugins\platforms\qwindows.dll" />
@@ -134,6 +159,7 @@
                                         <Directory Id="IMAGEFORMATSDIR" Name="imageformats">
                                             <Component Id="ApplicationFilesH" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE2}">
                                                 <File Id="ApplicationFile54" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qico.dll" />
+                                                <File Id="QtSvgImagePlugin" Source="dist\gui\PyQt5\Qt5\plugins\imageformats\qsvg.dll" />
                                             </Component>
                                         </Directory>
                                     </Directory>
@@ -176,6 +202,8 @@
             <ComponentRef Id="ApplicationFilesI" />
             <ComponentRef Id="ApplicationFilesJ" />
             <ComponentRef Id="ApplicationFilesK" />
+            <ComponentRef Id="RswAssetFiles" />
+            <ComponentRef Id="SvgIconPlugin" />
             <ComponentRef Id="ApplicationShortcutsA" />
             <ComponentRef Id="ApplicationShortcutsB" />
 

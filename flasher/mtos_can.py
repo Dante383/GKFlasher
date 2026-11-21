@@ -5,14 +5,13 @@ seven-byte packets replace the kernel's UART I/O. These packets use the RSW
 mailboxes, but are a byte-stream protocol, not native CCP commands.
 """
 import secrets
-import struct
 import time
 
 from gkbus.channel import CanFilter, CanFrame
 from gkbus.exceptions import TimeoutException
 
-from .kernel import KERNEL_ASSET, Kernel, KernelError, KernelLink, load_asset, xor_checksum, run_session
-from .mtos_asm import STAGE2_ADDRESS, _assemble, _code, build_blob
+from .kernel import Kernel, KernelError, KernelLink, load_asset, xor_checksum, run_session
+from .mtos_asm import _code, build_blob
 from .progress import Progress, transfer_summary
 from .rsw import TX_ID, RX_ID
 
@@ -124,27 +123,6 @@ class CanKernelLink(KernelLink):
 		raise KernelError('Could not synchronize the MTOS CAN stream')
 
 
-def _stage2():
-	io = _assemble('can_link')
-	kernel = bytearray(load_asset(KERNEL_ASSET))
-	# Replace just the stock kernel's two UART routines with far jumps.
-	for offset, expected, name in (
-		(0xE4, 'f7f1b0fe9ab7fe707eb77eb6cb00', 'CanTx'),
-		(0xF2, 'a758a7a79ab7fc707eb7f3f0b2fecb00', 'CanRx'),
-	):
-		original = bytes.fromhex(expected)
-		if kernel[offset:offset + len(original)] != original:
-			raise KernelError('Unrecognized SIMK kernel UART routine')
-		target = io.symbols[name].value
-		jump = bytes([0xFA, 0]) + struct.pack('<H', target)
-		kernel[offset:offset + len(original)] = jump + bytes.fromhex('cc00') * ((len(original) - 4) // 2)
-	shim = _code('bsl_shim', STAGE2_ADDRESS)
-	data = shim + bytes.fromhex('da0000e2') + kernel  # CALLS 0:CanInit
-	if len(data) > 0x200 or io.image().base != 0xE200 or len(io.image().data) > 0x400:
-		raise KernelError('MTOS CAN kernel exceeds its RAM allocation')
-	return data + bytes(0x200 - len(data)) + io.image().data
-
-
 def attach(channel, log_callback=None):
 	channel.open()
 	channel.set_filters([CanFilter.for_id(RX_ID)])
@@ -162,7 +140,7 @@ def launch(ecu, signature, mtos_key, log_callback=None, progress_callback=None):
 		arbitration = int.from_bytes(ecu.read_memory_by_address(address, 2), 'little')
 		if (arbitration & 255) * 8 + (arbitration >> 13) != identifier:
 			raise KernelError('The ECU CAN message objects do not match the RSW layout')
-	stage2 = _stage2()
+	stage2 = load_asset('assets/mtos_can_stage2.bin')
 	loader = _code('can_loader', 0xC014)
 	mtos.upload_blob(ecu, build_blob(loader, signature), log_callback=log_callback, progress_callback=progress_callback)
 	mtos._enter_execution_session(ecu, mtos_key, log_callback=log_callback)

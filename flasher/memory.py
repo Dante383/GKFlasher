@@ -2,7 +2,7 @@ import logging
 from dataclasses import replace
 from math import ceil
 from gkbus.protocol import kwp2000
-from gkbus.protocol.kwp2000.commands import ReadMemoryByAddress, WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
+from gkbus.protocol.kwp2000.commands import WriteMemoryByAddress, RequestDownload, TransferData, RequestTransferExit
 from gkbus.protocol.kwp2000.enums import CompressionType, EncryptionType
 from gkbus.exceptions import TimeoutException
 from gkbus.device import SerialKLineChannel
@@ -36,16 +36,12 @@ def prepare_write_memory(ecu: ECU) -> None:
 def round_to_multiple(number: int, multiple: int) -> int:  
         return multiple * ceil(number / multiple)
 
-def dynamic_find_end (payload):
-	end_offset = len(payload)-1
-
-	try:
-		while payload[end_offset] == 0xFF:
-			end_offset -= 1
-	except IndexError:
-		pass
-
-	return round_to_multiple(end_offset, 254)
+def dynamic_find_end (payload: bytes, alignment: int = 254) -> int:
+	"""Return the aligned length to retain after trimming an erased tail."""
+	if alignment <= 0:
+		raise ValueError('Alignment must be positive')
+	end = len(payload.rstrip(b'\xFF'))
+	return min(len(payload), round_to_multiple(end, alignment))
 
 def prepare_flash_payloads(ecu: ECU, image: bytes, flash_calibration=True, flash_program=True) -> dict[str, bytes]:
 	"""Validate all requested SIMK regions before any flash erase is allowed."""
@@ -66,7 +62,7 @@ def prepare_flash_payloads(ecu: ECU, image: bytes, flash_calibration=True, flash
 		if not 0 <= start < stop <= len(image):
 			raise ValueError('BIN does not contain the selected {} region. Check the ECU type.'.format(name))
 		section = image[start:stop]
-		payload = section[:max(0, dynamic_find_end(section))]
+		payload = section[:dynamic_find_end(section)]
 		if not payload or not any(payload) or all(byte == 0xFF for byte in payload):
 			raise ValueError('The selected {} region is empty. Check the ECU type and BIN file.'.format(name))
 		payloads[name] = payload
@@ -81,7 +77,6 @@ def read_page_16kib(ecu: ECU, offset: int, at_a_time: int = 254, progress_callba
 	address = address_start
 
 	payload = bytearray([0xFF]*(address_stop-address_start))
-	read_failures = 0
 
 	while True:
 		if compressed:
@@ -97,13 +92,6 @@ def read_page_16kib(ecu: ECU, offset: int, at_a_time: int = 254, progress_callba
 				raise
 			logger.warning('Negative KWP response at offset %s! Filling requested section with 0xF. %s', hex(address), e)
 			fetched = bytes()
-		except TimeoutException:
-			read_failures += 1
-			if read_failures >= 3:
-				raise
-			logger.warning('Timeout at Offset %s! Trying again...', hex(address))
-			continue
-		read_failures = 0
 		if compressed:
 			at_a_time = len(fetched)
 

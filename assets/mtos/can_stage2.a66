@@ -1,0 +1,12 @@
+; MTOS CAN stage-2 startup: establish the shared RAM-kernel environment,
+; initialise the assembled CAN byte stream, then fall through to the command
+; kernel appended by the host. No firmware flash is changed by this handoff.
+$MOD167
+$INCLUDE (REG167.INC)
+CAN_INIT EQU 0E200H
+STAGE2 SECTION CODE AT 0E000H
+CanStage2Start:
+    $INCLUDE (kernel_environment.inc)
+    CALLS 0,CAN_INIT
+STAGE2 ENDS
+END

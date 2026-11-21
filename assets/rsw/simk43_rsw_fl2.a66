@@ -1,0 +1,1702 @@
+; SIMK43 RSW recovery loader.
+; Preserves its CAN/CCP protocol, fixed entry points, AMD flash operations
+; and region table.
+$MOD167
+$SEGMENTED
+$INCLUDE (REG167.INC)
+
+; Original absolute RAM/SFR state references; preserve their access modes.
+word_3EEC                EQU 03EECH
+word_3EEE                EQU 03EEEH
+word_3EF0                EQU 03EF0H
+word_3EF2                EQU 03EF2H
+word_3FE6                EQU 03FE6H
+byte_C0FC                EQU 0C0FCH
+byte_C0FD                EQU 0C0FDH
+byte_C0FE                EQU 0C0FEH
+byte_C0FF                EQU 0C0FFH
+byte_C100                EQU 0C100H
+byte_C101                EQU 0C101H
+byte_C102                EQU 0C102H
+byte_C103                EQU 0C103H
+byte_C104                EQU 0C104H
+byte_C106                EQU 0C106H
+byte_C107                EQU 0C107H
+byte_C108                EQU 0C108H
+byte_C109                EQU 0C109H
+byte_C10A                EQU 0C10AH
+byte_C10B                EQU 0C10BH
+byte_C10C                EQU 0C10CH
+byte_C10D                EQU 0C10DH
+byte_C10E                EQU 0C10EH
+byte_C110                EQU 0C110H
+word_C112                EQU 0C112H
+word_C114                EQU 0C114H
+word_C116                EQU 0C116H
+word_C118                EQU 0C118H
+word_C11A                EQU 0C11AH
+word_C11C                EQU 0C11CH
+word_C11E                EQU 0C11EH
+word_C120                EQU 0C120H
+word_C122                EQU 0C122H
+word_C124                EQU 0C124H
+word_C126                EQU 0C126H
+word_C128                EQU 0C128H
+word_C12A                EQU 0C12AH
+byte_C12C                EQU 0C12CH
+byte_C12D                EQU 0C12DH
+word_C12E                EQU 0C12EH
+word_C130                EQU 0C130H
+byte_C132                EQU 0C132H
+word_C134                EQU 0C134H
+word_C136                EQU 0C136H
+word_C138                EQU 0C138H
+word_C13A                EQU 0C13AH
+word_EE00                EQU 0EE00H
+byte_EE02                EQU 0EE02H
+word_FD64                DEFA 0FD64H
+word_FE52                DEFR 0FE52H
+word_FE56                DEFR 0FE56H
+word_FEA0                DEFR 0FEA0H
+word_FF50                DEFR 0FF50H
+word_FF9E                DEFR 0FF9EH
+word_FFA0                DEFR 0FFA0H
+
+RSWImage SECTION CODE AT 082000H
+RSW_Header:
+    DW 02293H,1             ; original loader header words
+    DD RSW_Entry_CAN,RSW_PayloadEnd-1
+    DB '111663606621'       ; original twelve-byte identification
+
+
+; Native CAN entry: configure RAM/peripherals, then service CCP requests.
+RSW_Entry_CAN:
+    MOV [-R0],R12
+    BCLR IEN
+    MOV word_FE56,#DATA16 0
+    MOV word_FF9E,#DATA16 0
+    AND word_FF50,#DATA16 0FFH
+    OR word_FF50,#DATA16 4400H
+    MOV word_C128,word_FE52
+    MOV R4,#5
+    MOV word_C12A,R4
+    MOV DPP0,#DATA16 24H
+    MOV DPP1,#DATA16 28H
+    MOV DPP2,#DATA16 25H
+    MOV ADDRSEL1,#DATA16 1008H
+    CALLS 8,SOF RSW_CAN_Init
+    MOVB RL4,[R0]
+    MOVBZ R12,RL4
+    CALLS 8,SOF RSW_Init_ResponseState
+    MOV word_C122,ONES
+    MOV R4,#8
+    MOV word_C126,R4
+    MOV word_FFA0,#DATA16 81H
+    BSET word_FFA0.7
+    MOV word_C120,ZEROS
+    MOV word_C112,ZEROS
+    MOV word_C114,ZEROS
+    CALLS 8,SOF RSW_ClearPageBuffer
+loc_82072:
+    MOV R4,word_FE52
+    SUB R4,word_C128
+    CMP R4,#DATA16 0BBH
+    JMPR cc_ULE,loc_82090
+    MOV R4,#DATA16 0BBH
+    ADD word_C128,R4
+    CALLS 8,SOF RSW_PollSupplyVoltage
+    ADD word_C12A,ONES
+loc_82090:
+    MOV R4,word_C12A
+    JMPA cc_NZ,SOF loc_820CE
+    MOV R5,#5
+    MOV word_C12A,R5
+    MOV WDTCON,#DATA16 0EA01H
+    SRVWDT
+    MOV R4,word_C122
+    CMP R4,#DATA16 0C4H
+    JMPA cc_NC,SOF loc_820CE
+    JMPR cc_UC,loc_820C0
+loc_820B4:
+    MOV WDTCON,#DATA16 0EA01H
+    SRVWDT
+    CALLS 8,SOF RSW_PollSupplyVoltage
+loc_820C0:
+    MOV R4,word_C122
+    CMP R4,#DATA16 0C4H
+    JMPR cc_C,loc_820B4
+    SRST
+loc_820CE:
+    EXTR #1
+    JB XP1IR,loc_820D8
+    JMPA cc_UC,SOF loc_82072
+loc_820D8:
+    EXTR #1
+    JB XP1IE,loc_820E2
+    JMPA cc_UC,SOF loc_82072
+loc_820E2:
+    EXTR #1
+    BCLR XP1IR
+    CALLS 8,SOF RSW_CAN_ReceiveInterrupt
+    JMPA cc_UC,SOF loc_82072
+    RETS
+
+; Configure the CAN message objects used by the native recovery protocol.
+RSW_CAN_Init:
+    MOV [-R0],R6
+    MOV R13,#DATA16 0EE00H
+    MOV R4,#DATA16 74BH
+    MOV [R13],R4
+    MOV R13,#DATA16 0EE04H
+    MOV R4,#DATA16 3601H
+    MOV [R13],R4
+    MOV R13,#DATA16 0EE06H
+    MOV R4,#DATA16 0FFFFH
+    MOV [R13],R4
+    MOV R13,#DATA16 0EE08H
+    MOV [R13],R4
+    MOV R13,#DATA16 0EE0AH
+    MOV [R13],R4
+    MOV R12,#DATA16 0EE10H
+    MOV R4,#DATA16 5595H
+    MOV [R12],R4
+    MOV R4,#DATA16 20D4H
+    MOV [R12+#2],R4
+    MOV R4,#0
+    MOV [R12+#4],R4
+    MOVB RL4,#8
+    MOVB [R12+#6],RL4
+    ADD R12,#DATA16 10H
+    MOV R4,#DATA16 5599H
+    MOV [R12],R4
+    MOV R4,#DATA16 0D4H
+    MOV [R12+#2],R4
+    MOV R4,#0
+    MOV [R12+#4],R4
+    MOVB RL4,#0
+    MOVB [R12+#6],RL4
+    ADD R12,#DATA16 10H
+    MOVB RL6,#3
+loc_8215E:
+    MOV R4,#DATA16 5555H
+    MOV [R12],R4
+    ADDB RL6,#1
+    ADD R12,#DATA16 10H
+    CMPB RL6,#DATA16 0FH
+    JMPR cc_ULE,loc_8215E
+    MOV R13,#DATA16 0EE00H
+    MOV R4,[R13]
+    AND R4,#DATA16 0FFFEH
+    MOV [R13],R4
+    EXTR #2
+    MOV XP1IC,#DATA16 9
+    BSET XP1IE
+    MOVB byte_C0FC,ZEROS
+    MOVB byte_C110,ZEROS
+    MOV R6,[R0+]
+    RETS
+
+; Initialize the response buffer and recovery-loader state.
+RSW_Init_ResponseState:
+    MOV [-R0],R12
+    EXTP #DATA16 20H,#DATA16 1
+    MOVB RSW_ValidationStatusScratch,ZEROS
+    MOV R4,#DATA16 30ACH
+    MOV R5,#DATA16 8
+    MOV word_C134,R4
+    MOV word_C136,R5
+    MOVB RL4,#1
+    MOVB byte_C109,RL4
+    MOVB RL5,#DATA16 0D2H
+    MOVB byte_C10A,RL5
+    MOVB RL3,#5
+    MOVB byte_C10E,RL3
+    MOVB byte_C106,ONES
+    MOVB byte_C107,ZEROS
+    MOV R2,R12
+    MOVB byte_C108,RL2
+    CALLS 8,SOF RSW_CAN_SendCRM
+    ADD R0,#2
+    RETS
+
+; Capture an incoming CAN command and update its pending state.
+RSW_CAN_ReceiveInterrupt:
+    MOV [-R0],R9
+    MOV [-R0],R7
+    MOV [-R0],R6
+    JMPR cc_UC,loc_82258
+loc_821DC:
+    CMPB RL6,#1
+    JMPR cc_NZ,loc_8220A
+    MOV R4,word_EE00
+    AND R4,#DATA16 8000H
+    BMOVN USR0,Z
+    JNB USR0,loc_821F4
+    MOVB RL7,#1
+    JMPR cc_UC,loc_821F6
+loc_821F4:
+    MOVB RL7,#0
+loc_821F6:
+    CMPB RL7,byte_C110
+    JMPR cc_Z,loc_82258
+    MOVB byte_C110,RL7
+    MOVB RL4,RL7
+    JMPR cc_Z,loc_82258
+    CALLS 8,SOF RSW_CAN_Init
+    JMPR cc_UC,loc_82258
+loc_8220A:
+    SUBB RL6,#3
+    MOV R9,#DATA16 0EE10H
+    MOVBZ R4,RL6
+    SHL R4,#4
+    ADD R9,R4
+    MOV R4,#DATA16 0FFFDH
+    MOV [R9],R4
+    MOVB RL4,[R9+#6]
+    MOVBZ R4,RL4
+    AND R4,#DATA16 8
+    JMPR cc_Z,loc_82232
+    CALLS 8,SOF RSW_CAN_TxControlA
+    CALLS 8,SOF RSW_HandleResetService
+    JMPR cc_UC,loc_82258
+loc_82232:
+    MOV R9,#DATA16 0EE20H
+    MOVB RL4,[R9+#6]
+    MOVBZ R4,RL4
+    AND R4,#DATA16 0F0H
+    ASHR R4,#4
+    MOVB byte_C104,RL4
+    MOV R12,#DATA16 0C0FCH
+    MOV R13,R9
+    ADD R13,#7
+    MOVBZ R14,RL4
+    CALLS 8,SOF RSW_CopyBytes
+    CALLS 8,SOF RSW_Dispatch_CCP
+loc_82258:
+    MOVB RL4,byte_EE02
+    MOVB RL6,RL4
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_821DC
+    MOV R6,[R0+]
+    MOV R7,[R0+]
+    MOV R9,[R0+]
+    RETS
+
+; Publish the eight-byte CCP response using the CAN transmit object.
+RSW_CAN_SendCRM:
+    MOV [-R0],R9
+    MOV R9,#DATA16 0EE10H
+    MOV R4,#DATA16 0FAFFH
+    MOV [R9],R4
+    MOV R12,R9
+    ADD R12,#7
+    MOV R13,#DATA16 0C106H
+    MOVBZ R14,byte_C10E
+    CALLS 8,SOF RSW_CopyBytes
+    MOV R4,R9
+    ADD R4,#6
+    MOVB RL5,[R4]
+    ANDB RL5,#DATA16 0FH
+    MOVB [R4],RL5
+    MOVBZ R4,byte_C10E
+    SHL R4,#4
+    ANDB RL4,#DATA16 0F0H
+    MOV R5,R9
+    ADD R5,#6
+    MOVB RL3,[R5]
+    ORB RL3,RL4
+    MOVB [R5],RL3
+    MOV R4,#DATA16 0E7FFH
+    MOV [R9],R4
+    MOV R9,[R0+]
+    RETS
+
+; Apply the original CAN transmit-control masks (0xFF7F/0xFFDF/0xFFBF).
+RSW_CAN_TxControlA:
+    MOV R12,#DATA16 0EE10H
+    MOV R4,#DATA16 0FF7FH
+    MOV [R12],R4
+    MOV R4,#DATA16 0FFDFH
+    MOV [R12],R4
+    MOV R4,#DATA16 0FFBFH
+    MOV [R12],R4
+    RETS
+
+; Apply the alternate transmit-control masks (0xFF7F/0xFFEF/0xFFBF).
+RSW_CAN_TxControlB:
+    MOV R12,#DATA16 0EE10H
+    MOV R4,#DATA16 0FF7FH
+    MOV [R12],R4
+    MOV R4,#DATA16 0FFEFH
+    MOV [R12],R4
+    MOV R4,#DATA16 0FFBFH
+    MOV [R12],R4
+    RETS
+
+; Copy R14 bytes from R13 to R12; pointers advance byte by byte.
+RSW_CopyBytes:
+    JMPR cc_UC,loc_822E6
+loc_822E2:
+    MOVB [R12],[R13+]
+    ADD R12,#1
+loc_822E6:
+    CMPD1 R14,#0
+    JMPR cc_NZ,loc_822E2
+    RETS
+
+; Dispatch native CCP operations, including memory and flash services.
+RSW_Dispatch_CCP:
+    MOV [-R0],R6
+    SUB R0,#DATA16 8
+    MOVB byte_C107,ZEROS
+    MOVB RL4,byte_C0FC
+    CMPB RL4,#2
+    JMPR cc_Z,loc_82330
+    CMPB RL4,#5
+    JMPR cc_Z,loc_823AE
+    CMPB RL4,#DATA16 10H
+    JMPR cc_Z,loc_823D4
+    CMPB RL4,#DATA16 22H
+    JMPA cc_Z,SOF loc_82436
+    CMPB RL4,#DATA16 18H
+    JMPA cc_Z,SOF loc_824A8
+    CMPB RL4,#3
+    JMPA cc_Z,SOF loc_82578
+    CMPB RL4,#4
+    JMPA cc_Z,SOF loc_825D2
+    CMPB RL4,#DATA16 21H
+    JMPA cc_Z,SOF loc_8262A
+    JMPA cc_UC,SOF loc_826A4
+loc_82330:
+    MOVB RL4,byte_C104
+    CMPB RL4,#DATA16 8
+    JMPR cc_C,loc_823A2
+    MOVB RL5,byte_C0FE
+    CMPB RL5,#1
+    JMPR cc_UGT,loc_82396
+    MOVB RL3,byte_C0FF
+    JMPR cc_NZ,loc_82396
+    MOVB RL2,byte_C103
+    MOVB [R0+#3],RL2
+    MOVB RL1,byte_C102
+    MOVB [R0+#2],RL1
+    MOVB RL4,byte_C101
+    MOVB [R0+#1],RL4
+    MOVB [R0],byte_C100
+    CMPB RL5,#0
+    JMPR cc_Z,loc_8236E
+    CMPB RL5,#1
+    JMPR cc_Z,loc_8237E
+    JMPR cc_UC,loc_8238C
+loc_8236E:
+    MOV R4,[R0]
+    MOV R5,[R0+#2]
+    MOV word_C134,R4
+    MOV word_C136,R5
+    JMPR cc_UC,loc_8238C
+loc_8237E:
+    MOV R4,[R0]
+    MOV R5,[R0+#2]
+    MOV word_C138,R4
+    MOV word_C13A,R5
+loc_8238C:
+    MOVB RL4,#3
+    MOVB byte_C10E,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_82396:
+    MOVB RL4,#DATA16 32H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_823A2:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_823AE:
+    MOVB RL4,byte_C104
+    CMPB RL4,#4
+    JMPA cc_C,SOF loc_826AC
+    MOVBZ R4,byte_C0FF
+    SHL R4,#8
+    MOVBZ R5,byte_C0FE
+    OR R4,R5
+    CMP R4,#1
+    JMPA cc_NZ,SOF loc_826AC
+    MOVB RL4,#3
+    MOVB byte_C10E,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_823D4:
+    MOVB RL4,byte_C104
+    CMPB RL4,#6
+    JMPR cc_C,loc_8242A
+    MOVB RL5,byte_C101
+    MOVB [R0+#7],RL5
+    MOVB RL3,byte_C100
+    MOVB [R0+#6],RL3
+    MOVB RL2,byte_C0FF
+    MOVB [R0+#5],RL2
+    MOVB RL1,byte_C0FE
+    MOVB [R0+#4],RL1
+    MOV R12,word_C134
+    MOV R13,word_C136
+    MOV R14,[R0+#4]
+    MOV R15,[R0+#6]
+    CALLS 8,SOF RSW_EraseRange
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_8241E
+    MOVB RL4,#3
+    MOVB byte_C10E,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8241E:
+    MOVB RL4,#DATA16 23H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8242A:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_82436:
+    MOVB RL4,byte_C104
+    CMPB RL4,#DATA16 8
+    JMPR cc_C,loc_8249C
+    MOV R12,word_C134
+    MOV R13,word_C136
+    MOV R14,#DATA16 0C0FEH
+    MOV R15,#6
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82490
+    MOV R4,#6
+    MOV R5,#0
+    ADD word_C134,R4
+    ADDC word_C136,R5
+    MOVB byte_C109,ZEROS
+    MOVB RL4,word_C136+1
+    MOVB byte_C10D,RL4
+    MOVB RL5,word_C136
+    MOVB byte_C10C,RL5
+    MOVB RL3,word_C134+1
+    MOVB byte_C10B,RL3
+    MOVB RL2,word_C134
+    MOVB byte_C10A,RL2
+    MOVB RL1,#8
+    MOVB byte_C10E,RL1
+    JMPA cc_UC,SOF loc_826AC
+loc_82490:
+    MOVB RL4,#DATA16 23H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8249C:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_824A8:
+    MOVBZ R4,byte_C104
+    MOVBZ R5,byte_C0FE
+    ADD R5,#3
+    CMP R4,R5
+    JMPR cc_SLT,loc_8256C
+    MOVB RL4,byte_C0FE
+    JMPR cc_Z,loc_8252A
+    CMPB RL4,#5
+    JMPR cc_UGT,loc_8251E
+    MOV R12,word_C134
+    MOV R13,word_C136
+    MOV R14,#DATA16 0C0FFH
+    MOVBZ R15,RL4
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82512
+    MOVBZ R4,byte_C0FE
+    MOV R5,#0
+    ADD word_C134,R4
+    ADDC word_C136,R5
+    MOVB byte_C109,ZEROS
+    MOVB RL4,word_C136+1
+    MOVB byte_C10D,RL4
+    MOVB RL5,word_C136
+    MOVB byte_C10C,RL5
+    MOVB RL3,word_C134+1
+    MOVB byte_C10B,RL3
+    MOVB RL2,word_C134
+    MOVB byte_C10A,RL2
+    MOVB RL1,#8
+    MOVB byte_C10E,RL1
+    JMPA cc_UC,SOF loc_826AC
+loc_82512:
+    MOVB RL4,#DATA16 23H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8251E:
+    MOVB RL4,#DATA16 32H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8252A:
+    CALLS 8,SOF RSW_FlushProgramBuffer
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82560
+    MOVB byte_C109,ZEROS
+    MOVB RL4,word_C136+1
+    MOVB byte_C10D,RL4
+    MOVB RL5,word_C136
+    MOVB byte_C10C,RL5
+    MOVB RL3,word_C134+1
+    MOVB byte_C10B,RL3
+    MOVB RL2,word_C134
+    MOVB byte_C10A,RL2
+    MOVB RL1,#8
+    MOVB byte_C10E,RL1
+    JMPA cc_UC,SOF loc_826AC
+loc_82560:
+    MOVB RL4,#DATA16 23H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_8256C:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_82578:
+    MOVBZ R4,byte_C104
+    MOVBZ R5,byte_C0FE
+    ADD R5,#3
+    CMP R4,R5
+    JMPR cc_SLT,loc_825C6
+    MOVB RL4,byte_C0FE
+    JMPR cc_NZ,loc_825BA
+    MOVB byte_C109,ZEROS
+    MOVB RL5,word_C136+1
+    MOVB byte_C10D,RL5
+    MOVB RL3,word_C136
+    MOVB byte_C10C,RL3
+    MOVB RL2,word_C134+1
+    MOVB byte_C10B,RL2
+    MOVB RL1,word_C134
+    MOVB byte_C10A,RL1
+    MOVB RL4,#8
+    MOVB byte_C10E,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_825BA:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_825C6:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPA cc_UC,SOF loc_826AC
+loc_825D2:
+    MOVB RL4,byte_C104
+    CMPB RL4,#3
+    JMPR cc_C,loc_82620
+    MOVB RL5,byte_C0FE
+    JMPR cc_Z,loc_82616
+    CMPB RL5,#5
+    JMPR cc_UGT,loc_82616
+    MOVB RL6,#0
+    JMPR cc_UC,loc_82604
+loc_825E8:
+    MOV R4,word_C134
+    MOV R5,word_C136
+    EXTS R5,#1
+    MOVB RL3,[R4]
+    MOVBZ R2,RL6
+    MOVB [R2+#0C109H],RL3
+    SUB word_C134,ONES
+    SUBC word_C136,ONES
+    ADDB RL6,#1
+loc_82604:
+    CMPB RL6,byte_C0FE
+    JMPR cc_C,loc_825E8
+    MOVB RL4,byte_C0FE
+    ADDB RL4,#3
+    MOVB byte_C10E,RL4
+    JMPR cc_UC,loc_826AC
+loc_82616:
+    MOVB RL4,#DATA16 32H
+    MOVB byte_C107,RL4
+    JMPR cc_UC,loc_826AC
+loc_82620:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPR cc_UC,loc_826AC
+loc_8262A:
+    MOVB RL4,byte_C104
+    CMPB RL4,#4
+    JMPR cc_C,loc_8269A
+    MOVBZ R4,byte_C0FF
+    SHL R4,#8
+    ADDB RL4,byte_C0FE
+    CMPB RL4,#DATA16 10H
+    JMPR cc_Z,loc_8264A
+    CMPB RL4,#DATA16 11H
+    JMPR cc_Z,loc_8267C
+    JMPR cc_UC,loc_82690
+loc_8264A:
+    CALLS 8,SOF RSW_VerifyAndRestoreCoherence
+    EXTP #DATA16 20H,#DATA16 1
+    MOVB RSW_ValidationStatusScratch,RL4
+    MOV R4,#DATA16 30ACH
+    MOV R5,#DATA16 8
+    MOV word_C134,R4
+    MOV word_C136,R5
+    MOVB RL4,#1
+    MOVB byte_C109,RL4
+    MOVB RL5,#DATA16 0D0H
+    MOVB byte_C10A,RL5
+    MOVB RL3,#5
+    MOVB byte_C10E,RL3
+    JMPR cc_UC,loc_826AC
+loc_8267C:
+    CALLS 8,SOF RSW_CAN_TxControlB
+    MOVB byte_C109,ZEROS
+    MOVB byte_C10A,ZEROS
+    MOVB RL4,#5
+    MOVB byte_C10E,RL4
+    JMPR cc_UC,loc_826AC
+loc_82690:
+    MOVB RL4,#DATA16 32H
+    MOVB byte_C107,RL4
+    JMPR cc_UC,loc_826AC
+loc_8269A:
+    MOVB RL4,#DATA16 31H
+    MOVB byte_C107,RL4
+    JMPR cc_UC,loc_826AC
+loc_826A4:
+    MOVB RL4,#DATA16 30H
+    MOVB byte_C107,RL4
+loc_826AC:
+    MOVB RL4,byte_C107
+    JMPR cc_Z,loc_826B8
+    MOVB RL5,#3
+    MOVB byte_C10E,RL5
+loc_826B8:
+    MOVB byte_C106,ONES
+    MOVB RL4,byte_C0FD
+    MOVB byte_C108,RL4
+    MOVB RL5,byte_C10E
+    JMPR cc_Z,loc_826CE
+    CALLS 8,SOF RSW_CAN_SendCRM
+loc_826CE:
+    ADD R0,#DATA16 8
+    MOV R6,[R0+]
+    RETS
+
+; Recognize action-service 0xC311 and enter the software-reset path.
+RSW_HandleResetService:
+    MOVB RL4,byte_C0FC
+    CMPB RL4,#DATA16 21H
+    JMPR cc_NZ,locret_826F6
+    MOVBZ R4,byte_C0FF
+    SHL R4,#8
+    MOVBZ R5,byte_C0FE
+    ADD R4,R5
+    CMP R4,#DATA16 0C311H
+    JMPR cc_NZ,locret_826F6
+    CALLS 8,SOF RSW_SoftwareReset
+locret_826F6:
+    RETS
+
+; Calculate and compare the recovery loader's region checksums.
+RSW_CalculateRegionChecksums:
+    MOV [-R0],R9
+    MOV [-R0],R8
+    MOV [-R0],R7
+    MOV [-R0],R6
+    MOV R4,word_C120
+    AND R4,#DATA16 1000H
+    JMPR cc_Z,loc_827E2
+    MOV R4,#DATA16 83FFH
+    AND word_C120,R4
+    EXTP #DATA16 0,#DATA16 2
+    MOV R4,word_3EF0
+    MOV R5,word_3EF2
+    SUB R4,#DATA16 0FFFFH
+    SUBC R5,#DATA16 0FFFFH
+    JMPR cc_Z,loc_827DA
+    EXTP #DATA16 0,#DATA16 1
+    MOV R12,word_3FE6
+    MOV R4,#DATA16 800H
+    OR word_C120,R4
+    MOV R13,#0
+    JMPR cc_UC,loc_827A2
+loc_8273C:
+    MOV R4,R13
+    SHL R4,#3
+    EXTP #DATA16 0,#DATA16 3
+    MOV R14,[R4+#3EF0H]
+    MOV R15,[R4+#3EF2H]
+    NOP
+    MOV R4,R13
+    SHL R4,#3
+    EXTP #DATA16 0,#DATA16 3
+    MOV R6,[R4+#3EF4H]
+    MOV R7,[R4+#3EF6H]
+    NOP
+    JMPR cc_UC,loc_82796
+loc_82762:
+    EXTS R15,#1
+    MOVB RL4,[R14]
+    MOVBZ R8,RL4
+    MOV R9,#0
+loc_8276A:
+    MOV R4,R12
+    XOR R4,R8
+    AND R4,#1
+    JMPR cc_Z,loc_8277E
+    MOV R4,R12
+    SHR R4,#1
+    XOR R4,#DATA16 0A001H
+    MOV R12,R4
+    JMPR cc_UC,loc_82780
+loc_8277E:
+    SHR R12,#1
+loc_82780:
+    ASHR R8,#1
+    ADD R9,#1
+    CMP R9,#DATA16 8
+    JMPR cc_C,loc_8276A
+    ADD R14,#1
+    ADDC R15,#0
+    MOV WDTCON,#DATA16 0EA01H
+    SRVWDT
+loc_82796:
+    MOV R4,R14
+    MOV R5,R15
+    SUB R4,R6
+    SUBC R5,R7
+    JMPR cc_ULE,loc_82762
+    ADD R13,#1
+loc_827A2:
+    EXTP #DATA16 0,#DATA16 1
+    CMP R13,word_3EEE
+    JMPR cc_C,loc_8273C
+    EXTP #DATA16 0,#DATA16 1
+    CMP R12,word_3EEC
+    JMPR cc_NZ,loc_827C8
+    MOV R4,#DATA16 0F7FFH
+    AND word_C120,R4
+    MOV R4,#DATA16 2400H
+    OR word_C120,R4
+    JMPR cc_UC,loc_827E2
+loc_827C8:
+    MOV R4,#DATA16 0F3FFH
+    AND word_C120,R4
+    MOV R4,#DATA16 2000H
+    OR word_C120,R4
+    JMPR cc_UC,loc_827E2
+loc_827DA:
+    MOV R4,#DATA16 6000H
+    OR word_C120,R4
+loc_827E2:
+    MOV R4,word_C120
+    AND R4,#DATA16 80H
+    JMPR cc_Z,loc_828C0
+    MOV R4,#DATA16 0FC1FH
+    AND word_C120,R4
+    MOV R4,4014H
+    MOV R5,4016H
+    SUB R4,#DATA16 0FFFFH
+    SUBC R5,#DATA16 0FFFFH
+    JMPR cc_Z,loc_828B8
+    MOV R4,4496H
+    MOV R5,4498H
+    EXTS R5,#1
+    MOVB RL3,[R4]
+    MOVBZ R12,RL3
+    ADD R4,#1
+    ADDC R5,#0
+    EXTS R5,#1
+    MOVB RL3,[R4]
+    MOVBZ R4,RL3
+    SHL R4,#8
+    ADD R12,R4
+    MOV R4,#DATA16 40H
+    OR word_C120,R4
+    MOV R13,#0
+    JMPR cc_UC,loc_82888
+loc_8282E:
+    MOV R4,R13
+    SHL R4,#3
+    MOV R14,[R4+#4014H]
+    MOV R15,[R4+#4016H]
+    MOV R4,R13
+    SHL R4,#3
+    MOV R6,[R4+#4018H]
+    MOV R7,[R4+#401AH]
+    JMPR cc_UC,loc_8287C
+loc_82848:
+    EXTS R15,#1
+    MOVB RL4,[R14]
+    MOVBZ R8,RL4
+    MOV R9,#0
+loc_82850:
+    MOV R4,R12
+    XOR R4,R8
+    AND R4,#1
+    JMPR cc_Z,loc_82864
+    MOV R4,R12
+    SHR R4,#1
+    XOR R4,#DATA16 0A001H
+    MOV R12,R4
+    JMPR cc_UC,loc_82866
+loc_82864:
+    SHR R12,#1
+loc_82866:
+    ASHR R8,#1
+    ADD R9,#1
+    CMP R9,#DATA16 8
+    JMPR cc_C,loc_82850
+    ADD R14,#1
+    ADDC R15,#0
+    MOV WDTCON,#DATA16 0EA01H
+    SRVWDT
+loc_8287C:
+    MOV R4,R14
+    MOV R5,R15
+    SUB R4,R6
+    SUBC R5,R7
+    JMPR cc_ULE,loc_82848
+    ADD R13,#1
+loc_82888:
+    CMP R13,4012H
+    JMPR cc_C,loc_8282E
+    CMP R12,4010H
+    JMPR cc_NZ,loc_828A6
+    MOV R4,#DATA16 0FFBFH
+    AND word_C120,R4
+    MOV R4,#DATA16 120H
+    OR word_C120,R4
+    JMPR cc_UC,loc_828C0
+loc_828A6:
+    MOV R4,#DATA16 0FF9FH
+    AND word_C120,R4
+    MOV R4,#DATA16 100H
+    OR word_C120,R4
+    JMPR cc_UC,loc_828C0
+loc_828B8:
+    MOV R4,#DATA16 300H
+    OR word_C120,R4
+loc_828C0:
+    MOV R4,word_C120
+    AND R4,#4
+    JMPR cc_Z,loc_8299A
+    MOV R4,#DATA16 0FFE0H
+    AND word_C120,R4
+    MOV R4,0BEE4H
+    MOV R5,0BEE6H
+    SUB R4,#DATA16 0FFFFH
+    SUBC R5,#DATA16 0FFFFH
+    JMPR cc_Z,loc_82992
+    MOV R4,44BAH
+    MOV R5,44BCH
+    EXTS R5,#1
+    MOVB RL3,[R4]
+    MOVBZ R12,RL3
+    ADD R4,#1
+    ADDC R5,#0
+    EXTS R5,#1
+    MOVB RL3,[R4]
+    MOVBZ R4,RL3
+    SHL R4,#8
+    ADD R12,R4
+    MOV R4,#2
+    OR word_C120,R4
+    MOV R13,#0
+    JMPR cc_UC,loc_82962
+loc_82908:
+    MOV R4,R13
+    SHL R4,#3
+    MOV R14,[R4+#0BEE4H]
+    MOV R15,[R4+#0BEE6H]
+    MOV R4,R13
+    SHL R4,#3
+    MOV R6,[R4+#0BEE8H]
+    MOV R7,[R4+#0BEEAH]
+    JMPR cc_UC,loc_82956
+loc_82922:
+    EXTS R15,#1
+    MOVB RL4,[R14]
+    MOVBZ R8,RL4
+    MOV R9,#0
+loc_8292A:
+    MOV R4,R12
+    XOR R4,R8
+    AND R4,#1
+    JMPR cc_Z,loc_8293E
+    MOV R4,R12
+    SHR R4,#1
+    XOR R4,#DATA16 0A001H
+    MOV R12,R4
+    JMPR cc_UC,loc_82940
+loc_8293E:
+    SHR R12,#1
+loc_82940:
+    ASHR R8,#1
+    ADD R9,#1
+    CMP R9,#DATA16 8
+    JMPR cc_C,loc_8292A
+    ADD R14,#1
+    ADDC R15,#0
+    MOV WDTCON,#DATA16 0EA01H
+    SRVWDT
+loc_82956:
+    MOV R4,R14
+    MOV R5,R15
+    SUB R4,R6
+    SUBC R5,R7
+    JMPR cc_ULE,loc_82922
+    ADD R13,#1
+loc_82962:
+    MOVB RL4,0BEE2H
+    MOVBZ R4,RL4
+    CMP R13,R4
+    JMPR cc_C,loc_82908
+    CMP R12,0BEE0H
+    JMPR cc_NZ,loc_82982
+    MOV R4,#DATA16 0FFFDH
+    AND word_C120,R4
+    MOV R4,#9
+    OR word_C120,R4
+    JMPR cc_UC,loc_8299A
+loc_82982:
+    MOV R4,#DATA16 0FFFCH
+    AND word_C120,R4
+    MOV R4,#8
+    OR word_C120,R4
+    JMPR cc_UC,loc_8299A
+loc_82992:
+    MOV R4,#DATA16 18H
+    OR word_C120,R4
+loc_8299A:
+    MOV R6,[R0+]
+    MOV R7,[R0+]
+    MOV R8,[R0+]
+    MOV R9,[R0+]
+    RETS
+
+; Sample the supply-voltage condition used by flash operations.
+RSW_PollSupplyVoltage:
+    JB word_FFA0.8,locret_829D8
+    MOV R4,word_FEA0
+    AND R4,#DATA16 3FFH
+    ADD word_C124,R4
+    BCLR word_FFA0.7
+    BSET word_FFA0.7
+    ADD word_C126,ONES
+    MOV R4,word_C126
+    CMP R4,#0
+    JMPR cc_UGT,locret_829D8
+    MOV R5,word_C124
+    SHR R5,#3
+    MOV word_C122,R5
+    MOV R2,#8
+    MOV word_C126,R2
+    MOV word_C124,ZEROS
+locret_829D8:
+    RETS
+
+; Resolve and erase sectors for the requested flash address range.
+RSW_EraseRange:
+    MOV [-R0],R15
+    MOV [-R0],R14
+    MOV [-R0],R13
+    MOV [-R0],R12
+    MOV [-R0],R9
+    MOV [-R0],R8
+    MOV [-R0],R7
+    MOV [-R0],R6
+    SUB R0,#6
+    MOVB byte_C12D,ZEROS
+    MOV word_C12E,ZEROS
+    MOV word_C130,ZEROS
+    MOVB byte_C132,ZEROS
+    MOVB RL6,#0
+    MOV R9,#0
+    JMPA cc_UC,SOF loc_82B6C
+loc_82A04:
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOV R5,[R4+#3088H]
+    NOP
+    AND R5,#DATA16 0FFF0H
+    MOV R7,R5
+    MOV R8,#0
+    MOV R4,R7
+    SHL R7,#8
+    SHL R8,#8
+    SHR R4,#8
+    OR R8,R4
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOV R5,[R4+#3088H]
+    NOP
+    AND R5,#DATA16 0FH
+    MOV [R0],R5
+    MOV R2,R5
+    MOV R4,#DATA16 1000H
+    MOV R5,#0
+    JMPR cc_UC,loc_82A46
+loc_82A42:
+    ADD R4,R4
+    ADDC R5,R5
+loc_82A46:
+    CMPD1 R2,#0
+    JMPR cc_NZ,loc_82A42
+    MOV [R0+#2],R4
+    MOV [R0+#4],R5
+    MOV R4,[R0+#0EH]
+    MOV R5,[R0+#10H]
+    MOV R10,[R0+#12H]
+    MOV R11,[R0+#14H]
+    ADD R4,R10
+    ADDC R5,R11
+    SUB R4,R7
+    SUBC R5,R8
+    JMPA cc_ULE,SOF loc_82B6A
+    MOV R4,[R0+#2]
+    MOV R5,[R0+#4]
+    ADD R4,R7
+    ADDC R5,R8
+    MOV R10,[R0+#0EH]
+    MOV R11,[R0+#10H]
+    SUB R4,R10
+    SUBC R5,R11
+    JMPA cc_ULE,SOF loc_82B6A
+    MOVB RL4,byte_C12D
+    JMPR cc_NZ,loc_82AB6
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308AH]
+    NOP
+    MOVB byte_C12D,RL5
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL3,[R4+#308BH]
+    NOP
+    MOVB byte_C12C,RL3
+    JMPR cc_UC,loc_82B02
+loc_82AB6:
+    MOVB RL4,byte_C132
+    JMPR cc_NZ,loc_82AEC
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308AH]
+    NOP
+    CMPB RL5,byte_C12D
+    JMPR cc_Z,loc_82B02
+    MOV word_C12E,R7
+    MOV word_C130,R8
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308AH]
+    NOP
+    MOVB byte_C132,RL5
+    JMPR cc_UC,loc_82B02
+loc_82AEC:
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308AH]
+    NOP
+    CMPB RL5,byte_C132
+    JMPR cc_Z,loc_82B02
+    MOVB RL6,#1
+loc_82B02:
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308BH]
+    NOP
+    CMPB RL5,byte_C12C
+    JMPR cc_Z,loc_82B18
+    MOVB RL6,#1
+loc_82B18:
+    CMPB RL6,#0
+    JMPR cc_NZ,loc_82B6A
+    BCLR word_FD64.5
+    MOV R4,R7
+    MOV R5,R8
+    MOV word_C118,R4
+    MOV word_C11A,R5
+    MOV R2,R9
+    SHL R2,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL4,[R2+#308AH]
+    NOP
+    MOVBZ R4,RL4
+    AND R4,#1
+    JMPR cc_NZ,loc_82B64
+    MOV R4,R9
+    SHL R4,#2
+    EXTP #DATA16 20H,#DATA16 2
+    MOVB RL5,[R4+#308AH]
+    NOP
+    MOVBZ R4,RL5
+    AND R4,#2
+    JMPR cc_Z,loc_82B64
+    MOV R4,#0
+    MOV R5,#DATA16 10H
+    ADD word_C118,R4
+    ADDC word_C11A,R5
+    CALLS 8,SOF RSW_AMD_EraseSector
+loc_82B64:
+    JB word_FD64.5,loc_82B6A
+    MOVB RL6,#1
+loc_82B6A:
+    ADD R9,#1
+loc_82B6C:
+    CMP R9,#DATA16 9
+    JMPR cc_NC,loc_82B78
+    CMPB RL6,#0
+    JMPA cc_Z,SOF loc_82A04
+loc_82B78:
+    MOVB RL4,RL6
+    ADD R0,#6
+    MOV R6,[R0+]
+    MOV R7,[R0+]
+    MOV R8,[R0+]
+    MOV R9,[R0+]
+    ADD R0,#DATA16 8
+    RETS
+
+; Collect incoming bytes into the existing flash-page buffer.
+RSW_ProgramBytesBuffered:
+    MOV [-R0],R15
+    MOV [-R0],R13
+    MOV [-R0],R12
+    MOV [-R0],R9
+    MOV [-R0],R8
+    MOV [-R0],R7
+    MOV [-R0],R6
+    MOV R7,R14
+    MOVB RL6,#0
+    MOV R8,#0
+    JMPA cc_UC,SOF loc_82C92
+loc_82BA2:
+    BCLR word_FD64.6
+    MOVB RL4,byte_C132
+    JMPR cc_NZ,loc_82BB0
+    MOVBZ R9,byte_C12D
+    JMPR cc_UC,loc_82BD0
+loc_82BB0:
+    MOV R4,word_C12E
+    MOV R5,word_C130
+    MOV R10,[R0+#8]
+    MOV R11,[R0+#0AH]
+    SUB R10,R4
+    SUBC R11,R5
+    JMPR cc_NC,loc_82BCC
+    MOVBZ R9,byte_C12D
+    JMPR cc_UC,loc_82BD0
+loc_82BCC:
+    MOVBZ R9,byte_C132
+loc_82BD0:
+    MOV R4,#1
+    AND R4,R9
+    JMPR cc_NZ,loc_82C74
+    MOV R4,#2
+    AND R4,R9
+    JMPR cc_Z,loc_82C74
+    MOV R4,word_C116
+    CMP R4,#0
+    JMPR cc_ULE,loc_82C30
+    MOV R4,[R0+#8]
+    MOV R5,[R0+#0AH]
+    SUB R4,word_C112
+    SUBC R5,word_C114
+    JMPR cc_C,loc_82C16
+    MOV R4,word_C112
+    MOV R5,word_C114
+    ADD R4,#DATA16 0FCH
+    ADDC R5,#0
+    MOV R10,[R0+#8]
+    MOV R11,[R0+#0AH]
+    SUB R10,R4
+    SUBC R11,R5
+    JMPR cc_NC,loc_82C16
+    BSET word_FD64.6
+    JMPR cc_UC,loc_82C42
+loc_82C16:
+    CALLS 8,SOF RSW_FlushFlashPage
+    JNB word_FD64.6,loc_82C42
+    MOV R4,[R0+#8]
+    MOV R5,[R0+#0AH]
+    MOV word_C112,R4
+    MOV word_C114,R5
+    JMPR cc_UC,loc_82C42
+loc_82C30:
+    MOV R4,[R0+#8]
+    MOV R5,[R0+#0AH]
+    MOV word_C112,R4
+    MOV word_C114,R5
+    BSET word_FD64.6
+loc_82C42:
+    JNB word_FD64.6,loc_82C74
+    MOVB RL4,[R7]
+    CMPB RL4,#DATA16 0FFH
+    JMPR cc_Z,loc_82C74
+    MOV R4,[R0+#8]
+    MOV R5,[R0+#0AH]
+    MOV R9,R4
+    SUB R9,word_C112
+    MOVB RL4,[R7]
+    MOVB [R9+#0C000H],RL4
+    MOV R4,#1
+    ADD R4,R9
+    CMP R4,word_C116
+    JMPR cc_ULE,loc_82C74
+    MOV R4,#1
+    ADD R4,R9
+    MOV word_C116,R4
+loc_82C74:
+    JB word_FD64.6,loc_82C7A
+    MOVB RL6,#1
+loc_82C7A:
+    ADD R8,#1
+    MOV R4,[R0+#8]
+    MOV R5,[R0+#0AH]
+    ADD R4,#1
+    ADDC R5,#0
+    MOV [R0+#8],R4
+    MOV [R0+#0AH],R5
+    ADD R7,#1
+loc_82C92:
+    MOV R4,[R0+#0CH]
+    CMP R8,R4
+    JMPR cc_NC,loc_82CA0
+    CMPB RL6,#0
+    JMPA cc_Z,SOF loc_82BA2
+loc_82CA0:
+    MOVB RL4,RL6
+    MOV R6,[R0+]
+    MOV R7,[R0+]
+    MOV R8,[R0+]
+    MOV R9,[R0+]
+    ADD R0,#6
+    RETS
+
+; Commit pending programming data through the page-flush helper.
+RSW_FlushProgramBuffer:
+    MOV [-R0],R6
+    MOVB RL6,#0
+    MOV R4,word_C116
+    CMP R4,#0
+    JMPR cc_ULE,loc_82CC6
+    BCLR word_FD64.6
+    CALLS 8,SOF RSW_FlushFlashPage
+    JB word_FD64.6,loc_82CC6
+    MOVB RL6,#1
+loc_82CC6:
+    MOVB RL4,RL6
+    MOV R6,[R0+]
+    RETS
+
+; Verify programmed data and update recovery-loader coherence state.
+RSW_VerifyAndRestoreCoherence:
+    MOV [-R0],R6
+    SUB R0,#4
+    MOVB RL6,#0
+    EXTP #DATA16 28H,#DATA16 1
+    MOV R4,0
+    MOV [R0],R4
+    EXTP #DATA16 28H,#DATA16 1
+    MOV R5,2
+    MOV [R0+#2],R5
+    CMP R4,#DATA16 4890H
+    JMPR cc_NZ,loc_82CF4
+    CMP R5,#DATA16 4224H
+    JMPR cc_Z,loc_82CF6
+loc_82CF4:
+    MOVB RL6,#8
+loc_82CF6:
+    EXTP #DATA16 27H,#DATA16 1
+    MOV R4,3FF0H
+    MOV [R0],R4
+    EXTP #DATA16 27H,#DATA16 1
+    MOV R5,3FF2H
+    MOV [R0+#2],R5
+    CMP R4,#DATA16 2442H
+    JMPR cc_NZ,loc_82D18
+    CMP R5,#DATA16 9048H
+    JMPR cc_Z,loc_82D1C
+loc_82D18:
+    ORB RL6,#DATA16 10H
+loc_82D1C:
+    MOV R4,#DATA16 1084H
+    MOV word_C120,R4
+    CALLS 8,SOF RSW_CalculateRegionChecksums
+    MOV R4,word_C120
+    AND R4,#DATA16 400H
+    JMPR cc_NZ,loc_82D34
+    ORB RL6,#1
+loc_82D34:
+    MOV R4,word_C120
+    AND R4,#DATA16 20H
+    JMPR cc_Z,loc_82DA2
+    MOVBZ R4,RL6
+    AND R4,#DATA16 8
+    CMP R4,#DATA16 8
+    JMPR cc_NZ,loc_82DA4
+    MOVB RL4,#2
+    MOVB byte_C12D,RL4
+    MOV word_C12E,ZEROS
+    MOV word_C130,ZEROS
+    MOVB byte_C132,ZEROS
+    MOV R4,#DATA16 4890H
+    MOV [R0],R4
+    MOV R5,#DATA16 4224H
+    MOV [R0+#2],R5
+    MOV R12,#DATA16 0
+    MOV R13,#DATA16 0AH
+    MOV R14,R0
+    MOV R15,#2
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82DA4
+    MOV R12,#DATA16 2
+    MOV R13,#DATA16 0AH
+    MOV R14,#2
+    ADD R14,R0
+    MOV R15,#2
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82DA4
+    CALLS 8,SOF RSW_FlushProgramBuffer
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82DA4
+    ANDB RL6,#DATA16 0F7H
+    JMPR cc_UC,loc_82DA4
+loc_82DA2:
+    ORB RL6,#2
+loc_82DA4:
+    MOV R4,word_C120
+    AND R4,#1
+    JMPR cc_Z,loc_82E10
+    MOVBZ R4,RL6
+    AND R4,#DATA16 10H
+    CMP R4,#DATA16 10H
+    JMPR cc_NZ,loc_82E12
+    MOVB RL4,#2
+    MOVB byte_C12D,RL4
+    MOV word_C12E,ZEROS
+    MOV word_C130,ZEROS
+    MOVB byte_C132,ZEROS
+    MOV R4,#DATA16 2442H
+    MOV [R0],R4
+    MOV R5,#DATA16 9048H
+    MOV [R0+#2],R5
+    MOV R12,#DATA16 0FFF0H
+    MOV R13,#DATA16 9
+    MOV R14,R0
+    MOV R15,#2
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82E12
+    MOV R12,#DATA16 0FFF2H
+    MOV R13,#DATA16 9
+    MOV R14,#2
+    ADD R14,R0
+    MOV R15,#2
+    CALLS 8,SOF RSW_ProgramBytesBuffered
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82E12
+    CALLS 8,SOF RSW_FlushProgramBuffer
+    CMPB RL4,#0
+    JMPR cc_NZ,loc_82E12
+    ANDB RL6,#DATA16 0EFH
+    JMPR cc_UC,loc_82E12
+loc_82E10:
+    ORB RL6,#4
+loc_82E12:
+    MOVB RL4,RL6
+    ADD R0,#4
+    MOV R6,[R0+]
+    RETS
+
+; Issue the original software reset; preserve the trailing return stubs.
+RSW_SoftwareReset:
+    SRST
+    RETS
+    RETS
+
+; Reset the programming page buffer to its erased value.
+RSW_ClearPageBuffer:
+    MOV R12,#0
+loc_82E24:
+    MOVB RL4,#DATA16 0FFH
+    MOVB [R12+#0C000H],RL4
+    ADD R12,#1
+    CMP R12,#DATA16 0FCH
+    JMPR cc_C,loc_82E24
+    MOV word_C116,ZEROS
+    RETS
+
+; Program the buffered page and update its result/status.
+RSW_FlushFlashPage:
+    MOV [-R0],R9
+    MOV [-R0],R8
+    MOV [-R0],R7
+    MOV [-R0],R6
+    MOV R4,word_C116
+    CMP R4,#0
+    JMPR cc_ULE,loc_82EDE
+    MOV R4,word_C112
+    MOV R5,word_C114
+    MOV word_C118,R4
+    MOV word_C11A,R5
+    MOV R2,#DATA16 0C000H
+    MOV word_C11C,R2
+    MOV R3,word_C116
+    MOV word_C11E,R3
+    MOV R9,#0
+    MOV R7,R4
+    MOV R8,R5
+loc_82E70:
+    EXTS R8,#1
+    MOVB RL6,[R7]
+    ADD R7,#1
+    ADDC R8,#0
+    ADD R9,#1
+    CMP R9,word_C11E
+    JMPR cc_NC,loc_82E86
+    CMPB RL6,#DATA16 0FFH
+    JMPR cc_Z,loc_82E70
+loc_82E86:
+    CMPB RL6,#DATA16 0FFH
+    JMPR cc_NZ,loc_82ED6
+    MOV R4,word_C118
+    MOV R5,word_C11A
+    ADD R4,word_C11E
+    AND R4,#1
+    JMPR cc_Z,loc_82EA0
+    BSET word_FD64.8
+    JMPR cc_UC,loc_82EA2
+loc_82EA0:
+    BCLR word_FD64.8
+loc_82EA2:
+    MOV R4,word_C118
+    MOV R5,word_C11A
+    AND R4,#1
+    JMPR cc_Z,loc_82EC2
+    BSET word_FD64.7
+    SUB word_C11E,ONES
+    ADD word_C11C,ONES
+    ADD word_C118,ONES
+    ADDC word_C11A,ONES
+    JMPR cc_UC,loc_82EC4
+loc_82EC2:
+    BCLR word_FD64.7
+loc_82EC4:
+    MOV R4,#0
+    MOV R5,#DATA16 10H
+    ADD word_C118,R4
+    ADDC word_C11A,R5
+    CALLS 8,SOF RSW_AMD_ProgramWords
+loc_82ED6:
+    JNB word_FD64.6,loc_82EDE
+    CALLS 8,SOF RSW_ClearPageBuffer
+loc_82EDE:
+    MOV R6,[R0+]
+    MOV R7,[R0+]
+    MOV R8,[R0+]
+    MOV R9,[R0+]
+    RETS
+    RETS
+
+; Run the original crossed-data-line AMD word-program sequence.
+RSW_AMD_ProgramWords:
+    PUSH R9
+    PUSH R8
+    PUSH R7
+    PUSH R6
+    MOV R8,word_FE52
+    MOV R14,#DATA16 5554H
+    MOV R15,#DATA16 10H
+    MOV R12,#DATA16 0AAAAH
+    MOV R13,#DATA16 10H
+    MOV R6,#0
+    MOV R10,word_C118
+    MOV R11,word_C11A
+    MOV R3,R10
+    MOV R4,R11
+    SUB R3,#0
+    SUBC R4,#DATA16 10H
+    MOV R5,word_C11C
+loc_82F1E:
+    CMP R6,word_C11E
+    JMPR cc_NC,loc_82FC0
+    MOV R7,#0
+    BCLR word_FD64.6
+    MOVB RL1,[R5+]
+    MOVB RH1,[R5+]
+    ADD R6,#2
+    JNB word_FD64.7,loc_82F3A
+    EXTS R4,#1
+    MOVB RL1,[R3]
+    BCLR word_FD64.7
+    JMPR cc_UC,loc_82F4A
+loc_82F3A:
+    JNB word_FD64.8,loc_82F4A
+    CMP R6,word_C11E
+    JMPR cc_C,loc_82F4A
+    EXTS R4,#1
+    MOV R2,[R3]
+    MOVB RH1,RH2
+loc_82F4A:
+    MOV R2,#DATA16 2244H
+    EXTS R13,#1
+    MOV [R12],R2
+    MOV R2,#DATA16 8811H
+    EXTS R15,#1
+    MOV [R14],R2
+    MOV R2,#DATA16 44H
+    EXTS R13,#1
+    MOV [R12],R2
+    EXTS R11,#1
+    MOV [R10],R1
+loc_82F66:
+    MOV R9,word_FE52
+    SUB R9,R8
+    CMP R9,#DATA16 0BBH
+    JMPR cc_C,loc_82F82
+    ADD R8,#DATA16 0BBH
+    SUB R7,ONES
+    CMP R7,#2
+    JMPR cc_C,loc_82F82
+    SRST
+loc_82F82:
+    MOV WDTCON,#DATA16 101H
+    SRVWDT
+    EXTS R4,#1
+    MOV R2,[R3]
+    BCMP R2.6,R1.6
+    JMPR cc_NN,loc_82FA2
+    JNB R2.2,loc_82FAC
+    EXTS R4,#1
+    MOV R2,[R3]
+    BCMP R2.6,R1.6
+    JMPR cc_N,loc_82FCA
+loc_82FA2:
+    EXTS R4,#1
+    MOV R2,[R3]
+    CMP R2,R1
+    JMPR cc_NZ,loc_82FBA
+    BSET word_FD64.6
+loc_82FAC:
+    JNB word_FD64.6,loc_82F66
+    ADD R10,#2
+    ADDC R11,#0
+    ADD R3,#2
+    ADDC R4,#0
+    JMPR cc_UC,loc_82F1E
+loc_82FBA:
+    SUB R6,#2
+    MOV word_C11E,R6
+loc_82FC0:
+    POP R6
+    POP R7
+    POP R8
+    POP R9
+    RETS
+loc_82FCA:
+    MOV R2,#DATA16 2244H
+    EXTS R13,#1
+    MOV [R12],R2
+    MOV R2,#DATA16 8811H
+    EXTS R15,#1
+    MOV [R14],R2
+    MOV R2,#DATA16 55H
+    EXTS R13,#1
+    MOV [R12],R2
+    JMPR cc_UC,loc_82FBA
+
+; Run the original crossed-data-line AMD sector-erase sequence.
+RSW_AMD_EraseSector:
+    PUSH R9
+    PUSH R8
+    PUSH R7
+    MOV R7,#0
+    MOV R8,word_FE52
+    MOV R14,#DATA16 5554H
+    MOV R15,#DATA16 10H
+    MOV R12,#DATA16 0AAAAH
+    MOV R13,#DATA16 10H
+    MOV R10,word_C118
+    MOV R11,word_C11A
+    MOV R3,R10
+    MOV R4,R11
+    SUB R3,#0
+    SUBC R4,#DATA16 10H
+    BCLR word_FD64.5
+    MOV R1,#DATA16 2244H
+    EXTS R13,#1
+    MOV [R12],R1
+    MOV R2,#DATA16 8811H
+    EXTS R15,#1
+    MOV [R14],R2
+    MOV R2,#DATA16 40H
+    EXTS R13,#1
+    MOV [R12],R2
+    EXTS R13,#1
+    MOV [R12],R1
+    MOV R2,#DATA16 8811H
+    EXTS R15,#1
+    MOV [R14],R2
+    MOV R2,#5
+    EXTS R11,#1
+    MOV [R10],R2
+loc_8303E:
+    MOV WDTCON,#DATA16 101H
+    SRVWDT
+    MOV R1,word_FE52
+    SUB R1,R8
+    CMP R1,#DATA16 0BBH
+    JMPR cc_C,loc_83064
+    ADD R8,#DATA16 0BBH
+    SUB R7,ONES
+    CMP R7,#DATA16 7530H
+    JMPR cc_C,loc_83064
+    SRST
+loc_83064:
+    EXTS R4,#1
+    MOV R2,[R3]
+    JNB R2.6,loc_8306E
+    JMPR cc_UC,loc_8307A
+loc_8306E:
+    JNB R2.2,loc_8303E
+    EXTS R4,#1
+    MOV R2,[R3]
+    JNB R2.6,loc_8307C
+loc_8307A:
+    BSET word_FD64.5
+loc_8307C:
+    POP R7
+    POP R8
+    POP R9
+    RETS
+
+RSW_ReturnStubA:
+    RETS
+RSW_ReturnStubB:
+    RETS
+
+; Fixed-layout region descriptors used by the native address parser.
+RSW_RegionTable:
+    DB 002H,000H,002H,001H,083H,008H,002H,001H,004H,009H,002H,004H
+    DB 004H,00AH,002H,002H,004H,00BH,002H,002H,004H,00CH,002H,002H
+    DB 004H,00DH,002H,002H,004H,00EH,002H,002H,004H,00FH,002H,002H
+RSW_PayloadEnd:
+RSW_ValidationStatusScratch:
+    DB 0FFH
+RSWImage ENDS
+
+; The original image ends at 0x87FFE (inclusive).
+; Gaps between sections are emitted as erased 0xFF bytes by the build.
+RSWExtent SECTION CODE AT 087FFEH
+    DB 0FFH
+RSWExtent ENDS
+END

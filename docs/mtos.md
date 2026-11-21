@@ -97,11 +97,11 @@ previous job's recovery command. A successful MTOS job resets the ECU and checks
 | `dump`   | Reads up to 64 KiB of ECU memory at the selected baudrate using flow control and CRC. Range comes from `-s/--address-start` and `-e/--address-stop` (defaults to `0x000000`+`0x40`). |
 | `payload`| Uploads a raw body you authored (`--mtos-payload file.bin`, code starting at `0xC014`), runs it, and listens on the K-line. |
 | `loader` | Uploads the built-in K-line loader, then streams `--mtos-payload` to it as a second stage and runs that. Lets you run code larger than the MTOS RAM budget. |
-| `probe`  | Starts the BSL kernel over MTOS and does everything a full flash does before the first erase, then resets the ECU. Writes nothing to the flash. See [Full flash](#full-flash-bsl-kernel-over-mtos). |
-| `read`   | Starts the BSL kernel and reads the whole 512 KiB or 1 MiB external flash to `-o` (or `mtos_read_<time>.bin`). |
+| `probe`  | Starts the OpenGK kernel over MTOS and does everything a full flash does before the first erase, then resets the ECU. Writes nothing to the flash. See [Full flash](#full-flash-opengk-kernel-over-mtos). |
+| `read`   | Starts the OpenGK kernel and reads the whole 512 KiB or 1 MiB external flash to `-o` (or `mtos_read_<time>.bin`). |
 | `read-calibration` | Reads calibration at the selected baudrate in flow-controlled 240-byte blocks, verifies CRC16, saves a BIN, then recovers diagnostics. Experimental: tested on the 24 MHz C167 SIMK43 2.0 with CA663057 and an FTDI adapter. |
 | `flash-calibration` | Rewrites only the 64 KiB calibration sector from `--mtos-payload`, a matching full BIN or padded calibration-read BIN. Backs up first and preserves all boot/program bytes. |
-| `fullflash` | Starts the BSL kernel and rewrites the whole flash, **boot sectors included**, from `--mtos-payload` (a matching 512 KiB or 1 MiB image). Backs up first. |
+| `fullflash` | Starts the OpenGK kernel and rewrites the whole flash, **boot sectors included**, from `--mtos-payload` (a matching 512 KiB or 1 MiB image). Backs up first. |
 
 > There is deliberately no "write a value to RAM and read it back" self-test mode.
 > `StartRoutine(0xFA)` ends the KWP session once your code returns, and the ensuing
@@ -380,9 +380,9 @@ a good starting point:
 | `marker.a66` | `payload_marker()`, proof of execution without I/O |
 | `kline_hello.a66` | `hello` mode |
 | `memory_dump.a66` | `dump` mode |
-| `loader.a66` | `loader` mode, and starting the BSL kernel |
+| `loader.a66` | `loader` mode, and starting the OpenGK kernel |
 | `stage2_hello.a66` | sample second stage for `loader` mode |
-| `bsl_shim.a66` | the second stage in front of the BSL kernel (full flash) |
+| `bsl_shim.a66` | the second stage in front of the OpenGK kernel (full flash) |
 | `driver_patch.a66` | the flash driver's watchdog patch (full flash) |
 
 GKFlasher assembles them at runtime with [openc166](https://github.com/Dante383/openc166),
@@ -491,9 +491,9 @@ same data as reading flash directly.
 
 ---
 
-## Full flash (BSL kernel over MTOS)
+## Full flash (OpenGK kernel over MTOS)
 
-`probe`, `read` and `fullflash` run the BSL kernel from the live application.
+`probe`, `read` and `fullflash` run the OpenGK kernel from the live application.
 `fullflash` can rewrite all 512 KiB or 1 MiB of external flash, **including boot
 sectors**, from a running ECU over
 the normal K-line, without opening the case for BSL. Use them to move an ECU to a
@@ -533,7 +533,7 @@ write order) and can't be skipped.
 ### How it works
 
 1. The usual MTOS sequence runs the built-in [loader](#the-loader-protocol-second-stage).
-   Its second stage is a short prologue plus the **stock SIMK4x BSL kernel**
+   Its second stage is a short prologue plus the **OpenGK SIMK4x kernel**
    (`assets/simk4x_kernel.bin`, the same one [BSL](bsl.md) uses), copied to `0xE000` in XRAM.
    The prologue moves the stack and context pointer out of the firmware's RAM, then
    jumps into the kernel. The firmware never gets the CPU back.

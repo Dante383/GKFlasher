@@ -1,0 +1,9 @@
+; OpenGK SIMK4x V6 AMD flash driver; original RAM entry at 0xF640.
+; The shared driver selects linear flash data lines for this board variant.
+$MOD167
+$SEGMENTED
+$INCLUDE (REG167.INC)
+ASSUME DPP3:SYSTEM
+CROSSED_DATA_LINES EQU 0
+$INCLUDE (flash_driver.inc)
+END
