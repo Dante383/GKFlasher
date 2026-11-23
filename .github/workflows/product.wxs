@@ -125,11 +125,18 @@
                     <Directory Id="GKBUSDIR" Name="gkbus">
                         <Directory Id="GKBUSDEVICEDIR" Name="device">
                             <Directory Id="GKBUSJ2534DIR" Name="j2534">
-                                <Directory Id="GKBUSHELPERDIR" Name="helper">
-                                    <!-- loads 32 bit J2534 DLLs (Tactrix op20pt32.dll) for 64 bit gkflasher -->
-                                    <Component Id="ApplicationFilesI" Guid="{807EFD24-71E0-4759-BDB7-E94B0BD7C863}">
-                                        <File Id="ApplicationFile55" Source="dist\gui\gkbus\device\j2534\helper\gkbus_j2534_helper32.exe" />
+                                <Directory Id="GKBUSDRIVERSDIR" Name="drivers">
+                                    <!-- openport-j2534 (GPLv3) bundled by gkbus for Tactrix OpenPort 2.0; 64 bit build to match gkflasher -->
+                                    <Component Id="ApplicationFilesI" Guid="{FD3EDD47-5EA8-486C-A648-DFC4793F0393}">
+                                        <File Id="OpenportJ2534License" Source="dist\gui\gkbus\device\j2534\drivers\LICENSE" KeyPath="yes" />
+                                        <File Id="OpenportJ2534Notice" Source="dist\gui\gkbus\device\j2534\drivers\NOTICE" />
+                                        <File Id="OpenportJ2534Version" Source="dist\gui\gkbus\device\j2534\drivers\VERSION" />
                                     </Component>
+                                    <Directory Id="GKBUSDRIVERSWIN64DIR" Name="win64">
+                                        <Component Id="ApplicationFilesI64" Guid="{2459B2B1-5F52-451D-9649-805F572410C5}">
+                                            <File Id="OpenportJ2534Dll64" Source="dist\gui\gkbus\device\j2534\drivers\win64\openport-j2534-64.dll" KeyPath="yes" />
+                                        </Component>
+                                    </Directory>
                                 </Directory>
                             </Directory>
                         </Directory>
@@ -212,6 +219,7 @@
             <ComponentRef Id="ApplicationFilesG" />
             <ComponentRef Id="ApplicationFilesH" />
             <ComponentRef Id="ApplicationFilesI" />
+            <ComponentRef Id="ApplicationFilesI64" />
             <ComponentRef Id="ApplicationFilesJ" />
             <ComponentRef Id="ApplicationFilesK" />
             <ComponentRef Id="RswAssetFiles" />
