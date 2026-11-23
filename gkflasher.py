@@ -15,9 +15,9 @@ from ecu_definitions import ECU_IDENTIFICATION_TABLE, BAUDRATES, Routine, Reprog
 from flasher.logging import logger, logger_raw
 from flasher.immo import cli_immo, cli_immo_info
 from flasher.lineswap import generate_sie, generate_bin
-from flasher.rsw import rsw_handler
-from flasher.mtos import mtos_handler, attach_session, KERNEL_MODES, MTOS_MODES, WRITE_MODES, MTOS_BAUDRATE
-from flasher.mtos_asm import mtos_baudrate
+from flasher.rsw.handler import rsw_handler
+from flasher.mtos.handler import mtos_handler, attach_session, KERNEL_MODES, MTOS_MODES, WRITE_MODES, MTOS_BAUDRATE
+from flasher.mtos.asm import mtos_baudrate
 from flasher import bsl
 from flasher.kernel import KERNEL_TIMING
 from flasher.progress import transfer_summary

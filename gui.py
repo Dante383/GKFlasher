@@ -27,8 +27,8 @@ from gkflasher import strip
 from _version import __version__
 from flasher.lineswap import generate_sie, generate_bin, set_gui_log_handler as set_lineswap_log_handler
 from flasher.smartra import calculate_smartra_pin
-from flasher.rsw import rsw_handler
-from flasher.mtos import mtos_handler, MTOS_MODES, WRITE_MODES
+from flasher.rsw.handler import rsw_handler
+from flasher.mtos.handler import mtos_handler, MTOS_MODES, WRITE_MODES
 from flasher import bsl
 from flasher.kernel import KERNEL_TIMING, available_filename
 from flasher.progress import Progress as TransferProgress, transfer_summary

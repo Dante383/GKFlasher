@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / 'build' / 'out'
 sys.path.insert(0, str(ROOT))
 
-from flasher.mtos_asm import _assemble
-from flasher.rsw_kline import RSW_SHA256
+from flasher.mtos.asm import _assemble
+from flasher.rsw.kline import RSW_SHA256
 
 
 def build():

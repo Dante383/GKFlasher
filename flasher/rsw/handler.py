@@ -2,9 +2,9 @@ import time
 from gkbus.channel import CanChannel, KLineChannel
 from gkbus.transport import CcpOverCanTransport
 from gkbus.protocol import ccp
-from .progress import Progress, transfer_summary
-from .kernel import load_asset
-from .memory import dynamic_find_end
+from ..progress import Progress, transfer_summary
+from ..kernel import load_asset
+from ..memory import dynamic_find_end
 
 # ==========================================================
 # LOGGING
@@ -397,7 +397,7 @@ def rsw_handler(ecu, mode, bin_file, progress_callback=None, log_callback=None, 
     regions = _region_payloads(ecu, mode, full_bin, log_callback)
     channel = ecu.bus.transport.channel
     if isinstance(channel, KLineChannel):
-        from .rsw_kline import run
+        from .kline import run
         return run(ecu, mode, regions, key=key, baudrate=baudrate,
                    progress_callback=progress_callback, log_callback=log_callback)
     if not isinstance(channel, CanChannel):

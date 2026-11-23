@@ -3,7 +3,7 @@ import struct
 import time
 
 from .kernel import ACK, C_CALL, DONE, VERIFY_FAILED, Kernel, KernelLink, KernelError, read_block_size
-from .mtos_asm import _assemble
+from .mtos.asm import _assemble
 
 STARTUP_BAUDRATE = 57600
 LOADER_BAUDRATES = (750000, 375000, 250000, 125000, 107143, 83333, 57692, 38462, 19231, 10417)

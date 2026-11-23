@@ -427,7 +427,7 @@ Or from Python:
 
 ```python
 import openc166
-from flasher.mtos_asm import build_blob, payload_memory_dump
+from flasher.mtos.asm import build_blob, payload_memory_dump
 
 # Option A: a ready-made payload
 body = payload_memory_dump(0x000000, 0x40)
@@ -446,7 +446,7 @@ Run the module to see the reference payloads and the self-tests, which check the
 ready-made payloads against the bytes verified on the ECU:
 
 ```bash
-python -m flasher.mtos_asm
+python -m flasher.mtos.asm
 ```
 
 ---
@@ -478,7 +478,7 @@ Code that only uses relative jumps, like the ready-made payloads, runs at any
 address, so a top-level payload works as a second stage too:
 
 ```python
-from flasher.mtos_asm import payload_memory_dump
+from flasher.mtos.asm import payload_memory_dump
 stage2 = payload_memory_dump(0x000000, 0x200)   # raw body, no header
 # write stage2 to a file and pass it with --mtos-payload in loader mode
 ```
@@ -554,7 +554,7 @@ write order) and can't be skipped.
 Unlike in BSL, the **watchdog is running and can't be stopped**, because `DISWDT` only
 works before `EINIT`. The prologue sets the longest watchdog period (about 335 ms). The
 kernel services the watchdog while it waits for a byte. The driver is patched to
-service it in its erase poll (`mtos_asm.patch_driver_watchdog`); programming polls a
+service it in its erase poll (`flasher/mtos/asm.py: patch_driver_watchdog`); programming polls a
 word at a time and doesn't need it.
 The kernel doesn't service it while it sends, so every reply has to fit well inside
 the watchdog period. That's why reads are split into blocks: `0x80` bytes at 10400 baud,

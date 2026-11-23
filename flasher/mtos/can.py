@@ -10,10 +10,10 @@ import time
 from gkbus.channel import CanFilter, CanFrame
 from gkbus.exceptions import TimeoutException
 
-from .kernel import Kernel, KernelError, KernelLink, load_asset, xor_checksum, run_session
-from .mtos_asm import _code, build_blob
-from .progress import Progress, transfer_summary
-from .rsw import TX_ID, RX_ID
+from ..kernel import Kernel, KernelError, KernelLink, load_asset, xor_checksum, run_session
+from .asm import _code, build_blob
+from ..progress import Progress, transfer_summary
+from ..rsw.handler import TX_ID, RX_ID
 
 
 class CanKernelLink(KernelLink):
@@ -133,7 +133,7 @@ def attach(channel, log_callback=None):
 
 
 def launch(ecu, signature, mtos_key, log_callback=None, progress_callback=None):
-	from . import mtos
+	from . import handler as mtos
 
 	channel = ecu.bus.transport.channel
 	for address, identifier in ((0xEE12, RX_ID), (0xEE22, TX_ID)):
@@ -173,7 +173,7 @@ def launch(ecu, signature, mtos_key, log_callback=None, progress_callback=None):
 
 
 def run(ecu, signature, mtos_key, mode, address, length, **options):
-	from . import mtos, mtos_kernel
+	from . import handler as mtos, kernel as mtos_kernel
 
 	log_callback = options.get('log_callback')
 	progress_callback = options.get('progress_callback')

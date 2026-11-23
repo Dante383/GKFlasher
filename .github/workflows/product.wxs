@@ -58,21 +58,31 @@
                             <File Id="ApplicationFile34" Source="flasher\lineswap.py" />
                             <File Id="ApplicationFile35" Source="flasher\memory.py" />
                             <File Id="ApplicationFile36" Source="flasher\smartra.py" />
-                            <File Id="ApplicationFile37" Source="flasher\mtos.py" />
-                            <File Id="ApplicationFile38" Source="flasher\rsw.py" />
-                            <File Id="ApplicationFile56" Source="flasher\mtos_asm.py" />
-                            <File Id="ApplicationFile57" Source="flasher\mtos_kernel.py" />
                             <File Id="ApplicationFile58" Source="flasher\kernel.py" />
                             <File Id="ApplicationFile59" Source="flasher\bsl.py" />
                             <File Id="BaudrateModule" Source="flasher\baudrate.py" />
                             <File Id="LoaderBaudrateModule" Source="flasher\loader_baudrate.py" />
                             <File Id="KwpCompressionModule" Source="flasher\kwp_compression.py" />
                             <File Id="LzssModule" Source="flasher\lzss.py" />
-                            <File Id="MtosCanModule" Source="flasher\mtos_can.py" />
                             <File Id="ProgressModule" Source="flasher\progress.py" />
-                            <File Id="RswKlineModule" Source="flasher\rsw_kline.py" />
                             <File Id="UtilsModule" Source="flasher\utils.py" />
                         </Component>
+                        <Directory Id="FLASHERMTOSDIR" Name="mtos">
+                            <Component Id="ApplicationFilesMtos" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CEA}">
+                                <File Id="MtosInit" Source="flasher\mtos\__init__.py" />
+                                <File Id="ApplicationFile37" Source="flasher\mtos\handler.py" />
+                                <File Id="ApplicationFile56" Source="flasher\mtos\asm.py" />
+                                <File Id="ApplicationFile57" Source="flasher\mtos\kernel.py" />
+                                <File Id="MtosCanModule" Source="flasher\mtos\can.py" />
+                            </Component>
+                        </Directory>
+                        <Directory Id="FLASHERRSWDIR" Name="rsw">
+                            <Component Id="ApplicationFilesRsw" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CEB}">
+                                <File Id="RswInit" Source="flasher\rsw\__init__.py" />
+                                <File Id="ApplicationFile38" Source="flasher\rsw\handler.py" />
+                                <File Id="RswKlineModule" Source="flasher\rsw\kline.py" />
+                            </Component>
+                        </Directory>
                     </Directory>
                     <Directory Id="ASSETSDIR" Name="assets">
                         <Component Id="ApplicationFilesC" Guid="{652E355F-4E96-40FB-8B34-A9593CE42CE7}">
@@ -193,6 +203,8 @@
             <ComponentRef Id="ENVS" />
             <ComponentRef Id="ApplicationFilesA" />
             <ComponentRef Id="ApplicationFilesB" />
+            <ComponentRef Id="ApplicationFilesMtos" />
+            <ComponentRef Id="ApplicationFilesRsw" />
             <ComponentRef Id="ApplicationFilesC" />
             <ComponentRef Id="ApplicationFilesD" />
             <ComponentRef Id="ApplicationFilesE" />

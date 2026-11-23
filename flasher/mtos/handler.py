@@ -7,11 +7,11 @@ from alive_progress import alive_bar
 from gkbus.channel import CanChannel, KLineChannel, KLineTiming
 from gkbus.protocol import kwp2000
 
-from . import mtos_kernel
-from .progress import transfer_summary
-from .kernel import KERNEL_ASSET, KERNEL_STARTED, Kernel, KernelError, KernelLink, Progress, enter, identification, load_asset, read_partial
-from .ecu import ECU, enable_security_access, request_security_seed, end_diagnostic_session, configure_serial_kline
-from .mtos_asm import (
+from . import kernel as mtos_kernel
+from ..progress import transfer_summary
+from ..kernel import KERNEL_ASSET, KERNEL_STARTED, Kernel, KernelError, KernelLink, Progress, enter, identification, load_asset, read_partial
+from ..ecu import ECU, enable_security_access, request_security_seed, end_diagnostic_session, configure_serial_kline
+from .asm import (
 	build_blob,
 	crc16_mtos,
 	KLINE_HELLO,
@@ -382,7 +382,7 @@ def run_loader (ecu: ECU, signature: bytes, stage2: bytes, mtos_key: int | None 
 
 def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_callback=None, progress_callback=None, baudrate: int | None = None):
 	'''Turn the ECU over to the OpenGK kernel: the loader, then the kernel as its
-	second stage (mtos_asm.payload_bsl_kernel_shim). Returns the channel, with
+	second stage (asm.payload_bsl_kernel_shim). Returns the channel, with
 	the kernel answering at the selected rate and kernel timing set.
 
 	The firmware never comes back from this - the session has to end with the
@@ -409,7 +409,7 @@ def launch_kernel (ecu: ECU, signature: bytes, mtos_key: int | None = None, log_
 			raise KernelError('The kernel didn\'t start. Switch the ECU off and on again - the flash wasn\'t touched')
 	log('[+] OpenGK kernel running', log_callback)
 	if automatic:
-		from .loader_baudrate import discover_loader_baudrate
+		from ..loader_baudrate import discover_loader_baudrate
 		discover_loader_baudrate(kernel)
 	return channel
 
@@ -485,12 +485,12 @@ def attach_session (bus, mode: str, image_filename: str | None = None, output_fi
 	try:
 		image = mtos_kernel.load_image(image_filename, log_callback, warn_check=warn_check, calibration_only=mode == 'flash-calibration', override_safety_checks=override_safety_checks) if mode in WRITE_MODES else None
 		if isinstance(channel, CanChannel):
-			from .mtos_can import attach
+			from .can import attach
 			link = attach(channel, log_callback)
 		else:
 			enter(channel, log_callback)
 			if baudrate is None:
-				from .loader_baudrate import STARTUP_BAUDRATE, locate_loader, discover_loader_baudrate
+				from ..loader_baudrate import STARTUP_BAUDRATE, locate_loader, discover_loader_baudrate
 				channel.set_baudrate(STARTUP_BAUDRATE)
 				kernel, boot_reply = locate_loader(channel, log_callback)
 				if boot_reply is not None:
@@ -574,7 +574,7 @@ def mtos_handler (ecu: ECU, mtos_key: int, mode: str = 'hello',
 	log('[*] MTOS signature @0x{:04X}: {} ({})'.format(
 		MTOS_SIGNATURE_ADDRESS, signature.hex(), signature.decode('latin-1')), log_callback)
 	if can:
-		from . import mtos_can
+		from . import can as mtos_can
 		return mtos_can.run(ecu, signature, mtos_key, mode, address, length,
 			image=image, output_filename=output_filename, confirm=confirm_callback,
 			warn_check=warn_check, attach_hint=attach_hint, skip_verify=skip_verify,

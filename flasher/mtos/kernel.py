@@ -2,11 +2,11 @@
 MTOS full flash: the OpenGK kernel and the I4 flash driver (kernel.py), run on a live SIMK43.
 
 The MTOS loader streams a short prologue plus the OpenGK kernel into XRAM
-(mtos_asm.payload_bsl_kernel_shim). From then on the ECU speaks the BSL protocol over the
+(asm.payload_bsl_kernel_shim). From then on the ECU speaks the BSL protocol over the
 K-line at 750 kbaud after the loader's handshake. What's different from the BSL: the firmware
 set the bus up, but its flash write strobe isn't where the driver writes, and the
 watchdog is running and can't be stopped - the driver is patched to service it while it
-waits for an erase (mtos_asm.patch_driver_watchdog).
+waits for an erase (asm.patch_driver_watchdog).
 
 The firmware never gets the CPU back: a session ends with the kernel's software reset.
 If anything goes wrong once the flash has been touched, the kernel is left running so
@@ -16,13 +16,13 @@ flash.
 import time
 from dataclasses import replace
 
-from .kernel import (
+from ..kernel import (
 	CHIPS, Chip, DRIVER_I4, FLASH_READ_BASE, Flash, Kernel, KernelError, KernelLink, identification, log, read_flash,
 	run_session as run_kernel_session, write_flash,
 )
-from .mtos_asm import patch_driver_watchdog
-from .ecu import calibration_identification, identify_ecu_image, identify_ecu_layout, ECUIdentificationException
-from .memory import prepare_flash_payloads
+from .asm import patch_driver_watchdog
+from ..ecu import calibration_identification, identify_ecu_image, identify_ecu_layout, ECUIdentificationException
+from ..memory import prepare_flash_payloads
 from ecu_definitions import ECU_IDENTIFICATION_TABLE
 
 # I4 SIMK43 boards with bottom-boot 4/8 Mbit flash.
@@ -125,7 +125,7 @@ def prepare (kernel: Kernel, signature: bytes | None = None, allow_blank: bool =
 	kernel.log('[*] ADDRSEL1: 0x{:04X} -> 0x{:04X}'.format(previous, ADDRSEL1_DRIVER))
 
 	if compressed:
-		from .lzss import CompressedFlash
+		from ..lzss import CompressedFlash
 		flash = CompressedFlash(kernel, MTOS_DRIVER)
 	else:
 		flash = Flash(kernel, MTOS_DRIVER)

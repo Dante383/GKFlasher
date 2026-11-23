@@ -42,7 +42,7 @@ MTOS execution contract (reverse engineered from ca663056, validator @0x003460):
 import re
 import struct
 
-from .kernel import DRIVER_ADDRESS, DRIVER_ENTRY, resource_path
+from ..kernel import DRIVER_ADDRESS, DRIVER_ENTRY, resource_path
 
 MTOS_BASE = 0xC000  # where the blob is uploaded
 MTOS_ENTRY = 0xC014  # firmware entry point (calls 0xC014)
@@ -311,7 +311,7 @@ def payload_stage2_hello() -> bytes:
 
 
 if __name__ == '__main__':
-	# Offline self-tests (no hardware): python -m flasher.mtos_asm
+	# Offline self-tests (no hardware): python -m flasher.mtos.asm
 	assert payload_marker() == bytes.fromhex('e6f4efbe' 'f6f402c0' 'db00'), \
 		payload_marker().hex()
 	# CRC sanity: seed with 'MT', empty-ish vectors
@@ -361,7 +361,7 @@ if __name__ == '__main__':
 		pass
 
 	import os
-	driver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'simk4x_driver_i4_a29fx00bx.bin')
+	driver_path = resource_path('assets/simk4x_driver_i4_a29fx00bx.bin')
 	if os.path.exists(driver_path):
 		driver = open(driver_path, 'rb').read()
 		patched = patch_driver_watchdog(driver)

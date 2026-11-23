@@ -4,7 +4,7 @@ import struct
 from dataclasses import dataclass
 
 from .kernel import DRIVER_ENTRY, FLASH_READ_BASE, DATA_BUFFER, Flash, KernelError, Progress
-from .mtos_asm import _assemble, crc16_mtos
+from .mtos.asm import _assemble, crc16_mtos
 
 OUTPUT_ADDRESS = 0xC400  # C167CS 6 KiB XRAM; the application is stopped.
 INPUT_ADDRESS = 0xCC00

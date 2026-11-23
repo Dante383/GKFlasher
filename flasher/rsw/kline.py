@@ -9,8 +9,8 @@ import struct
 
 from gkbus.transport import TransportABC, PacketDirection
 
-from .kernel import KernelError, load_asset
-from .mtos_asm import _assemble, crc16_mtos
+from ..kernel import KernelError, load_asset
+from ..mtos.asm import _assemble, crc16_mtos
 
 RSW_BASE = 0xC400
 BRIDGE_ADDRESS = 0xE400
@@ -200,12 +200,13 @@ def _validate_checksum_layout(kernel, regions):
 
 def run(ecu, mode, regions, key=None, baudrate=None, progress_callback=None, log_callback=None):
     from gkbus.protocol import ccp
-    from . import rsw, mtos
-    from .ecu import configure_serial_kline
-    from .kernel import Kernel, KernelLink, run_session
-    from .mtos_kernel import prepare
-    from .mtos_asm import mtos_baudrate
-    from .progress import Progress
+    from . import handler as rsw
+    from ..mtos import handler as mtos
+    from ..ecu import configure_serial_kline
+    from ..kernel import Kernel, KernelLink, run_session
+    from ..mtos.kernel import prepare
+    from ..mtos.asm import mtos_baudrate
+    from ..progress import Progress
 
     if key is None or not 0 <= key <= 0xFFFFFFFF:
         raise ValueError('K-Line RSW requires a four-byte Siemens key (--rsw-key)')

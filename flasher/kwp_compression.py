@@ -13,7 +13,7 @@ from gkbus.protocol import kwp2000
 from gkbus.protocol.kwp2000.kwp2000_command import Kwp2000Command
 
 from .lzss import BLOCK_SIZE, encode, decode
-from .mtos_asm import crc16_mtos
+from .mtos.asm import crc16_mtos
 
 CAPABILITY_ADDRESS = 0xE5E14
 CAPABILITY = b'OGKLZS01'
