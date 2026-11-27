@@ -147,7 +147,7 @@ python gkflasher.py --protocol kline --interface COM69 --desired-baudrate 0x06 -
 
  Note: `0x06` is currently a CLI option; it is not a fixed-rate entry in the GUI dropdown.
 
-`-i --interface {interface}` - for example `/dev/ttyUSB0` or `COM3` (K-Line), `can0` (SocketCAN), `pcan:PCAN_USBBUS1` (python-can interface:channel) or `j2534:openport` (J2534 adapter, K-Line and CAN; `j2534` for the first installed one). If the interface isn't found, GKFlasher lists the available ones to choose from
+`-i --interface {interface}` - for example `/dev/ttyUSB0` or `COM3` (K-Line), `can0` (SocketCAN), `pcan:PCAN_USBBUS1` or `cansub:aabbccdd-usb.local@1` (python-can interface:channel) or `j2534:openport` (J2534 adapter, K-Line and CAN; `j2534` for the first installed one). If the interface isn't found, GKFlasher lists the available ones to choose from
 
 `-r --read`
 
