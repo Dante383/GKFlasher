@@ -186,7 +186,7 @@ def load_config (config_filename):
 def load_arguments ():
 	parser = argparse.ArgumentParser(prog='GKFlasher v{}'.format(__version__))
 	parser.add_argument('-p', '--protocol', help='Protocol to use. canbus or kline')
-	parser.add_argument('-i', '--interface', help='Linux: can0 for socketCAN. | Windows: gs_usb:0, slcan:COM69, pcan:PCAN_USBBUS1, vector:0 | J2534: j2534, j2534:openport')
+	parser.add_argument('-i', '--interface', help='Linux: can0 for socketCAN. | Windows: gs_usb:0, slcan:COM69, pcan:PCAN_USBBUS1, vector:0, cansub:aabbccdd-usb.local@1 | J2534: j2534, j2534:openport')
 	parser.add_argument('-b', '--baudrate', type=int)
 	parser.add_argument('--desired-baudrate', type=lambda x: int(x,0),
 		help='ECU baudrate selector; omitted = automatic normal K-Line discovery. Normal KWP 0x06 requires --session-baudrate. '
